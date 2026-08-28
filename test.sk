@@ -3,8 +3,8 @@
 command /test:
 	permission: op
 	trigger:
-		send "<##C3B1E1>&l[Elite-Grandmaster Viking] <##C3B1E1>%name of player%"
-		send "<##C3B1E1>&l[Elite Viking] <##C3B1E1>%name of player%"
+		send "<##C3B1E1>&l[Adept Viking] <##C3B1E1>%name of player%"
+		send "<##C3B1E1>&l[Grandmaster Viking] <##C3B1E1>%name of player%"
 		send " "
 
 
