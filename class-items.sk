@@ -1,0 +1,120 @@
+
+options:
+	# 
+	ZT: unbreakable trident of unbreaking 1 named "&6Zeus's Trident" 
+	PGS: unbreakable iron sword of unbreaking 1 named "&6Paladin Great Sword" 
+	GD: unbreakable golden sword of unbreaking 1 named "&6Ghost Dagger" 
+	VBA: unbreakable iron axe of unbreaking 1 named "&6Viking Battle Axe" 
+	DS: unbreakable netherite sword of unbreaking 1 named "&6Demonic Saber" 
+	MH: unbreakable mace of unbreaking 1 named "&6Mighty Hammer" 
+	RS: unbreakable netherite hoe of unbreaking 1 named "&6Reaper Scythe" 
+	FH: unbreakable mace of unbreaking 1 named "&6Frankenstein Hammer" 
+	BS: unbreakable shield of unbreaking 1 named "&6Basher Shield" 
+	WH: unbreakable netherite axe of unbreaking 1 named "&6Warden's Heart" 
+
+	PT: unbreakable trident of unbreaking 1 named "&6Poseidon's Trident"
+	PT1: unbreakable trident of riptide 2 named "&6Poseidon's Trident"
+
+	CB: unbreakable diamond sword of unbreaking 1 named "&6Cyberpunk Blade &7● ●" 
+	CB1: unbreakable diamond sword of unbreaking 1 named "&6Cyberpunk Blade &7● ●" 
+
+	RB: unbreakable bow of infinity 1 named "&6Rapid Bow" 
+	RD: unbreakable stone sword named "&6Rapid Dagger" 
+	RB1: unbreakable bow of infinity 1 named "&6Rapid Bow" 
+	RD1: unbreakable stone sword named "&6Rapid Dagger" 
+
+	PF: unbreakable leather horse armor of unbreaking 1 named "&6Pirate Flintlock &e●" 
+	PC: unbreakable iron sword named "&6Pirate Cutlass" 
+	PC1: unbreakable iron sword of knockback 1 named "&6Pirate Cutlass" 
+
+	MMH: unbreakable stone axe named "&6Marksman Hatchet" 
+	MMS: unbreakable spyglass of unbreaking 1 named "&6Marksman Sniper &7● ● ●" 
+
+	NS: unbreakable nether star named "&6Ninja Shurikens" 
+	NK: unbreakable diamond sword of unbreaking 1 named "&6Ninja Katana" 
+
+	HC: unbreakable crossbow of unbreaking 1 named "&6Hunter Crossbow" 
+	HK: unbreakable iron sword named "&6Hunter Knife" 
+	HWL: unbreakable lead of unbreaking 1 named "&6Hunter's Wolf Leash" 
+	HC1: unbreakable crossbow of quick charge 2 named "&6Hunter Crossbow" 
+
+	TB: unbreakable bow of infinity 1 named "&6Tempest Bow"
+	TS: unbreakable iron hoe of unbreaking 1 named "&6Tempest Scythe"  
+
+
+on load:
+	# Weapon Color
+	set {wc} to "&6"
+	# Weapons
+	delete {class::weapon::*}
+	#
+	set {class::weapon::ZT} to {@ZT}
+	set {class::weapon::PGS} to {@PGS}
+	set {class::weapon::GD} to {@GD}
+	set {class::weapon::VBA} to {@VBA}
+	set {class::weapon::DS} to {@DS}
+	set {class::weapon::RB} to {@RB}
+	set {class::weapon::RD} to {@RD}
+	set {class::weapon::RB1} to {@RB1}
+	set {class::weapon::RD1} to {@RD1}
+	set {class::weapon::PF} to {@PF}
+	set {class::weapon::PC} to {@PC}
+	set {class::weapon::PC1} to {@PC1}
+	#
+	set {class::weapon::MH} to {@MH}
+	set {class::weapon::RS} to {@RS}
+	set {class::weapon::MMH} to {@MMH}
+	set {class::weapon::MMS} to {@MMS}
+	set {class::weapon::NS} to {@NS}
+	set {class::weapon::NK} to {@NK}
+	set {class::weapon::PT} to {@PT}
+	set {class::weapon::PT1} to {@PT1}
+	set {class::weapon::HC} to {@HC}
+	set {class::weapon::HK} to {@HK}
+	set {class::weapon::HWl} to {@HWL}
+	set {class::weapon::HC1} to {@HC1}
+	set {class::weapon::TB} to {@TB}
+	set {class::weapon::TS} to {@TS}
+	#
+	set {class::weapon::CB} to {@CB}
+	set {class::weapon::CB1} to {@CB1}
+	set {class::weapon::FH} to {@FH}
+	set {class::weapon::BS} to {@BS}
+	set {class::weapon::WH} to {@WH}
+
+	wait 5 ticks
+	loop {class::weapon::*}: # updates attack speed
+		set {_v} to loop-value
+		set {_i} to loop-index
+		set {_as} to {weapons::%{_i}%::AS}
+		if {_as} is set:
+			set {_as} to "%{_as}%"
+			add nbt compound of "{""minecraft:attribute_modifiers"":[{amount:%{_as}%d,id:""minecraft:1729387129852"",operation:""add_value"",type:""minecraft:attack_speed""}]}" to nbt of {_v}
+		if {_i} = "HC" or "HC1":
+			add nbt compound of "{""minecraft:charged_projectiles"":[{count:1,id:""minecraft:arrow""}]}" to nbt of {_v}
+		set {class::weapon::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 
+		
+	loop {class::weapon::*}: # add spec lore to weapons
+		set {_class} to loop-index
+		if {_class} = "PC1":
+			set {_lore::*} to lore of {class-display::PC}
+		else if {_class} = "HC1":
+			set {_lore::*} to lore of {class-display::HC}
+		else if {_class} = "PT1":
+			set {_lore::*} to lore of {class-display::PT}
+		else if {_class} = "CB1":
+			set {_lore::*} to lore of {class-display::CB1}
+		else:
+			set {_lore::*} to lore of {class-display::%{_class}%}
+		set {_lore::$} to "&8%{_class}%" in uppercase # sets the first lore slot ot name abver. ex. VBA
+		set {_size} to size of {_lore::*}-1
+		if {_lore::%{_size}%} is "&7Click to swap":
+			delete {_lore::%{_size}%}
+
+		set lore of {class::weapon::%{_class}%} to {_lore::*}
+		delete {_lore::*}
+
+	# Armor ?
+
+
+

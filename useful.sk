@@ -1,0 +1,310 @@
+
+
+
+
+command /hset <number> [<offline player>]:
+	permission: op
+	trigger:
+		if arg 2 is set:
+			set arg 2's max health to arg 1
+		else:
+			set player's max health to arg 1
+			set player's health to arg 1
+			
+command /timer:
+	permission: op
+	trigger:
+		if {race-timer} is true:
+			delete {race-timer}
+			send "&cTimer OFF"
+		else:
+			set {race-timer} to true
+			send "&aTimer ON"
+			
+on step on orange wool:
+	if {race-timer} is true:
+		if {restrictions::%player's uuid%} is true:
+			set {race-time} to now
+			send "&aSTART!"
+on step on blue wool:
+	if {race-timer} is true:
+		if {restrictions::%player's uuid%} is true:
+			send "&e%difference between now and {race-time}%"
+			delete {race-time}
+	
+command /gmsp [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to spectator
+			send "&7You set &f%arg 1%'s &7gamemode to &aSPECTATOR"
+		else:
+			set gamemode of player to spectator
+			send "&7You set your gamemode to &aSPECTATOR"
+command /gms [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to survival
+			send "&7You set &f%arg 1%'s &7gamemode to &aSURVIVAL"
+		else:
+			set gamemode of player to survival
+			send "&7You set your gamemode to &aSURVIVAL"
+command /gmc [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to creative
+			send "&7You set &f%arg 1%'s &7gamemode to &aCREATIVE"
+		else:
+			set gamemode of player to creative
+			send "&7You set your gamemode to &aCREATIVE"
+command /gma [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to adventure
+			send "&7You set &f%arg 1%'s &7gamemode to &aADVENTURE"
+		else:
+			set gamemode of player to adventure
+			send "&7You set your gamemode to &aADVENTURE"
+
+command /sudo <offline player> <text>:
+	usage: /sudo <player> <command>
+	trigger:
+		if player is op:
+			if name of arg 1 is not "HypeHub":
+				make arg 1 say arg 2
+			else:
+				make player say arg 2
+		else:
+			send "&cYou don't have access to this command!"
+
+		
+command /tyt:
+	permission: op
+	trigger:
+		broadcast "%full nbt compound of player's held item%"
+
+command /indent:
+	permission: op
+	trigger:
+		broadcast "%player's held item%"	
+
+command /full-test:
+	permission: op
+	trigger:
+		set {_loc} to player's location
+		set {_shapes::circle} to a circle with radius 1
+		set {_shapes::arc} to a arc with radius 1 and angle 60 degrees
+		set offset vector of {_shapes::arc} to vector(3, 0, 0)
+		set {_shapes::cylinder} to a tube with radius 1 and height 1
+		set offset vector of {_shapes::cylinder} to vector(6, 0, 0)
+		set {_shapes::cylarc} to a arc with radius 1, height 1, and angle 60 degrees
+		set offset vector of {_shapes::cylarc} to vector(9, 0, 0)
+		set {_shapes::helix} to a helix with radius 1, height 1, and winding rate of 1
+		set offset vector of {_shapes::helix} to vector(12, 0, 0)
+
+		set {_shapes::ellipse} to an ellipse with radius 0.5 and 1
+		set offset vector of {_shapes::ellipse} to vector(0, 0, 3)
+		set {_shapes::elliptical-arc} to an elliptical arc with radius 0.5, 1 and angle 60 degrees
+		set offset vector of {_shapes::elliptical-arc} to vector(3, 0, 3)
+		set {_shapes::elliptical-cylinder} to an elliptical tube with radius 0.5, 1 and height 1
+		set offset vector of {_shapes::elliptical-cylinder} to vector(6, 0, 3)
+		set {_shapes::elliptical-cylarc} to an elliptical arc with radius 0.5, 1, height 1 and angle 60 degrees
+		set offset vector of {_shapes::elliptical-cylarc} to vector(9, 0, 3)
+
+		set {_shapes::sphere} to a sphere with radius 1
+		set offset vector of {_shapes::sphere} to vector(0, 0, 6)
+		set {_shapes::cap} to a spherical sector with radius 1 and cutoff angle 60
+		set offset vector of {_shapes::cap} to vector(3, 0, 6)
+		set {_shapes::ellipsoid} to an ellipsoid with radius 1, 0.5, and 0.8
+		set offset vector of {_shapes::ellipsoid} to vector(6, 0, 6)
+		set {_shapes::ellipsoid-2} to a hollow ellipsoid with radius 1, 0.5, and 0.8
+		set offset vector of {_shapes::ellipsoid-2} to vector(9, 0, 6)
+
+
+		set {_shapes::rectangle} to a rectangle with length 1 and width 1
+		set offset vector of {_shapes::rectangle} to vector(0, 0, 9)
+		set {_shapes::cuboid} to a cuboid with length 1, width 1 and height 1
+		set offset vector of {_shapes::cuboid} to vector(3, 0, 9)
+		
+		set {_shapes::line-1} to a line from vector(0, 0, 0) to vector(1, 0, 0)
+		set {_shapes::line-2} to a line from {_loc} to {_loc} offset by vector(0, 1, 0)
+		set {_shapes::line-3} to a line in direction vector(0, 0, 1) with length 1
+		set offset vector of {_shapes::line-1}, {_shapes::line-2}, {_shapes::line-3} to vector(0, 0, -3)
+		set {_shapes::heart} to a solid heart with width 2 and length 2
+		set offset vector of {_shapes::heart} to vector(3, 0, -3)
+		set {_shapes::star} to a solid star with 5 points, inner radius 0.5, and outer radius 1
+		set offset vector of {_shapes::star} to vector(6, 0, -3)
+		
+		set {_shapes::polygon-1} to a triangle with radius 1
+		set offset vector of {_shapes::polygon-1} to vector(0, 0, -6)
+		set {_shapes::polygon-2} to a square with side length 1
+		set offset vector of {_shapes::polygon-2} to vector(3, 0, -6)
+		set {_shapes::polygon-3} to a regular polygon with 5 sides and side length 0.6
+		set offset vector of {_shapes::polygon-3} to vector(6, 0, -6)
+		set {_shapes::polygon-4} to a regular polygon with 12 sides and radius 1
+		set offset vector of {_shapes::polygon-4} to vector(9, 0, -6)
+
+		set {_shapes::ir-polygon} to a polygon with points vector(0, 0, 0), vector(1, 0, 0), vector(1, 1, 1)
+		set offset vector of {_shapes::ir-polygon} to vector(0, 0, -9)
+		set {_shapes::polyhedron} to an icosahedron with radius 1
+		set offset vector of {_shapes::polyhedron} to vector(3, 0, -9)
+
+		create a new custom electric spark particle:
+			count: 0
+			# velocity: clockwise motion
+			force: true 
+
+		set {_a} to last created particle
+
+		set particle of {_shapes::*} to last created particle
+		show local and global axes of {_shapes::*}
+		loop 40 times:
+			draw shapes {_shapes::*} at {_loc}:
+				add 1 to {_a}
+			wait 1 tick
+		broadcast {_a} / 40
+		loop 20 times:
+			add 0.1 to radius of {_shapes::*}
+			add 0.1 to inner radius of {_shapes::*}
+			add 0.1 to outer radius of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick 
+		loop 20 times:
+			add -0.1 to radius of {_shapes::*}
+			add -0.1 to inner radius of {_shapes::*}
+			add -0.1 to outer radius of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		loop 20 times:
+			#add 0.1 to scale of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		loop 20 times:
+			#add -0.1 to scale of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		broadcast "R1"
+		loop 40 times:
+			rotate shapes {_shapes::*} around vector(0, 1, 0) by 9 degrees 
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		broadcast "R2"
+		loop 40 times:
+			rotate shapes {_shapes::*} around vector(1, 0, 0) by 9 degrees 
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		broadcast "R3"
+		loop 40 times:
+			rotate shapes {_shapes::*} around vector(0, 0, 1) by 9 degrees 
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		broadcast "R4"
+		set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+		loop 40 times:
+			rotate shapes {_shapes::*} by {_rotation}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		broadcast "R5"
+		rotate shapes {_shapes::*} around vector(1, 0, 0) by 45 degrees
+		loop 40 times:
+			rotate shapes {_shapes::*} around local z axis by 9 degrees
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		reset normal vector of {_shapes::*}
+
+		loop 40 times:
+			add 7.5 to the cutoff angle of {_shapes::*}
+			add 0.1 to the winding rate of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+
+		loop 40 times:
+			add -7.5 to the cutoff angle of {_shapes::*}
+			remove 0.1 from the winding rate of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+
+		loop 40 times:
+			add 0.1 to the shape length of {_shapes::*}
+			add 0.01 to the side length of {_shapes::*}
+			add 0.1 to the outer radius of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+
+		loop 40 times:
+			add -0.1 to the shape length of {_shapes::*}
+			add -0.01 to the side length of {_shapes::*}
+			add -0.1 to the outer radius of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		
+		loop 40 times:
+			add 0.1 to the shape width of {_shapes::*}
+			add 0.1 to the inner radius of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+			
+		loop 40 times:
+			add -0.1 to the shape width of {_shapes::*}
+			add -0.1 to the inner radius of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+			
+		loop 40 times:
+			add 0.05 to the shape height of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+			
+		loop 40 times:
+			add -0.05 to the shape height of {_shapes::*}
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+
+		loop 4 times:
+			add 1 to the sides of {_shapes::*}
+			add 1 to the star points of {_shapes::*}
+			loop 10 times:
+				draw shapes {_shapes::*} at {_loc}
+				wait 1 tick
+
+		loop 4 times:
+			remove 1 from the sides of {_shapes::*}
+			remove 1 from the star points of {_shapes::*}
+			loop 10 times:
+				draw shapes {_shapes::*} at {_loc}
+				wait 1 tick
+
+		draw shapes {_shapes::*} at {_loc} for 3 seconds with refresh 1 tick
+		
+		hide local and global axes of {_shapes::*}
+
+command /magic:
+	permission: op
+	trigger:
+		set {_shapes::outer-circle} to a circle of radius 2.225
+		set {_shapes::inner-circle} to a circle of radius 2
+		set {_shapes::tiny-circle} to a circle of radius 0.875
+
+		set {_shapes::triangle-1} to a triangle with radius 2
+		set {_shapes::triangle-2} to a triangle with radius 2
+		rotate shapes {_shapes::triangle-2} around y axis by 60 degrees
+
+		set particle of {_shapes::*} to electric spark
+
+		loop 200 times:
+			set {_view} to vector from yaw player's yaw and pitch player's pitch
+			set {_yaw} to yaw of {_view}
+			# figure out the rotation needed to rotate the shape
+			set {_rotation} to rotation from vector(0, 1, 0) to {_view}
+			draw the shapes {_shapes::*} at player's eye location ~ {_view}:
+				# only happens for this draw call, the original shape is not modified
+				# note that this is called once for each shape, hence `drawn shape` and not `drawn shapes`
+				rotate shape drawn shape by {_rotation}
+				# the shape takes the shortest path to rotate to the desired rotation, but that causes it to appear to rotate as we turn.
+				# so we'll correct for it by rotating the shape around the y axis by the yaw of the player
+				rotate shape drawn shape around relative y axis by -1 * {_yaw}
+
+			wait 1 tick

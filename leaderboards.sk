@@ -1,0 +1,83 @@
+
+function formatNumber(n: number) :: string:
+	return join (regex split "%{_n}%" by "(?<=\d(?=(\d{3})+(?!\d)))") by ","
+
+function leaderboard(type: text, class: text) :: objects:
+	if {_class} = "overall": # Overall
+		set {_prefix} to "Overall"
+		set {_suffix} to {_type}
+		if {_type} = "Killstreak":
+			loop {kill::*}:
+				set {_uuid} to loop-index
+				set {_value} to {ks::%{_uuid}%::top}
+				if {_value} is set:
+					set {_leaderboardList::%{_uuid}%} to {_value}
+		else:
+			loop {%{_type}%::*}:
+				set {_uuid} to loop-index
+				set {_value} to loop-value
+				set {_leaderboardList::%{_uuid}%} to {_value}
+	else: # Class speific
+		set {_prefix} to {class-name::%{_class}%}
+		set {_suffix} to {_type}
+		if {_type} = "Killstreak":
+			loop {kill::*}:
+				set {_uuid} to loop-index
+				set {_value} to {class-ks::%{_uuid}%::%{_class}%::top}
+				if {_value} is set:
+					set {_leaderboardList::%{_uuid}%} to {_value}
+		else:
+			loop {kill::*}:
+				set {_uuid} to loop-index
+				set {_value} to {class-%{_type}%::%{_uuid}%::%{_class}%}
+				if {_value} is set:
+					set {_leaderboardList::%{_uuid}%} to {_value}		
+					
+	# Leaderboard sorting
+	loop {_leaderboardList::*}:
+		add 1 to {_size}
+		if {_low::%loop-value%} isn't set:
+			set {_low::%loop-value%} to loop-index
+		else:
+			loop {_size} times:
+				add 1 to {_n}
+				{_low::%loop-value-1%.%{_n}%} is not set
+				set {_low::%loop-value-1%.%{_n}%} to loop-index
+				stop loop
+	set {_size} to size of {_low::*}
+	loop {_low::*}:
+		set {_player} to loop-value parsed as a offline player
+		if {_player} is set: # gets rid of <none> on leaderboards
+			if {_player} is not banned:
+				set {_high::%{_size}%} to loop-value
+				remove 1 from {_size}
+
+	# Leaderboard display
+	add "&3&o%{_prefix}% %{_suffix}%" to {_display::*}
+	add "" to {_display::*}
+
+	set {_max} to 0
+	loop {_high::*}:
+		add 1 to {_max}
+		if {_max} = 1:
+			set {_c} to "&b"
+		else if {_max} = 2:
+			set {_c} to "&6"
+		else if {_max} = 3:
+			set {_c} to "&f"
+		else:
+			set {_c} to "&7"
+		set {_player} to loop-value parsed as a offline player
+		set {_temp} to formatNumber({_leaderboardList::%loop-value%})
+		add "%{_c}%%{_max}%. &8%{_player}% &f%{_temp}%" to {_display::*}
+		if {_max} is 10:
+			stop loop
+	loop 10 times:
+		if {_max} < 10:
+			add 1 to {_max}
+			add "&7%{_max}%. &8No Data Found" to {_display::*}
+
+	add "" to {_display::*}
+	add "&7Click to switch" to {_display::*}
+	return {_display::*}
+

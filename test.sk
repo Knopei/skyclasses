@@ -1,0 +1,19 @@
+
+
+command /test:
+	permission: op
+	trigger:
+		send "<##C3B1E1>&l[Elite-Grandmaster Viking] <##C3B1E1>%name of player%"
+		send "<##C3B1E1>&l[Elite Viking] <##C3B1E1>%name of player%"
+		send " "
+
+
+
+command /nbt:
+	permission: op
+	trigger:
+		set {_nbt} to nbt of player's held item
+		broadcast {_nbt}
+
+
+	

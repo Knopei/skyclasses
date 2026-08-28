@@ -1,0 +1,35 @@
+
+# mana.sk, for more functions
+
+on sneak toggle: #Stamina movement
+	if {top::%player's uuid%} is set:
+		if player isn't on ground:
+			if staminaCHECK(player, 1) is true:
+			
+				perkStamina(player) # generalperk.sk
+				if {isShielding::%player's uuid%} is set:
+					bsBash(player, "TAC") # weapons3.sk
+					play sound "entity_bat_takeoff" with volume 0.5 and pitch 0.5 at player
+				else:
+					play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at player
+				set {_pitch} to pitch of player
+				if {_pitch} > 75:
+					if {class::%player's uuid%} = "NS":
+						nkStamina(player)
+						teleport player to player
+						push player upward at speed 1.35
+					else:
+						teleport player to player
+						push player upward at speed 1
+				else:
+					if {class::%player's uuid%} = "NS":
+						nkStamina(player)
+						push player horizontally forward at speed 0.5
+						wait 1 tick
+						push player horizontally forward at speed 0.5
+						wait 1 tick
+						push player horizontally forward at speed 0.25
+					else:
+						push player horizontally forward at speed 0.5
+						wait 1 tick
+						push player horizontally forward at speed 0.5							

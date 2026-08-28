@@ -1,0 +1,363 @@
+
+on load:
+	# Arrow slot
+	set {arrow-slot} to 17
+	# Class Select Bottom
+	set {class-bottom::heals} to potion of healing named "&c&lHealth Items" with lore "" and "&7Click to choose"
+	set {class-bottom::perks} to glowstone dust named "&e&lGeneral Perks" with lore "" and "&7Click to choose"
+	set {class-bottom::lb} to heart of the sea named "&9&lLeaderboard" with lore "" and "&8&lComing Soon"
+	set {class-bottom::stats} to book named "&f&lStatistics" with lore "" and "" and "" and "" and "" and "" and "" and "" and ""
+
+	loop {class-bottom::*}:
+		set {_v} to loop-value
+		set {_i} to loop-index
+		#add nbt compound of "{attribute_modifiers:{modifiers:[],show_in_tooltip:0}}" to nbt compound of {_v}
+		set {class-bottom::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	# Class Color
+	set {class-color::ZT} to "&6"
+	set {class-color::PGS} to "&6"
+	set {class-color::GD} to "&6"
+	set {class-color::VBA} to "&6"
+	set {class-color::DS} to "&6"
+	set {class-color::RB} to "&6"
+	set {class-color::PF} to "&6"
+	set {class-color::MH} to "&6"
+	set {class-color::RS} to "&6"
+	set {class-color::MMH} to "&6"
+	set {class-color::NS} to "&6"
+	set {class-color::PT} to "&6"
+	set {class-color::HC} to "&6"
+	set {class-color::TB} to "&6"
+	set {class-color::CB} to "&6"
+	set {class-color::FH} to "&6"
+	set {class-color::BS} to "&6"
+	set {class-color::WH} to "&6"
+	# Class Name
+	set {class-name::ZT} to "Zeus"
+	set {class-name::PGS} to "Paladin"
+	set {class-name::GD} to "Ghost"
+	set {class-name::VBA} to "Viking"
+	set {class-name::DS} to "Demon"
+	set {class-name::RB} to "Rapid"
+	set {class-name::PF} to "Pirate"
+	set {class-name::MH} to "Mighty"
+	set {class-name::RS} to "Reaper"
+	set {class-name::MMH} to "Marksman"
+	set {class-name::NS} to "Ninja"
+	set {class-name::PT} to "Poseidon"
+	set {class-name::HC} to "Hunter"
+	set {class-name::TB} to "Tempest"
+	set {class-name::CB} to "Cyberpunk"
+	set {class-name::FH} to "Frankenstein"
+	set {class-name::BS} to "Basher"
+	set {class-name::WH} to "Warden"
+	# Class Select
+	set {class-select::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&8Difficulty  &a●&7●●●●" and "" and "&cDamage    &a●●●&7●●" and "&6Defense   &a●●●●●" and "&eRange      &7●●●●●" and "&bMobility     &a●●&7●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&8Difficulty  &a●&7●●●●" and "" and "&cDamage    &a●●●●●" and "&6Defense   &a●&7●●●●" and "&eRange      &a●&7●●●●" and "&bMobility     &a●●●&7●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::RB} to bow named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&8Difficulty  &6●●●&7●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &7●●●●●" and "&eRange      &a●●●&7●●" and "&bMobility     &a●●●&7●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&8Difficulty  &a●&7●●●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &a●●●●&7●" and "&eRange      &a●●&7●●●" and "&bMobility     &7●●●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&8Difficulty  &e●●&7●●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &a●&7●●●●" and "&eRange      &7●●●●●" and "&bMobility     &a●●●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&8Difficulty  &a●&7●●●●" and "" and "&cDamage    &a●●●●●" and "&6Defense   &a●●&7●●●" and "&eRange      &a●●●&7●●" and "&bMobility     &7●●●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::PF} to leather horse armor named "&eClass: %{class-color::PF}%&l%{class-name::PF}%" with lore "" and "&8Difficulty  &6●●●&7●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &a●&7●●●●" and "&eRange      &a●●●●●" and "&bMobility     &7●●●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::MH} to mace named "&eClass: %{class-color::MH}%&l%{class-name::MH}%" with lore "" and "&8Difficulty  &e●●&7●●●" and "" and "&cDamage    &a●●●●●" and "&6Defense   &a●●●&7●●" and "&eRange      &7●●●●●" and "&bMobility     &a●●&7●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::RS} to netherite hoe named "&eClass: %{class-color::RS}%&l%{class-name::RS}%" with lore "" and "&8Difficulty  &6●●●&7●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &a●&7●●●●" and "&eRange      &a●&7●●●●" and "&bMobility     &a●●●●&7●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::MMH} to spyglass named "&eClass: %{class-color::MMH}%&l%{class-name::MMH}%" with lore "" and "&8Difficulty  &4●●●●●" and "" and "&cDamage    &a●●●●●" and "&6Defense   &7●●●●●" and "&eRange      &a●●●●●" and "&bMobility     &7●●●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::NS} to nether star named "&eClass: %{class-color::NS}%&l%{class-name::NS}%" with lore "" and "&8Difficulty  &e●●&7●●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &7●●●●●" and "&eRange      &a●●&7●●●" and "&bMobility     &a●●●●&7●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::PT} to trident named "&eClass: %{class-color::PT}%&l%{class-name::PT}%" with lore "" and "&8Difficulty  &6●●●&7●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &a●●&7●●●" and "&eRange      &a●&7●●●●" and "&bMobility     &a●●●&7●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::HC} to crossbow named "&eClass: %{class-color::HC}%&l%{class-name::HC}%" with lore "" and "&8Difficulty  &c●●●●&7●" and "" and "&cDamage    &a●●●●●" and "&6Defense   &a●●&7●●●" and "&eRange      &a●●●&7●●" and "&bMobility     &7●●●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::TB} to bow named "&eClass: %{class-color::TB}%&l%{class-name::TB}%" with lore "" and "&8Difficulty  &c●●●●&7●" and "" and "&cDamage    &a●●●&7●●" and "&6Defense   &a●&7●●●●" and "&eRange      &a●●●&7●●" and "&bMobility     &a●●●&7●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::CB} to diamond sword named "&eClass: %{class-color::CB}%&l%{class-name::CB}%" with lore "" and "&8Difficulty  &e●●&7●●●" and "" and "&cDamage    &a●●●●●&7" and "&6Defense   &a●&7●●●●" and "&eRange      &a●&7●●●●" and "&bMobility     &a●●●&7●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::FH} to mace named "&eClass: %{class-color::FH}%&l%{class-name::FH}%" with lore "" and "&8Difficulty  &a●&7●●●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &a●●●●&7●" and "&eRange      &7●●●●●" and "&bMobility     &a●●&7●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::BS} to shield named "&eClass: %{class-color::BS}%&l%{class-name::BS}%" with lore "" and "&8Difficulty  &6●●●&7●●" and "" and "&cDamage    &a●●●●&7●" and "&6Defense   &a●●●●&7●" and "&eRange      &7●●●●●" and "&bMobility     &a●●&7●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	set {class-select::WH} to netherite axe named "&eClass: %{class-color::WH}%&l%{class-name::WH}%" with lore "" and "&8Difficulty  &e●●&7●●●" and "" and "&cDamage    &a●●●●●" and "&6Defense   &a●●&7●●●" and "&eRange      &a●●&7●●●" and "&bMobility     &a●&7●●●●" and "" and "" and "" and "&7[LEFT] Select" and "&7[RIGHT] Info/Edit" 
+	# "&8Difficulty  &7●●●●●" and "" and "&7Damage    &7●●●●●" and "&7Defense   &7●●●●●" and "&7Range      &7●●●●●" and "&7Mobility     &7●●●●●" 
+	# "&8Difficulty  &a●●●●●" and "" and "&cDamage    &a●●●●●" and "&6Defense   &a●●●●●" and "&eRange      &a●●●●●" and "&bMobility     &a●●●●●"
+
+	loop {class-select::*}:
+		set {_v} to loop-value
+		set {_i} to loop-index
+		#add nbt compound of "{attribute_modifiers:{modifiers:[],show_in_tooltip:0}}" to nbt compound of {_v}
+		set {class-select::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 
+
+on join:
+	wait 1 tick
+	loop {class-select::*}:
+		set {_class} to loop-index
+		if {class-assist::%player's uuid%::%{_class}%} isn't set:
+			set {class-kill::%player's uuid%::%{_class}%} to 0
+			set {class-death::%player's uuid%::%{_class}%} to 1
+			set {class-assist::%player's uuid%::%{_class}%} to 0
+			set {class-ks::%player's uuid%::%{_class}%::count} to 0
+			set {class-ks::%player's uuid%::%{_class}%::top} to 0
+			set {class-damage::%player's uuid%::%{_class}%} to 0
+	wait 1 tick
+	ClassMenu(player)
+
+
+command /class:
+	trigger:
+		if {duel::%player's uuid%::status} isn't set:
+			ClassMenu(player)
+
+on inventory close:
+	if event-inventory = (metadata tag "class menu" of player):
+		wait 1 tick 
+		if {class::%player's uuid%} isn't set:
+			classSelect(player, "VBA")
+
+function ClassMenu(p: player):
+	set {_size} to size of {class-select::*}
+	set metadata tag "class menu" of {_p} to chest inventory with 6 rows named "Class Selection"
+	set slot (integers between 9 and 35) of metadata tag "class menu" of {_p} to gray stained glass pane named " " 
+	set slot (integers between 0 and 8) of metadata tag "class menu" of {_p} to black stained glass pane named " " 
+	set slot (integers between 36 and 53) of metadata tag "class menu" of {_p} to black stained glass pane named " " 
+	# row 1
+	set slot 10 of metadata tag "class menu" of {_p} to {class-select::PGS} 
+	set slot 11 of metadata tag "class menu" of {_p} to {class-select::VBA}
+	set slot 12 of metadata tag "class menu" of {_p} to {class-select::RB}
+	set slot 13 of metadata tag "class menu" of {_p} to {class-select::DS}
+	set slot 14 of metadata tag "class menu" of {_p} to {class-select::GD}
+	set slot 15 of metadata tag "class menu" of {_p} to {class-select::ZT}
+	set slot 16 of metadata tag "class menu" of {_p} to {class-select::PF}
+
+	set line 9 of lore of slot 10 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "PGS", "long")%"
+	set line 9 of lore of slot 11 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "VBA", "long")%"
+	set line 9 of lore of slot 12 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "RB", "long")%"
+	set line 9 of lore of slot 13 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "DS", "long")%"
+	set line 9 of lore of slot 14 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "GD", "long")%"
+	set line 9 of lore of slot 15 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "ZT", "long")%"
+	set line 9 of lore of slot 16 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "PF", "long")%"
+	# row 2
+	set slot 19 of metadata tag "class menu" of {_p} to {class-select::MH}
+	set slot 20 of metadata tag "class menu" of {_p} to {class-select::RS}
+	set slot 21 of metadata tag "class menu" of {_p} to {class-select::MMH}
+	set slot 22 of metadata tag "class menu" of {_p} to {class-select::NS}
+	set slot 23 of metadata tag "class menu" of {_p} to {class-select::PT}
+	set slot 24 of metadata tag "class menu" of {_p} to {class-select::HC}
+	set slot 25 of metadata tag "class menu" of {_p} to {class-select::TB}
+
+	set line 9 of lore of slot 19 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "MH", "long")%"
+	set line 9 of lore of slot 20 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "RS", "long")%"
+	set line 9 of lore of slot 21 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "MMH", "long")%"
+	set line 9 of lore of slot 22 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "NS", "long")%"
+	set line 9 of lore of slot 23 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "PT", "long")%"
+	set line 9 of lore of slot 24 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "HC", "long")%"
+	set line 9 of lore of slot 25 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "TB", "long")%"
+	# row 3
+	set slot 28 of metadata tag "class menu" of {_p} to {class-select::CB}
+	set slot 29 of metadata tag "class menu" of {_p} to {class-select::FH}
+	set slot 30 of metadata tag "class menu" of {_p} to {class-select::BS}
+	set slot 31 of metadata tag "class menu" of {_p} to {class-select::WH}
+
+	set line 9 of lore of slot 28 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "CB", "long")%"
+	set line 9 of lore of slot 29 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "FH", "long")%"
+	set line 9 of lore of slot 30 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "BS", "long")%"
+	set line 9 of lore of slot 31 of metadata tag "class menu" of {_p} to "&8Rank: %getClassDiv({_p}, "WH", "long")%"
+
+	# bottom
+	set {_bottom::45} to {class-bottom::perks} 
+	set {_bottom::46} to {class-bottom::heals} 
+	set {_bottom::49} to {class-bottom::lb} 
+	set {_bottom::53} to {class-bottom::stats} 
+
+	set {_lore::*} to leaderboard("Kill", "overall")
+	set lore of {_bottom::49} to {_lore::*}
+
+	set slot 45 of metadata tag "class menu" of {_p} to {_bottom::45} 
+	set slot 46 of metadata tag "class menu" of {_p} to {_bottom::46} 
+	set slot 49 of metadata tag "class menu" of {_p} to {_bottom::49} 
+	set slot 53 of metadata tag "class menu" of {_p} to {_bottom::53} 
+
+	set line 1 of lore of slot 53 of metadata tag "class menu" of {_p} to "&e&oOverall"
+
+	set {_kill} to formatNumber({kill::%{_p}'s uuid%}) 
+	set {_death} to formatNumber({death::%{_p}'s uuid%}) 
+	set {_assist} to formatNumber({assist::%{_p}'s uuid%}) 
+	set {_ks} to formatNumber({ks::%{_p}'s uuid%::top}) 
+	set {_dmg} to formatNumber({damage::%{_p}'s uuid%}) 
+	set {_kdr} to {kill::%{_p}'s uuid%}/{death::%{_p}'s uuid%}
+
+	set line 3 of lore of slot 53 of metadata tag "class menu" of {_p} to "&8Kills &f%{_kill}%"
+	set line 4 of lore of slot 53 of metadata tag "class menu" of {_p} to "&8K.D.R &f%{_kdr}%"
+	set line 5 of lore of slot 53 of metadata tag "class menu" of {_p} to "&8Deaths &f%{_death}%"
+	set line 6 of lore of slot 53 of metadata tag "class menu" of {_p} to "&8Assists &f%{_assist}%"
+	set line 7 of lore of slot 53 of metadata tag "class menu" of {_p} to "&8Damage &f%{_dmg}%"
+	set line 8 of lore of slot 53 of metadata tag "class menu" of {_p} to "&8Top Killstreak &f%{_ks}%"
+
+	open (metadata tag "class menu" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "class menu" of player):
+		cancel event
+		# row 1
+		if index of event-slot is 10:
+			set {_class} to "PGS"
+		else if index of event-slot is 11:
+			set {_class} to "VBA"
+		else if index of event-slot is 12:
+			set {_class} to "RB"
+		else if index of event-slot is 13:
+			set {_class} to "DS"
+		else if index of event-slot is 14:
+			set {_class} to "GD"
+		else if index of event-slot is 15:
+			set {_class} to "ZT"
+		else if index of event-slot is 16:
+			set {_class} to "PF"
+		# row 2
+		else if index of event-slot is 19:
+			set {_class} to "MH"
+		else if index of event-slot is 20:
+			set {_class} to "RS"
+		else if index of event-slot is 21:
+			set {_class} to "MMH"
+		else if index of event-slot is 22:
+			set {_class} to "NS"
+		else if index of event-slot is 23:
+			set {_class} to "PT"
+		else if index of event-slot is 24:
+			set {_class} to "HC"
+		else if index of event-slot is 25:
+			set {_class} to "TB"
+		# row 3
+		else if index of event-slot is 28:
+			set {_class} to "CB"
+		else if index of event-slot is 29:
+			set {_class} to "FH"
+		else if index of event-slot is 30:
+			set {_class} to "BS"
+		else if index of event-slot is 31:
+			set {_class} to "WH"
+		# class functionality
+		if {_class} is set:
+			if "%event-clicktype%" = "right mouse button":
+				ClassInfo(player, {_class})
+				classAuto(player, {_class})
+				play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+			else:
+				close player's inventory
+				classSelect(player, {_class})
+				play sound "block.enchantment_table.use" at volume 1 at pitch 1.25 to player
+		else if index of event-slot is 45:
+			perkSelect(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 46:
+			healthSelect(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 49:
+			if line 1 of lore of event-slot contains "Killstreak":
+				set {_lore::*} to leaderboard("Kill", "overall")
+				set lore of event-slot to {_lore::*}
+			else if line 1 of lore of event-slot contains "Damage": 
+				set {_lore::*} to leaderboard("Killstreak", "overall")
+				set lore of event-slot to {_lore::*}
+			else if line 1 of lore of event-slot contains "Kill": 
+				set {_lore::*} to leaderboard("Damage", "overall")
+				set lore of event-slot to {_lore::*}
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+
+function classAuto(p: player, class: string):
+	if {class::%{_p}'s uuid%} isn't set:
+		classSelect({_p}, {_class})
+
+
+function classSelect(p: player, class: text):
+	if {class-SwitchCooldown::%{_p}'s uuid%} is set:
+		if difference between now and {class-SwitchCooldown::%{_p}'s uuid%} < 5 seconds:
+			send "&cYou are switching classes too quickly!" to {_p}
+			stop
+	if {_p} isn't op:
+		set {class-SwitchCooldown::%{_p}'s uuid%} to now
+	clear {_p}'s inventory
+	set {_uuid} to {_p}'s uuid
+	# Class ID, used to ensure while loops dont overlap (typically used for charge/ammo counts in items' name)
+	set {_id} to "%unix timestamp of now%" 
+	set {class-ID::%{_uuid}%} to {_id}
+	# clear current class
+	if {class::%{_uuid}%} is set:
+		clearCurrClass({_p}) # weapons.sk
+	# Create new class
+	set {class::%{_uuid}%} to {_class}
+	# PHY items
+	set {_weapon} to {class::weapon::%{_class}%}
+	
+	if {_class} = "HC":
+		if {class-perk::%{_uuid}%::HC::perk} = {perk-check::1}:
+			set {_weapon} to {class::weapon::HC1}
+	else if {_class} = "TB":
+		set {_weapon} to {class::weapon::TS}
+	else if {_class} = "CB":
+		if {class-perk::%{_uuid}%::CB::perk} = {perk-check::2}:
+			set {_weapon} to {class::weapon::CB1}
+	else if {_class} = "RB":
+		if {class-perk::%{_uuid}%::RB::perk} = {perk-check::3}:
+			set {_weapon} to {class::weapon::RD1}
+	
+	give {_p} {_weapon}
+	classHeals({_p})
+	nadeCount({_p}, {_id})
+	maxHealth({_p}) # found in generalperk.sk
+	# Class loops
+	healCount({_p}, {_id})
+	# Var Reset
+	set {mana::%{_uuid}%::max} to 1000
+	set {stamina::%{_uuid}%::max} to 900
+	# Class Specific
+	set {currWeapon::%{_uuid}%} to {_class}
+	if {_class} = "MMH":
+		give {_p} {class::weapon::MMS}
+		mmsULT({_p}, {_id})
+	else if {_class} = "TB":
+		give {_p} {class::weapon::TB}
+		arrowGive({_p})
+	else if {_class} = "HC":
+		give {_p} {class::weapon::HWL}
+	else if {_class} = "NS":
+		if {class-perk::%{_uuid}%::NS::perk} = {perk-check::1}:
+			set {stamina::%{_uuid}%::max} to 1200
+	else if {_class} = "CB":
+		cbULT({_p}, {_id})
+	else if {_class} = "RB":
+		if {class-perk::%{_uuid}%::RB::perk} = {perk-check::3}:
+			give {_p} {class::weapon::RB1}
+			set {currFireRate::%{_uuid}%} to -1 # bow fire rate
+			if {general-perk::%{_uuid}%::perk} = 22:
+				set {special::%{_uuid}%::ULT-CD} to {weapons::RB1::ULT-CD} - {gp-ultCD}
+			else:
+				set {special::%{_uuid}%::ULT-CD} to {weapons::RB1::ULT-CD}
+	else if {_class} = "BS":
+		set {shieldStrength::%{_uuid}%} to {weapons::BS::SS}
+		set level progress of {_p} to 0.99
+	# Stats
+	send "&eYou selected the &6%{_class}% &eclass!" to {_p}
+	#
+	if {special::%{_uuid}%::ULT-CD} is set:
+		set {_wait} to {special::%{_uuid}%::ULT-CD}
+	else:
+		if {_wait} isn't set:
+			if {_class} = "CB":
+				set {_wait} to cbCalcCooldownULT({_p})
+			else:
+				set {_wait} to {weapons::%{_class}%::ULT-CD}
+
+		if {general-perk::%{_uuid}%::perk} = 22:
+			if {_wait} > 20 seconds:
+				set {_wait} to {_wait} - {gp-ultCD}
+				set {special::%{_uuid}%::ULT-CD} to {_wait}
+
+	set {godlike-ULT-CD::%{_uuid}%::%{_class}%} to now
+	wait {_wait}
+	if {class-ID::%{_uuid}%} = {_id}:
+		delete {godlike-ULT-CD::%{_uuid}%::%{_class}%}
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+		
+on disconnect:
+	delete {class-ID::%player's uuid%}
+on skript stop:
+	delete {class-ID::*}
+
+command /myclass:
+	permission: op
+	trigger:
+		send "%{class::%player's uuid%}%"
+

@@ -1,0 +1,1308 @@
+
+		
+on load:
+	# ZT
+	set {weapons::ZT::AS} to -2
+	set {weapons::ZT::TAC-COST} to 45
+	set {weapons::ZT::ULT-COST} to 60
+	set {weapons::ZT::ULT-CD} to 40 seconds # 35
+	# PGS
+	set {weapons::PGS::AS} to -2
+	set {weapons::PGS::TAC-COST} to 55
+	set {weapons::PGS::ULT-COST} to 55
+	set {weapons::PGS::ULT-CD} to 40 seconds
+	# GD
+	set {weapons::GD::AS} to -2
+	set {weapons::GD::TAC-COST} to 45
+	set {weapons::GD::ULT-COST} to 60
+	set {weapons::GD::ULT-CD} to 45 seconds
+
+	set {perk-var::GD::28} to 40 # 40 mana (perk: 28)
+	set {gd-dmgReduction} to 10 # take 10% less dmg (perk: 30)
+	# VBA
+	set {weapons::VBA::AS} to -2
+	set {weapons::VBA::TAC-COST} to 45
+	set {weapons::VBA::ULT-COST} to 50
+	set {weapons::VBA::ULT-CD} to 40 seconds
+	# DS
+	set {weapons::DS::AS} to -2
+	set {weapons::DS::TAC-COST} to 45
+	set {weapons::DS::ULT-COST} to 55
+	set {weapons::DS::ULT-CD} to 40 seconds
+	# RB
+	set {weapons::RB::AS} to -2
+	set {weapons::RB::ATK-COST} to 5
+	set {weapons::RB::TAC-COST} to 25
+	set {weapons::RB::ULT-COST} to 10
+	set {weapons::RB::ULT-CD} to 1 seconds
+
+	set {weapons::RD::AS} to -2
+	set {weapons::RD::TAC-COST} to 40
+
+	set {weapons::RB1::TAC-COST} to 40
+	set {weapons::RB1::ULT-COST} to 60
+	set {weapons::RB1::ULT-CD} to 40 seconds 
+	set {RB1-FirstHitAtkCost} to 25
+	set {weapons::RD1::AS} to -2
+	# PF/PC
+	set {weapons::PF::AS} to -2
+	set {weapons::PF::ATK-COST} to 15
+	set {weapons::PF::TAC-COST} to 35
+	set {weapons::PF::ULT-COST} to 10
+	set {weapons::PF::ULT-CD} to 1 seconds
+
+	set {weapons::PC::AS} to -2
+	set {weapons::PC::TAC-COST} to 50
+	set {weapons::PC1::AS} to 100
+	# MH
+	set {weapons::MH::AS} to -2
+	# RS
+	set {weapons::RS::AS} to -2
+	# MMH
+	set {weapons::MMH::AS} to -2
+	set {weapons::MMS::AS} to -2
+	# NS
+	set {weapons::NS::AS} to -2
+	set {weapons::NK::AS} to -2
+	# PT
+	set {weapons::PT::AS} to -2
+	set {weapons::PT1::AS} to -2
+	# HC
+	set {weapons::HC::AS} to -2
+	set {weapons::HK::AS} to -2
+	# TB
+	set {weapons::TB::AS} to -2
+	set {weapons::TS::AS} to -2
+	# 
+	set {weapons::CB::AS} to -2
+	set {weapons::CB1::AS} to -2
+	# FH
+	set {weapons::FH::AS} to -2
+	# BS
+	set {weapons::BS::AS} to -2
+	# WH
+	set {weapons::WH::AS} to -2
+
+
+# COMMON RULES
+
+on join:
+	set player's level to 0
+	set level progress of player to 0
+
+on projectile hit:
+	set metadata value "hit" of event-projectile to true
+
+on disconnect:
+	clearCurrClass(player)
+
+on skript stop:
+	loop all players:
+		clearCurrClass(loop-player)
+
+function clearCurrClass(p: player):
+	set {_uuid} to {_p}'s uuid
+	# ALL
+	delete {godlike-ULT-CD::%{_uuid}%::*}
+	delete {godlike-ULT-USE::%{_uuid}%::*}
+	delete {godlike-TAC-USE::%{_uuid}%::*}
+	delete {special::%{_uuid}%::ULT-CD}
+	set {_p}'s level to 0
+	set level progress of {_p} to 0
+	# CLASSES
+	# RB
+	set {currFireRate::%{_uuid}%} to 0
+	# PGS
+	remove absorption from active potion effects of {_p}	
+	# RS
+	delete {rg::%{_uuid}%::*}
+	delete {rg-hitEntity::%{_uuid}%}
+	delete {rg-movement::%{_uuid}%}
+	delete {rg-hitLoc::%{_uuid}%}
+	delete {reaper-attack::%{_uuid}%} 
+	# PT
+	delete {tornadoMovement::%{_uuid}%}
+	delete {poseidon-attack::%{_uuid}%} # outdated
+	delete {zeus-attack::%{_uuid}%}
+	set {tridentFix::%{_uuid}%} to now
+	# PF
+	delete {piratePerk-30::%{_uuid}%} 
+	# HC
+	kill {summon::%{_uuid}%::summon}
+	delete {summon::%{_uuid}%::*}
+	set {summon::%{_uuid}%::cd} to true
+	# BS
+	delete {isShielding::%{_uuid}%}
+	# WH 
+	set {sonicBeamStack::%{_uuid}%} to 0
+
+
+
+
+function directAttack(v: living entity): 
+	# GD
+	if {godlike-ULT-USE::%{_v}'s uuid%::GD} is set:
+		set {godlike-ULT-USE::%{_v}'s uuid%::GD} to false
+
+function itemEnchant(p: player, name: string):
+	loop {_p}'s inventory:
+		if name of loop-value is {_name}:
+			set {_i} to index of loop-value
+			enchant slot {_i} of {_p}'s inventory with unbreaking 1 
+			stop loop
+
+function itemDisenchant(p: player, name: string):
+	loop {_p}'s inventory:
+		if name of loop-value is {_name}:
+			set {_i} to index of loop-value
+			disenchant slot {_i} of {_p}'s inventory 
+			stop loop
+
+function projectileDmgCHECK(a: player, v: living entity, dmg: number) :: number:
+	if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
+		return fhULT({_a}, {_v}, {_dmg})
+	
+	if {playerDefense::%{_v}'s uuid%} is set:
+		set {_temp} to (100 - {playerDefense::%{_v}'s uuid%}) * 0.01
+		set {_dmg} to {_dmg}*{_temp}	
+	return {_dmg}
+
+
+on join:
+	set {projectileChangeFix::%player's uuid%} to now
+
+every 1 seconds: # inf speed
+	loop all players:
+		if {top::%loop-player's uuid%} is set:
+			if {class::%loop-player's uuid%} = "GD":
+				add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+			else if {class::%loop-player's uuid%} = "TB":
+				if name of loop-player's held item is "%{wc}%Tempest Bow":
+					add potion effect of speed 3 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else if {class::%loop-player's uuid%} = "VBA":
+				
+				if loop-player's health <= 5:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else if {currWeapon::%loop-player's uuid%} = "PF":
+				if {class-perk::%loop-player's uuid%::PF::perk} = {perk-check::1}:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else:
+				add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+
+
+# ZEUS TRIDENT
+
+on shoot: # TAC
+	if name of shooter's held item is "%{wc}%Zeus's Trident":
+		if difference between now and {projectileChangeFix::%shooter's uuid%} > 10 ticks:
+			if tacCHECK(shooter, {weapons::ZT::TAC-COST}) is true:
+				cancel event
+				set shooter's held item to {class::weapon::ZT}
+
+				set {projectileChangeFix::%shooter's uuid%} to now
+				shoot a trident from shooter at speed 2
+				set {_proj} to last shot projectile
+
+				set metadata value "attacker" of {_proj} to shooter
+				set metadata value "type" of {_proj} to "ZT"
+
+				play sound "item_trident_throw" at volume 3 at pitch 1 at shooter
+
+				if {class-perk::%shooter's uuid%::ZT::perk} = {perk-check::1}:
+					add potion effect of speed 2 without particles for 4 seconds to potion effects of shooter
+
+				while metadata value "hit" of {_proj} isn't set:
+					if metadata value "type" of {_proj} is "ZT":
+						draw 5 of enchanted_hit at {_proj} with offset vector(0.1, 0.1, 0.1) with extra 0 
+					if (y coord of {_proj}) < -75:
+						set metadata value "hit" of {_proj} to true
+					wait 1 tick
+				kill {_proj}
+			else:
+				cancel event
+
+
+		
+
+on projectile hit with priority low: # TAC
+	if event-projectile is a trident:
+		if metadata value "type" of event-projectile is "ZT":
+			if metadata value "hit" of event-projectile isn't set:
+				loop all entities in radius 3 around event-location:
+					if loop-entity is not shooter:
+						if loop-entity is a warden:
+							damage loop-entity by 1.5
+						updateAttacker(shooter, loop-entity)
+						directAttack(loop-entity)
+				strike lightning at the event-location
+				draw 10 of large_smoke at event-location # with extra 0
+
+		wait 1.5 second
+		kill event-projectile
+
+on drop of trident with priority low: # ULT USE
+	if name of event-item is "%{wc}%Zeus's Trident":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::ZT::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::ZT} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::ZT} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::ZT}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::ZT::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::ZT} to now
+
+			set {_shapes::outer-circle} to a circle of radius 6 # 6
+			set {_shapes::inner-circle} to a circle of radius 4 # 4
+			set {_shapes::tiny-circle} to a circle of radius 1.5 # 1.5
+
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(white, light blue, 1)
+			# ULT PREP
+			set {_loc} to location of player
+
+			loop blocks in radius 5 around {_loc}: # radius 5
+				set {_y} to y-coord of {_loc}
+				if y-coord of loop-block < {_y}+1:
+					if y-coord of loop-block > {_y}-1:
+						add location of loop-block to {_strike::*}
+			set {_s} to size of {_strike::*}
+			loop all entities in radius 5 around {_loc}: # radius 5
+				if loop-entity is not player:
+					add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
+
+			play sound "entity.elder_guardian.curse" at volume 10 at pitch 0.75 at block 10 above {_loc}
+
+			if {class-perk::%player's uuid%::ZT::perk} = {perk-check::2}:
+				set {_ticks} to 5 ticks
+			else:
+				set {_ticks} to 15 ticks
+
+			draw shapes {_shapes::tiny-circle} at {_loc}
+			wait {_ticks}
+			draw shapes {_shapes::inner-circle} at {_loc}
+			wait {_ticks}
+			draw shapes {_shapes::outer-circle} at {_loc}
+
+			# PHY ULT
+			loop 60 times:
+				set {_r} to random integer between 0 and {_s}
+				loop all entities in radius 2 around {_strike::%{_r}%}:
+					if loop-entity is not player:
+						if loop-entity is a warden:
+							damage loop-entity by 1.5
+						updateAttacker(player, loop-entity)	
+						add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity				
+				strike lightning at {_strike::%{_r}%}
+				draw 10 of large_smoke at {_strike::%{_r}%}
+				draw shapes {_shapes::outer-circle} at {_loc}
+				wait 2 tick
+			wait 1 second
+			set {godlike-ULT-CD::%player's uuid%::ZT} to now
+			delete {godlike-ULT-USE::%player's uuid%::ZT}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::ZT}
+			if {class::%player's uuid%} = "ZT":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on damage of player:
+	if "%damage cause%" is "lightning":
+		if {godlike-ULT-USE::%victim's uuid%::ZT} is set:
+			cancel event
+
+on pickup of trident:
+	cancel event
+
+on left click with priority high: # PSS
+	if name of player's held item is "%{wc}%Zeus's Trident":
+		if attack cooldown of player >= 0.75:
+			if {zeus-attack::%player's uuid%} = 3:
+				delete {zeus-attack::%player's uuid%} 
+				set level progress of player to 0
+				zeusPSS(player, 13)
+
+function ztCHECK(a: player) :: number:
+	if name of {_a}'s held item is "%{wc}%Zeus's Trident":
+		if {zeus-attack::%{_a}'s uuid%} = 3:
+			delete {zeus-attack::%{_a}'s uuid%} 
+			set level of {_a} to 0
+			set level progress of {_a} to 0	
+			zeusPSS({_a}, 13)		
+		else:
+			add 1 to {zeus-attack::%{_a}'s uuid%} 
+			set level of {_a} to 0
+			add 0.33 to level progress of {_a}
+
+function zeusPSS(p: player, length: number): #PSS
+	wait 1 tick
+	set {_uuid} to {_p}'s uuid
+
+	set {_pLoc::1} to location of {_p}
+	set {_pLoc::2} to location of {_p}
+	set {_pLoc::3} to location of {_p}
+	add 5 to yaw of {_pLoc::2}
+	add -5 to yaw of {_pLoc::3}
+
+	set {_x} to 0
+	set {_l} to 0
+
+	loop {_length} times: 
+		add 1 to {_x}
+		add 0.5 to {_l}
+
+		loop {_pLoc::*}:
+			set {_index} to loop-index
+			set {_loc} to location {_l} blocks infront of {_pLoc::%{_index}%}
+			set {_loc} to location 1.5 blocks above {_loc} 
+			draw 1 of dust using dustOption(cyan, 1) at {_loc}
+			# CHECKS HIT ENTITIES
+			set {_height} to 0
+			loop 3 times:
+				loop all living entities in radius 1 around {_loc}:
+					if loop-entity is not {_p}:
+						if {_height} = 0:
+							set {_hit} to true
+						else if {_height} = 1:
+							if loop-entity is not a wolf:
+								set {_hit} to true
+						else if {_height} = 2:
+							if loop-entity is a warden:
+								set {_hit} to true
+						if {_hit} is set:
+							updateAttacker({_p}, loop-entity)
+							damage loop-entity by 0.75
+				add 1 to {_height}
+				set {_loc} to location 1 blocks below {_loc}
+
+	play sound "entity.player.attack.sweep" at volume 3 and pitch 1.5 at location of {_p}
+
+# PALADIN GREAT SWORD
+
+on right click with iron sword:
+	if name of player's held item is "%{wc}%Paladin Great Sword": 
+		if tacCHECK(player, {weapons::PGS::TAC-COST}) is true:
+			add potion effect of absorption 1 without particles for 10 seconds to potion effects of player
+			play sound "BLOCK_ANVIL_PLACE" with volume 1 and pitch 0.25 at player
+			# TAC PART
+			set {_shapes::circle} to a circle with radius 1.25
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 0.75)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			# PHY TAC
+			set {_perkCount} to 10
+			while (absorption amount of player) > 0:
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				if {class-perk::%player's uuid%::PGS::perk} = {perk-check::1}:
+					if {_perkCount} = 10:
+						add potion effect of speed 2 without particles for 1 seconds to potion effects of player
+						set {_perkCount} to 0
+					add 1 to {_perkCount}
+				wait 2 tick
+
+on damage of player:
+	if (absorption amount of victim) > 0:
+		if {class::%victim's uuid%} = "PGS":
+			set {_loc} to location of victim
+			set {_x} to random number between -1 and 1
+			set {_y} to random number between 1 and 1.5
+			add {_x} to x-coord of {_loc}
+			add {_y} to y-coord of {_loc}
+			spawn 1 armor stand at {_loc}
+			set {_ls} to last spawned armor stand
+			add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
+			set name of last spawned armor stand to "&6✧&e&oSHIELDED&6✧"
+			wait 1 second
+			kill {_ls}		
+
+on drop of iron sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Paladin Great Sword":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::PGS::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::PGS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::PGS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::PGS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::PGS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::PGS} to now	
+			# ULT PART
+			if {class-perk::%player's uuid%::PGS::perk} = {perk-check::2}:
+				set {_shapes::outer-circle} to a circle of radius 7.5
+				set {_shapes::inner-circle} to a circle of radius 7.25
+				set {_shapes::tiny-circle} to a circle of radius 3
+				set {_shapes::teeny-circle} to a circle of radius 1.5
+
+				set {_shapes::triangle-1} to a triangle with radius 7
+				set {_shapes::triangle-2} to a triangle with radius 7
+				set {_ultDmgRadius} to 7.75
+			else:
+				set {_shapes::outer-circle} to a circle of radius 5
+				set {_shapes::inner-circle} to a circle of radius 4.75
+				set {_shapes::tiny-circle} to a circle of radius 1.5
+
+				set {_shapes::triangle-1} to a triangle with radius 4.5
+				set {_shapes::triangle-2} to a triangle with radius 4.5
+				set {_ultDmgRadius} to 5.25
+
+
+			rotate shapes {_shapes::triangle-2} around y axis by 60 degrees
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 1)
+			# PHY ULT
+			set {_loc} to player's location
+			set {_y-max} to y-coord of {_loc}+2
+			set {_y-min} to y-coord of {_loc}-2
+			loop 40 times:
+				add 1 to {_n}
+				draw shapes {_shapes::*} at {_loc}
+				if {_n} = 4:
+					delete {_n}
+					loop all living entities in radius {_ultDmgRadius} around {_loc}:
+						if loop-entity is player:
+							add potion effect of speed 3 for 1 seconds to potion effects of loop-entity
+							add potion effect of regeneration 3 for 1 seconds to potion effects of loop-entity	
+						else if y-coord of loop-entity is between {_y-max} and {_y-min}:
+							updateAttacker(player, loop-entity)
+							add potion effect of slowness 1 for 1 seconds to potion effects of loop-entity
+							damage loop-entity by 1 
+							play sound "BLOCK_ANVIL_PLACE" with volume 0.5 and pitch 3 at {_loc}
+				wait 5 tick 
+			set {godlike-ULT-CD::%player's uuid%::PGS} to now	
+			delete {godlike-ULT-USE::%player's uuid%::PGS}	
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::PGS}	
+			if {class::%player's uuid%} = "PGS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+every 3 seconds:
+	loop all players:
+		if name of loop-player's held item is "%{wc}%Paladin Great Sword":
+			add potion effect of regeneration 1 without particles for 3 seconds to potion effects of loop-player
+
+# GHOST DAGGER
+
+on sprint toggle:
+	if name of player's held item is "%{wc}%Ghost Dagger":
+		if player isn't sprinting:
+			wait 1 tick
+			while player is sprinting:
+				if {godlike-ULT-USE::%player's uuid%::GD} is set:
+					stop
+				if player.isOnGround() is true:
+					draw 1 of smoke at player with extra 0
+				wait 1 tick
+
+on right click with golden sword:
+	if name of player's held item is "%{wc}%Ghost Dagger":
+		if {class-perk::%player's uuid%::GD::perk} = {perk-check::1}:
+			set {_mana} to {perk-var::GD::28}
+		else:
+			set {_mana} to {weapons::GD::TAC-COST}
+		if tacCHECK(player, {_mana}) is true:
+			teleport player to player
+			push player forward at speed 1.1
+			play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at player
+			if {class-perk::%player's uuid%::GD::perk} = {perk-check::2}:
+				set {_dmgReduc} to {gd-dmgReduction}
+			else:
+				set {_dmgReduc} to 0
+
+			loop 10 times:
+				add 1 to {_n}
+				if player isn't on ground:
+					set {playerDefense::%player's uuid%} to {_dmgReduc}
+					loop all living entities in radius 2 around player:
+						if loop-entity is not player:
+							if {_tacHit::*} doesn't contain loop-entity:
+								updateAttacker(player, loop-entity)
+								directAttack(loop-entity)
+								damage loop-entity by 1.5 
+								add loop-entity to {_tacHit::*}
+				else if {_n} < 3:
+					set {playerDefense::%player's uuid%} to {_dmgReduc}
+					loop all living entities in radius 2 around player:
+						if loop-entity is not player:
+							if {_tacHit::*} doesn't contain loop-entity:
+								updateAttacker(player, loop-entity)
+								directAttack(loop-entity)
+								damage loop-entity by 1.5 	
+								add loop-entity to {_tacHit::*}		
+				else:
+					stop loop
+				wait 5 ticks
+			delete {playerDefense::%player's uuid%} 
+
+on drop of golden sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Ghost Dagger":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::GD::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::GD} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::GD} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::GD}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::GD::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::GD} to now	
+			if {class-perk::%player's uuid%::GD::perk} = {perk-check::3}:
+				removeBadEffects(player, "victim")
+				add potion effect of regeneration 3 without particles for 5 seconds to potion effects of player
+			add potion effect of speed 4 without particles for 5 seconds to potion effects of player
+			add potion effect of invisibility without particles for 5 seconds to potion effects of player
+			player.setArrowsInBody(0)
+			set {_ta} to {total-armor::%player's uuid%}
+			set {_pa} to {projectile-armor::%player's uuid%}
+			set {_armor::1} to player's helmet
+			set {_armor::2} to player's chestplate
+			set {_armor::3} to player's leggings
+			set {_armor::4} to player's boots
+			set player's helmet to air
+			set player's chestplate to air
+			set player's leggings to air
+			set player's boots to air
+			play sound "block_fire_extinguish" with volume 5 and pitch 1 at player
+			draw 25 of large_smoke at player with offset vector(0.5, 0.5, 0.5) with extra 0.1
+			wait 2 tick
+			set {total-armor::%player's uuid%} to {_ta}
+			set {projectile-armor::%player's uuid%} to {_pa}
+
+			while {godlike-ULT-USE::%player's uuid%::GD} is set:
+				add 1 to {_n}
+				if {_n} = 100:
+					stop loop
+				if {godlike-ULT-USE::%player's uuid%::GD} is false: 
+					if {_n} > 20:
+						stop loop
+					else: # allows a guaranteed 1 second of ult
+						wait 1 second
+						stop loop
+				else:
+					wait 1 tick
+			delete {godlike-ULT-USE::%player's uuid%::GD}
+			remove speed from active potion effects of player
+			remove invisibility from active potion effects of player
+			if {class-perk::%player's uuid%::GD::perk} = {perk-check::3}:
+				remove regeneration from active potion effects of player
+
+			set player's helmet to {_armor::1}
+			set player's chestplate to {_armor::2}
+			set player's leggings to {_armor::3}
+			set player's boots to {_armor::4}
+			play sound "block_fire_extinguish" with volume 5 and pitch 1 at player
+			draw 25 of large_smoke at player with offset vector(0.5, 0.5, 0.5) with extra 0.1
+			set {godlike-ULT-CD::%player's uuid%::GD} to now	
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::GD}	
+			if {class::%player's uuid%} = "GD":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function gdCHECK(a: living entity, v: living entity) :: number:
+	if name of {_a}'s held item is "%{wc}%Ghost Dagger":
+		if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
+			if {godlike-ULT-USE::%{_a}'s uuid%::GD} is false:
+				set {_multi} to 0.25
+			else:
+				set {_time} to difference between now and {godlike-ULT-USE::%{_a}'s uuid%::GD}
+				set {_check} to 80 ticks
+				set {_multi} to 0.25
+				loop 4 times:
+					if {_time} > {_check}:
+						add 0.1 to {_multi}
+					remove 20 ticks from {_check}
+
+			delete {godlike-ULT-USE::%{_a}'s uuid%::GD}
+			updateAttacker({_a}, {_v})
+			set {_h} to health of {_v}
+			set {_h} to {_h}*{_multi} # dmg multiplier
+			if {_h} < 2.5:
+				set {_h} to 2.5
+			damage {_v} by {_h} 
+			dmgStats({_a}, {_v}, {_h}, "GD")
+			make 25 of block particle using redstone block at block 1.5 above location of {_v}
+			play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_v}
+			return 0
+
+on damage of player:
+	if "%event-damagecause%" is "attack" or "projectile":
+		if {godlike-ULT-USE::%victim's uuid%::GD} is set:
+			set {godlike-ULT-USE::%victim's uuid%::GD} to false
+			
+# VIKING BATTLE AXE
+
+on right click with iron axe:
+	if name of player's held item is "%{wc}%Viking Battle Axe": 
+		if tacCHECK(player, {weapons::VBA::TAC-COST}) is true:
+			shoot a arrow from player at speed 2.5
+			set metadata value "type" of shot projectile to "VBA"
+			set metadata value "attacker" of shot projectile to player
+			play sound "entity_arrow_shoot" with volume 3 and pitch 1 at player
+			while metadata value "hit" of shot projectile isn't set:
+				draw 5 of dust_color_transition using dustTransition(orange, red, 0.5) at shot projectile with offset vector(0, 0, 0) with extra 0 
+				if (y-coord of shot projectile) < -75:
+					set metadata value "hit" of shot projectile to true
+				wait 1 tick
+			kill shot projectile
+
+on damage of living entity:
+	if event-damagecause is a projectile:
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "VBA":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+				add potion effect of speed 2 for 3 seconds to potion effects of {_attacker}
+				add potion effect of slowness 1 for 3 seconds to potion effects of victim
+				make 25 of block particle using redstone block at block 1.5 above location of victim
+				play sound "BLOCK_STONE_BREAK" at volume 5 at location of victim
+
+on damage of living entity:
+	if event-damagecause is attack:
+		if name of attacker's held item is "%{wc}%Viking Battle Axe":
+			if {godlike-ULT-USE::%attacker's uuid%::VBA} is set:
+				play sound "ENTITY_ENDER_DRAGON_HURT" with volume 1 and pitch 1 at victim
+
+on drop of iron axe with priority low: # ULT USE
+	if name of event-item is "%{wc}%Viking Battle Axe":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::VBA::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::VBA} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::VBA} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::VBA}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::VBA::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::VBA} to now
+			if {class-perk::%player's uuid%::VBA::perk} = {perk-check::2}:
+				add potion effect of speed 3 without particles for 10 seconds to potion effects of player
+			else:
+				add potion effect of speed 2 without particles for 10 seconds to potion effects of player
+			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1 at player
+			# TAC PART
+			set {_shapes::circle} to a circle with radius 1.25
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(orange, red, 0.5)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			# PHY TAC
+			loop 200 times:
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				draw 1 of angry villager at block above player with offset vector(0.5, 0.5, 0.5) with extra 0.1
+				wait 1 tick
+			set {godlike-ULT-CD::%player's uuid%::VBA} to now	
+			delete {godlike-ULT-USE::%player's uuid%::VBA}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::VBA}	
+			if {class::%player's uuid%} = "VBA":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function vbaCHECK(a: living entity, v: living entity, dmg: number, crit: text) :: number:
+	if {_a} is a player:
+		if name of {_a}'s held item is "%{wc}%Viking Battle Axe":
+			if {class-perk::%{_a}'s uuid%::VBA::perk} = {perk-check::1}:
+				if {godlike-ULT-USE::%{_a}'s uuid%::VBA} is set:
+					set {_factor} to 0.75 # 3.5,4.5*
+				else if {_a}'s health <= 3:
+					set {_factor} to 0.75 # 3.5,4.5*
+				else if {_a}'s health <= 5:
+					set {_factor} to 0.5 # 3,4*
+				else if {_a}'s health <= 7:
+					set {_factor} to 0.25 # 2.5,3.5*
+				if {_factor} is set:
+					set {_return} to {_dmg}*{_factor}
+					if {_crit} = "critical":
+						remove {_factor} from {_return}
+			else:
+				if {godlike-ULT-USE::%{_a}'s uuid%::VBA} is set:
+					set {_factor} to 0.4 # 3.5,4.5* adjust crit remove
+				else if {_a}'s health <= 3:
+					set {_return} to 0.5 # 3,4.25*
+				else if {_a}'s health <= 5:
+					set {_return} to 0.25 # 2.75,4*
+				if {_factor} is set:
+					set {_return} to {_dmg}*{_factor}
+					if {_crit} = "critical":
+						remove 0.75 from {_return} # only applies for ult 
+			return {_return}
+
+
+# DEMONIC SABER
+
+function demonicBeam(p: player, e: living entity, v: vector, h: number):
+	set vector length of {_v} to 0.1
+	set {_loc} to location of {_p}
+	add {_h} to y-coord of {_loc}
+	loop (distance between {_loc} and {_e}) / 0.1 times:
+		draw 2 of dust using dustOption(red, 0.75) at {_loc}
+		make 1 of block particle using redstone block at {_loc}
+		set {_loc} to {_loc} ~ {_v}
+	updateAttacker({_p}, {_e})
+	play sound "entity_blaze_shoot" at volume 5 at location of {_p}
+	make 25 of block particle using redstone block at block 1.5 above location of {_e}
+	play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_e}
+
+
+on right click with netherite sword:
+	if name of player's held item is "%{wc}%Demonic Saber": 
+		if tacCHECK(player, {weapons::DS::TAC-COST}) is true:
+
+			if {class-perk::%player's uuid%::DS::perk} = {perk-check::1}:
+				set {_beamRange} to 7.5
+			else:
+				set {_beamRange} to 5
+
+			loop {_beamRange} times: 
+				add 1 to {_dis}
+				set {_loc} to location {_dis} blocks infront of player
+				set {_loc} to location 1 blocks above {_loc}
+				loop all living entities in radius 2.5 of {_loc}:
+					if loop-entity is not a armor stand:
+						if loop-entity isn't player:
+							set {_target} to loop-entity
+							if {_targetList::*} doesn't contain {_target}:
+								add {_target} to {_targetList::*}
+								set {_v} to vector from player to {_target}
+								# func
+								demonicBeam(player, {_target}, {_v}, 1.25)
+								directAttack({_target})
+								damage {_target} by 0.5
+								heal player by 0.5 heart
+			if {_target} isn't set:
+				play sound "entity.blaze.hurt" at volume 3 and pitch 0.5 to player
+
+
+
+
+on drop of netherite sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Demonic Saber":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::DS::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::DS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::DS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::DS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::DS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::DS} to now
+			play sound "entity_blaze_death" with volume 5 and pitch 0.5 at player
+			# TAC PART
+			set {_shapes::circle} to a circle with radius 1.25
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(red, black, 0.5)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			# PHY TAC
+			set {_n} to 39
+			loop 161 times:
+				add 1 to {_n}
+				if {_n} = 40:
+					set {_n} to 0
+					set {_max} to 0
+					loop all living entities in radius 6 around player:
+						if loop-entity is not player:
+							if loop-entity is a player:
+								set {_v} to vector from player to loop-entity
+								if {_max} < 3:
+									demonicBeam(player, loop-entity, {_v}, 1.25)
+									damage loop-entity by 0.5 hearts
+									set {_heal} to true
+									add 1 to {_max}
+							else:
+								set {_v} to vector from player to loop-entity
+								demonicBeam(player, loop-entity, {_v}, 1.25)
+								damage loop-entity by 0.5 hearts
+								set {_heal} to true
+					if {_heal} is set:
+						heal player by 0.5 hearts
+					delete {_heal}
+					delete {_v}
+					delete {_max}
+
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				
+				wait 1 tick
+			set {godlike-ULT-CD::%player's uuid%::DS} to now	
+			delete {godlike-ULT-USE::%player's uuid%::DS}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::DS}
+			if {class::%player's uuid%} = "DS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player	
+
+on damage of living entity:
+	if attacker is a player:
+		if name of attacker's held item is "%{wc}%Demonic Saber":
+			if attack cooldown of attacker >= 0.75:
+				if {godlike-ULT-USE::%attacker's uuid%::DS} is set:
+					if {class-perk::%attacker's uuid%::DS::perk} = {perk-check::2}:
+						heal attacker by 0.75 hearts
+					else:
+						heal attacker by 0.25 hearts
+				else:
+					heal attacker by 0.25 hearts
+
+# RAPID BOW
+
+on join:
+	set {rbAllowedToShoot::%player's uuid%} to true 
+	set {currFireRate::%player's uuid%} to 0 # represents the current fire rate 0 = none, 10 = max (doesn't rep. time between shots)
+
+every 10 ticks:
+	loop all players:
+		if {currFireRate::%loop-player's uuid%} > 1:
+			remove 2 from {currFireRate::%loop-player's uuid%}
+		else if {currFireRate::%loop-player's uuid%} > 0:
+			remove 1 from {currFireRate::%loop-player's uuid%}
+
+		else if {class-perk::%loop-player's uuid%::RB::perk} = {perk-check::3}: 
+			if {currFireRate::%loop-player's uuid%} > -1:
+				remove 1 from {currFireRate::%loop-player's uuid%}
+
+function rbTimeBetweenShots(p: player, currFireRate: integer): 
+	set {rbAllowedToShoot::%{_p}'s uuid%} to false
+	if {_currFireRate} < 4: # calcs time between shots when currFireRate < 4
+		set {_time} to abs({_currFireRate} - 17) 
+	else:
+		set {_time} to abs({_currFireRate} - 10) 
+	wait ("%{_time}% ticks" parsed as a timespan)
+	set {rbAllowedToShoot::%{_p}'s uuid%} to true
+
+on right click with stone sword: # TAC USE
+	if name of player's held item is "%{wc}%Rapid Dagger": 
+		if tacCHECK(player, {weapons::RD::TAC-COST}) is true:
+			play sound "entity_generic_drink" with volume 1 and pitch 1 at player
+			if {class-perk::%player's uuid%::RB::perk} = {perk-check::1}:
+				add potion effect of speed 3 for 4 seconds to potion effects of player
+			else:
+				add potion effect of speed 3 for 1 seconds to potion effects of player
+				wait 1 seconds
+				add potion effect of speed 2 for 2 seconds to potion effects of player
+
+on drop of stone sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Rapid Dagger":
+		cancel event
+		if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
+			send "&cULT WEAPON IN INVENTORY!" to player
+			stop
+		if {godlike-ULT-CD::%player's uuid%::RB} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RB}
+			if {_time} < {weapons::RB::ULT-CD}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:
+			set {godlike-ULT-CD::%player's uuid%::RB} to now	
+			add potion effect of speed 2 without particles for 3 seconds to potion effects of player
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Rapid Dagger": 
+				set player's held item to {class::weapon::RB}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Rapid Dagger":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::RB}
+						stop loop
+			# ULT CD
+			wait {weapons::RB::ULT-CD}
+			delete {godlike-ULT-CD::%player's uuid%::RB}	
+			if {class::%player's uuid%} = "RB":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on right click with bow: # ATK USE
+	if name of player's held item is "%{wc}%Rapid Bow": 
+		if {godlike-ULT-USE::%player's uuid%::RB} is set: # perk 3
+			stop
+
+		set {_currFireRate} to {currFireRate::%player's uuid%}
+		set {_rbATS} to {rbAllowedToShoot::%player's uuid%}
+		if {_currFireRate} < 8:
+			add 1 to {currFireRate::%player's uuid%}
+		if {_rbATS} is true:
+			if {class-perk::%player's uuid%::RB::perk} = {perk-check::2}:
+				set {_atkCost} to {weapons::RB::ATK-COST} - 1
+			else:
+				set {_atkCost} to {weapons::RB::ATK-COST}
+			if {_currFireRate} < 0:
+				set {_atkCost} to {RB1-FirstHitAtkCost}
+			if atkCHECK(player, {_atkCost}) is true:
+				if {_currFireRate} < 0: # applies only for perk 3
+					shoot a arrow from player at speed 2.5
+				else if {_currFireRate} < 6:
+					shoot a arrow from player at speed 2.5
+				else:
+					set {_l} to location 0.5 in front of player
+					#add 1.5 to y-coord of {_l}
+					#set {_y} to a random number between -2.5 and 2.5 
+					#set {_p} to a random number between -2.5 and 2.5
+					#add {_y} to yaw of {_l}
+					#add {_p} to pitch of {_l}
+
+					add 1.5 to y-coord of {_l}
+					set {_d} to vector in direction of player
+
+					shoot arrow from {_l} at speed 2.5 {_d}
+
+
+					set metadata value "attacker" of shot projectile to player
+
+					if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
+						set metadata value "type" of shot projectile to "RB1"
+					else:
+						set metadata value "type" of shot projectile to "RB"
+
+				play sound "entity_arrow_shoot" with volume 3 and pitch 1 at player
+				rbTimeBetweenShots(player, {_currFireRate})
+				while metadata value "hit" of shot projectile isn't set:
+					draw 1 of electric spark particle at shot projectile with offset vector(0, 0, 0) with extra 0 
+					if (y-coord of shot projectile) < -75:
+						set metadata value "hit" of shot projectile to true
+					wait 1 tick
+				kill shot projectile
+			else:
+				set {currFireRate::%player's uuid%} to 0
+
+
+on left click with bow: # TAC USE
+	if name of player's held item is "%{wc}%Rapid Bow": 
+		if {godlike-ULT-USE::%player's uuid%::RB} is set:
+			stop
+		else if {tacCheck-fix::%player's uuid%} is set: # fix the drop issue, dropping triggers a left click event
+			delete {tacCheck-fix::%player's uuid%} 
+		else if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
+			if tacCHECK(player, {weapons::RB1::TAC-COST}) is true:
+				set {currFireRate::%player's uuid%} to 10
+				play sound "entity_generic_drink" with volume 1 and pitch 1 at player
+		else if tacCHECK(player, {weapons::RB::TAC-COST}) is true:
+			set {currFireRate::%player's uuid%} to 10
+			play sound "entity_generic_drink" with volume 1 and pitch 1 at player
+
+on drop of bow with priority low: # ULT USE
+	if name of event-item is "%{wc}%Rapid Bow":
+		cancel event
+		set {tacCheck-fix::%player's uuid%} to true # fix the drop issue, dropping triggers a left click event
+		if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
+			rbMachineGun(player)
+		else:
+			if {godlike-ULT-CD::%player's uuid%::RB} is set:
+				set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RB}
+				if {_time} < {weapons::RB::ULT-CD}:
+					send "&cULT NOT READY!" to player
+			else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:
+				set {godlike-ULT-CD::%player's uuid%::RB} to now	
+				add potion effect of speed 2 without particles for 3 seconds to potion effects of player
+				wait 5 ticks
+				if name of player's held item is "%{wc}%Rapid Bow": 
+					set player's held item to {class::weapon::RD}
+				else:
+					wait 5 ticks
+					loop player's inventory:
+						if name of loop-value is "%{wc}%Rapid Bow":
+							set {_i} to index of loop-value
+							set slot {_i} of player's inventory to {class::weapon::RD}
+							stop loop
+				# ULT CD
+				wait {weapons::RB::ULT-CD}
+				delete {godlike-ULT-CD::%player's uuid%::RB}	
+				if {class::%player's uuid%} = "RB":
+					play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+
+function rbMachineGun(p: player): # perk 3
+	set {_uuid} to {_p}'s uuid
+	if {general-perk::%{_uuid}%::perk} = 22:
+		set {_ultCooldown} to {special::%{_uuid}%::ULT-CD}
+	else:
+		set {_ultCooldown} to {weapons::RB1::ULT-CD}
+	if {godlike-ULT-USE::%{_uuid}%::RB} is set:
+		send "&cULT ALREADY ACTIVATED!" to {_p}
+	else if {godlike-ULT-CD::%{_uuid}%::RB} is set:
+		set {_time} to difference between now and {godlike-ULT-CD::%{_uuid}%::RB}
+		if {_time} < {_ultCooldown}:
+			send "&cULT NOT READY!" to {_p}
+	else if ultCHECK({_p}, {weapons::RB1::ULT-COST}) is true:
+		set {godlike-ULT-CD::%{_uuid}%::RB} to now
+
+		set {_speed} to 0.5
+		loop 50 times:
+			if name of {_p}'s held item is "%{wc}%Rapid Bow": 
+				if {_speed} < 1.5:
+					add 0.1 to {_speed}
+					shoot a arrow from {_p} at speed {_speed}
+				else:
+					if {_speed} < 3:
+						add 0.1 to {_speed}
+					set {_l} to location 0.5 in front of {_p}
+					add 1.5 to y-coord of {_l}
+					set {_y} to a random number between -4 and 4 
+					set {_pitch} to a random number between -4 and 4
+					add {_y} to yaw of {_l}
+					add {_pitch} to pitch of {_l}
+					shoot a arrow from {_l} at speed {_speed}
+				#
+				set metadata value "attacker" of shot projectile to {_p}
+				set metadata value "type" of shot projectile to "RB1"
+				play sound "entity_arrow_shoot" with volume 3 and pitch 1 at {_p}
+
+			wait 2 tick
+
+		set {godlike-ULT-CD::%{_uuid}%::RB} to now	
+		delete {godlike-ULT-USE::%{_uuid}%::RB}
+		# ULT CD
+		wait {_ultCooldown}
+		delete {godlike-ULT-CD::%{_uuid}%::RB}	
+		if {class::%{_uuid}%} = "RB":
+			play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+
+
+on damage of living entity:
+	if event-damagecause is a projectile:
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "RB" or "RB1":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+
+on held item change:	
+	set {currFireRate::%player's uuid%} to 0
+
+
+# PIRATE FLINTLOCK/CUTLASS
+
+on right click with iron sword:
+	if name of player's held item is "%{wc}%Pirate Cutlass": 
+		if {godlike-TAC-USE::%player's uuid%::PC} is set:
+			send "&cTAC ALREADY ACTIVATED!" to player
+		else if tacCHECK(player, {weapons::PC::TAC-COST}) is true:
+			set {godlike-TAC-USE::%player's uuid%::PC} to now
+			set {_old} to player's held item
+			set {_new} to {class::weapon::PC1}
+			set player's held item to {_new}
+			wait 5 seconds
+			delete {godlike-TAC-USE::%player's uuid%::PC}
+			loop player's inventory:
+				if name of loop-value is "%{wc}%Pirate Cutlass":
+					set {_i} to index of loop-value
+					set slot {_i} of player's inventory to {_old}
+
+on damage of living entity:
+	if name of attacker's held item is "%{wc}%Pirate Cutlass":
+		if {godlike-TAC-USE::%attacker's uuid%::PC} is set:
+			play sound "entity.player.attack.sweep" with volume 3 and pitch 1.2 at victim
+
+on drop of iron sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Pirate Cutlass":
+		cancel event
+		if {godlike-ULT-CD::%player's uuid%::PF} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::PF}
+			if {_time} < {weapons::PF::ULT-CD}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::PF::ULT-COST}) is true:
+			set {currWeapon::%player's uuid%} to "PF"
+			set {godlike-ULT-CD::%player's uuid%::PF} to now	
+			delete {flintlock-CD::%player's uuid%}
+			set {pirate-dmgBuff::%player's uuid%} to true
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Pirate Cutlass": 
+				set player's held item to {class::weapon::PF}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Pirate Cutlass":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::PF}
+						stop loop
+			# ULT CD
+			wait {weapons::PF::ULT-CD}
+			delete {godlike-ULT-CD::%player's uuid%::PF}	
+			if {class::%player's uuid%} = "PF":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function pfCHECK(a: living entity, cause: string) :: number:
+	if {_cause} = "attack":
+		if {pirate-dmgBuff::%{_a}'s uuid%} is set:
+			delete {pirate-dmgBuff::%{_a}'s uuid%}
+			return 0.5
+
+on right click with leather horse armor:
+	if name of player's held item contains "%{wc}%Pirate Flintlock": 
+		if {flintlock-CD::%player's uuid%} is set:
+			send "&cFLINTLOCK RELOADING!" to player
+		else:
+			if atkCHECK(player, {weapons::PF::ATK-COST}) is true:
+				set {flintlock-CD::%player's uuid%} to now
+
+				shoot a snowball from player at speed 3.5
+				# PERK
+				if {class-perk::%player's uuid%::PF::perk} = {perk-check::2}:
+					if {piratePerk-30::%player's uuid%} = 2:
+						set metadata value "fire" of shot projectile to true
+						ignite shot projectile
+						delete {piratePerk-30::%player's uuid%} 
+						set level of player to 0
+						set level progress of player to 0
+					else:
+						add 1 to {piratePerk-30::%player's uuid%}
+						set level of player to 0
+						add 0.495 to level progress of player
+						
+				#
+				disenchant player's held item
+				flintlockUpdateName(player, 0)
+				play sound "ENTITY_FIREWORK_ROCKET_BLAST" at volume 1 at pitch 0.8 at player
+				flintLockRELOAD(player)
+				while metadata value "hit" of shot projectile isn't set:
+					draw 1 of electric spark particle at shot projectile with offset vector(0, 0, 0) with extra 0 
+					if (y-coord of shot projectile) < -75:
+						set metadata value "hit" of shot projectile to true
+					wait 1 tick
+				kill shot projectile
+
+on held item change:	
+	if name of player's held item contains "%{wc}%Pirate Flintlock": 
+		if {flintlock-CD::%player's uuid%} is set:
+			flintLockRELOAD(player)
+
+function flintLockRELOAD(p: player):
+	wait 15 ticks
+	if name of {_p}'s held item contains "%{wc}%Pirate Flintlock":
+		play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.5 to {_p}
+	wait 1 second
+	if name of {_p}'s held item contains "%{wc}%Pirate Flintlock":
+		enchant {_p}'s held item with unbreaking 1
+		flintlockUpdateName({_p}, 1)
+		delete {flintlock-CD::%{_p}'s uuid%}
+		play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.5 to {_p}
+
+function flintlockUpdateName(p: player, ammo: integer):
+	if {_ammo} = 0:
+		set {_update} to "&7●"
+	else if {_ammo} = 1:
+		set {_update} to "&e●"
+	loop {_p}'s inventory:
+		if name of loop-value contains "%{wc}%Pirate Flintlock":
+			set {_i} to index of loop-value
+			set name of slot {_i} of {_p}'s inventory to "%{wc}%Pirate Flintlock %{_update}%"
+			stop loop
+
+on left click with leather horse armor:
+	if name of player's held item contains "%{wc}%Pirate Flintlock": 
+		if {tacCheck-fix::%player's uuid%} is set: # fix the drop issue
+			delete {tacCheck-fix::%player's uuid%} 
+		else if tacCHECK(player, {weapons::PF::TAC-COST}) is true:
+			shoot a snowball from player at speed 3
+			teleport player to player
+			push player backwards at speed 0.5
+
+			set metadata value "tac" of shot projectile to "PF"
+			play sound "ENTITY_FIREWORK_ROCKET_BLAST" at volume 1 at pitch 0.5 at player
+			while metadata value "hit" of shot projectile isn't set:
+				draw 5 of dust_color_transition using dustTransition(gray, black, 0.75) at shot projectile with offset vector(0.1, 0.1, 0.1) with extra 0 
+				if (y-coord of shot projectile) < -75:
+					set metadata value "hit" of shot projectile to true
+				wait 1 tick
+			kill shot projectile
+
+on damage of living entity with priority high:
+	if event-damagecause is a projectile:
+		if event-projectile is a snowball:
+			set {_attacker} to metadata value "attacker" of event-projectile
+			updateAttacker({_attacker}, victim)
+			if metadata value "type" of event-projectile is "PF":
+				if distance between {_attacker} and location of victim >= 12.5:
+					set {_d} to 4
+				else if distance between {_attacker} and location of victim >= 7.5:
+					set {_d} to 3
+				else:
+					set {_d} to 3 # 2.5
+			if {pirate-dmgBuff::%{_attacker}'s uuid%} is set:
+				delete {pirate-dmgBuff::%{_attacker}'s uuid%}
+				add 0.5 to {_d}
+			if metadata value "tac" of event-projectile is "PF":
+				set {_d} to {_d}-0.5
+
+			set {_d} to projectileDmgCHECK({_attacker}, victim, {_d})
+			add {_d} to damage
+			if metadata value "tac" of event-projectile is "PF":
+				set {_v} to vector between location of {_attacker} and location of victim
+				wait 1 tick
+				teleport victim to victim
+				push victim {_v} at speed 2
+
+			if metadata value "fire" of event-projectile is true:
+				set fire to victim for 4 seconds
+
+			dmgStats({_attacker}, victim, {_d}, "PF")
+			showDMG(victim, {_d})
+
+on join:
+	delete {flintlock-CD::%player's uuid%}
+	delete {pirate-dmgBuff::%player's uuid%}
+
+on drop of leather horse armor with priority low: # ULT USE
+	if name of event-item contains "%{wc}%Pirate Flintlock":
+		cancel event
+		set {tacCheck-fix::%player's uuid%} to true
+		if {godlike-ULT-CD::%player's uuid%::PF} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::PF}
+			if {_time} < {weapons::PF::ULT-CD}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::PF::ULT-COST}) is true:
+			set {currWeapon::%player's uuid%} to "PC"
+			set {godlike-ULT-CD::%player's uuid%::PF} to now	
+			delete {flintlock-CD::%player's uuid%}
+			set {pirate-dmgBuff::%player's uuid%} to true
+			wait 5 ticks
+			if name of player's held item contains "%{wc}%Pirate Flintlock": 
+				set player's held item to {class::weapon::PC}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value contains "%{wc}%Pirate Flintlock":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::PC}
+						stop loop
+			# ULT CD
+			wait {weapons::PF::ULT-CD}
+			delete {godlike-ULT-CD::%player's uuid%::PF}	
+			if {class::%player's uuid%} = "PF":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+
+command /sound:
+	permission: op
+	trigger:
+		play sound "block_chain_break" with volume 5 and pitch 0.8 at player
+
+		
+
+
+
+
+

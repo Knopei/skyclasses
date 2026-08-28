@@ -1,0 +1,134 @@
+
+on join:
+	if {assist::%player's uuid%} isn't set:
+		set {kill::%player's uuid%} to 0
+		set {death::%player's uuid%} to 1
+		set {assist::%player's uuid%} to 0
+		set {ks::%player's uuid%::count} to 0
+		set {ks::%player's uuid%::top} to 0
+		set {damage::%player's uuid%} to 0
+
+
+function removeBadEffects(p: player, type: string):
+	remove poison from active potion effects of {_p}
+	remove wither from active potion effects of {_p}
+	remove ("wither" parsed as a potion effect type) from active potion effects of {_p}
+	remove slowness from active potion effects of {_p}
+	remove weakness from active potion effects of {_p}
+	remove mining fatigue from active potion effects of {_p}
+	extinguish {_p}	
+	#
+	if {_type} = "victim":
+		if metadata value "marked" of {_p} is set: # Marksman 
+			delete metadata value "marked" of {_p}
+			set glowing of {_p} to false
+
+on death of player: #---------------------------------------------------------------------DEATH
+	cancel event
+	set {_attacker} to metadata value "attacker" of victim 
+	set {_assist} to metadata value "assist" of victim 
+	set {_vClass} to {class::%victim's uuid%}
+	set {_aClass} to {class::%{_attacker}'s uuid%}
+	set {_sClass} to {class::%{_assist}'s uuid%}
+	# messages and stats
+	add 1 to {death::%victim's uuid%}
+	add 1 to {class-death::%victim's uuid%::%{_vClass}%}
+	if {ks::%victim's uuid%::count} > {ks::%victim's uuid%::top}:
+		set {ks::%victim's uuid%::top} to {ks::%victim's uuid%::count}
+	if {class-ks::%victim's uuid%::%{_vClass}%::count} > {class-ks::%victim's uuid%::%{_vClass}%::top}:
+		set {class-ks::%victim's uuid%::%{_vClass}%::top} to {class-ks::%victim's uuid%::%{_vClass}%::count}
+	set {ks::%victim's uuid%::count} to 0
+	set {class-ks::%victim's uuid%::%{_vClass}%::count} to 0
+	if {duel::%{_v}'s uuid%::status} = "ingame":
+		add 1 to {dueldeath::%victim's uuid%}
+	if {_attacker} is a player:
+		if {_attacker} isn't victim:
+			add 1 to {kill::%{_attacker}'s uuid%}
+			add 1 to {class-kill::%{_attacker}'s uuid%::%{_aClass}%}
+			add 1 to {ks::%{_attacker}'s uuid%::count}
+			add 1 to {class-ks::%{_attacker}'s uuid%::%{_aClass}%::count}
+			if {duel::%{_attacker}'s uuid%::status} = "ingame":
+				add 1 to {duelkill::%{_attacker}'s uuid%}
+			if {_attacker} is a player:
+				broadcast "&6%{_attacker}% &c%health of {_attacker}%❤ &e, shit on &6%victim%!"
+			make 50 of block particle using redstone block at block 1.5 above location of victim
+			play sound "BLOCK_STONE_BREAK" at volume 5 at pitch 1 to {_attacker}
+	set {_title} to "&c&lYOU DIED!"
+	set {_message} to "&eBetter Luck Next Time!"
+	if {_attacker} isn't victim:
+		add 1 to {assist::%{_assist}'s uuid%}
+		add 1 to {class-assist::%{_assist}'s uuid%::%{_sClass}%}
+		send "&eYou assist killed %victim%!" to {_assist}
+	send title "%{_title}%" with subtitle "%{_message}%" to victim for 2 seconds with fade out 1 second
+	# reset mana, stamina, effects, ult
+	wait 1 tick
+	if {_attacker} is a player:
+		heal {_attacker}
+		give {_attacker} 1 of {health-item::GA}
+		# stamina
+		set {_sCurr} to {stamina::%{_attacker}'s uuid%::curr}
+		if {_sCurr} > 600:
+			set {stamina::%{_attacker}'s uuid%::curr} to 900
+		else:
+			add 300 to {stamina::%{_attacker}'s uuid%::curr}
+		actionBar({_attacker})
+	if {_assist} is a player:
+		add potion effect of regeneration 2 for 5 seconds to potion effects of {_assist}
+
+	if victim is a player: # MAX HEALTH
+		maxHealth(victim)
+	if {_attacker} is a player:
+		maxHealth({_attacker})	
+
+	removeBadEffects({_attacker}, "attacker")
+	removeBadEffects(victim, "victim")
+
+	delete metadata value "attacker" of victim
+	delete metadata value "assist" of victim 
+	classHeals(victim)
+
+	# CLASS SPEC
+	set {wpShield::%victim's uuid%} to true
+	delete {tempestPSS::%victim's uuid%}
+
+	# WH
+	set {sonicBeamStack::%victim's uuid%} to 0
+	loop all mobs: # reset warden anger
+		if loop-mob is a warden:
+			clear the loop-mob's anger level towards victim
+
+
+	# DUEL 
+	#if {duel::%victim's uuid%::status} = "ingame":
+	#	set {_mode} to getDuelMode(victim)
+	#	if {_mode} != "control":
+	#		set {_opponent} to {duel::%victim's uuid%::opponent}
+	#		if {duel::%victim's uuid%::team} = "RED":
+	#			set {_rp} to victim
+	#			set {_bp} to {_opponent}
+	#		else:
+	#			set {_rp} to {_opponent}
+	#			set {_bp} to victim
+
+	#		duelRoundEnd({_rp}, {_bp}, "%{_opponent}%")
+	#	else:
+	#		add potion effect of slow falling 1 for 5 seconds to potion effects of victim
+	#		teleport victim to {duelRespawn}
+
+	#else:
+	teleport victim to {spawnlocation::%victim's uuid%}
+
+	set {spawn-protection::%victim's uuid%} to true
+	wait 2 seconds
+	delete {spawn-protection::%victim's uuid%}
+
+
+	#if {_attacker} is a player:
+	#	sidebar({_attacker})
+	#sidebar(victim)
+
+on damage of player:
+	if {spawn-protection::%attacker's uuid%} is set:
+		cancel event
+	if potion effects of victim contains slow falling:
+		remove slow falling from active potion effects of victim

@@ -1,0 +1,384 @@
+
+on load:
+	# Grenades
+	set {nade::grenade} to unbreakable fire charge of unbreaking 1 named "&6Grenade" with lore "" and "&6&lUTILITY ITEM" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {nade::flashbang} to unbreakable light gray candle of unbreaking 1 named "&6Flashbang" with lore "" and "&6&lUTILITY ITEM" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	# Healing / Shielding
+	set {health-item::GA} to golden apple named "&cGolden Apple" with lore "" and "&c&lHEALTH ITEM" 
+	set {health-item::HP} to potion of health named "&cHealth Potion" with lore "" and "&c&lHEALTH ITEM" 
+	# Healing / Utility
+	set {health-item::GP} to golden carrot named "&cGolden Pepper" with lore "" and "&c&lHEALTH ITEM" 
+	set {health-item::GM} to glistering melon slice named "&cGolden Melon" with lore "" and "&c&lHEALTH ITEM" 
+	set {health-item::CF} to chorus fruit named "&cChorus Fruit" with lore "" and "&c&lHEALTH ITEM" 
+	# Utility
+	set {health-item::MP} to water bottle named "&9Mana Potion" with lore "" and "&9&lUTILITY ITEM" 
+	set {health-item::SP} to honey bottle named "&eStamina Potion" with lore "" and "&e&lUTILITY ITEM" 
+
+	loop {health-item::*}: # item flag hide fix
+		set {_v} to loop-value
+		set {_i} to loop-index
+		#add nbt compound of "{attribute_modifiers:{modifiers:[],show_in_tooltip:0}}" to nbt compound of {_v}
+		set {health-item::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	#Display
+	set {hi-caption} to apple of unbreaking 1 named "&c&lSecondary Health Item" with lore "" and "&8&oChoose a secondary health item that" and "&8&oyou will get every time you respawn." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set {hi-display::GA} to golden apple named "&c&lGolden Apple (2x)" with lore "" and "&f&lCONSUME" and "&60/10 Doctors Recommend &7[RIGHT]" and "&8&oInstantly heal for 1 heart and heal" and "&8&o2 hearts over 5 seconds."  and "" and ""
+	set {hi-display::HP} to potion of health named "&c&lHealth Potion" with lore "" and "&f&lCONSUME" and "&dMed Kit &7[RIGHT]" and "&8&oInstantly heal for 3 hearts."  and "" and ""
+	set {hi-display::GP} to golden carrot named "&c&lGolden Pepper" with lore "" and "&f&lCONSUME" and "&cBlazin Hot! &7[RIGHT]" and "&8&oGain extra speed for 5 seconds and" and "&8&oheal 2 hearts over 5 seconds."  and "" and ""
+	set {hi-display::GM} to glistering melon slice named "&c&lGolden Melon" with lore "" and "&f&lCONSUME" and "&aCleanse &7[RIGHT]" and "&8&oRemove all negative effects and heal" and "&8&o2 hearts over 5 seconds."  and "" and ""
+	set {hi-display::CF} to chorus fruit named "&c&lChorus Fruit" with lore "" and "&f&lCONSUME" and "&5Exotic Fruit &7[RIGHT]" and "&8&oGain invisibility, teleport to a random" and "&8&onearby location and heal 2.5 hearts" and "&8&oover 5 seconds."  and "" and ""
+	set {hi-display::MP} to water bottle named "&9&lMana Potion" with lore "" and "&f&lCONSUME" and "&bSlurp Juice &7[RIGHT]" and "&8&oInstantly regenerate 50 mana."  and "" and ""
+	set {hi-display::SP} to honey bottle named "&e&lStamina Potion" with lore "" and "&f&lCONSUME" and "&eRecharge &7[RIGHT]" and "&8&oInstantly regenerate all stamina."  and "" and ""
+
+on load:
+	add name of {health-item::HP} to {manualStackItems::*}
+	add name of {health-item::MP} to {manualStackItems::*}
+	add name of {health-item::SP} to {manualStackItems::*}
+
+on join:
+	if {health-item::%player's uuid%::item} isn't set:
+		set {health-item::%player's uuid%::item} to {health-item::GA}
+		set {health-item::%player's uuid%::pos} to 22
+
+function healthSelect(p: player):
+	set metadata tag "health items" of {_p} to chest inventory with 5 rows named "Health Items"
+	set slot (integers between 9 and 35) of metadata tag "health items" of {_p} to gray stained glass pane named " " 
+	set slot (integers between 0 and 8) of metadata tag "health items" of {_p} to red stained glass pane named " " 
+	set slot (integers between 36 and 44) of metadata tag "health items" of {_p} to red stained glass pane named " " 
+
+	set slot 4 of metadata tag "health items" of {_p} to {hi-caption}
+
+	set {_pos} to {health-item::%{_p}'s uuid%::pos}
+	set {_display::19} to {hi-display::MP}
+	set {_display::20} to {hi-display::SP}
+	set {_display::21} to {hi-display::HP}
+	set {_display::22} to {hi-display::GA}
+	set {_display::23} to {hi-display::CF}
+	set {_display::24} to {hi-display::GP}
+	set {_display::25} to {hi-display::GM}
+
+	loop {_display::*}:
+		set {_index} to loop-index parsed as a integer
+		set {_value} to loop-value 
+		#add nbt compound of "{attribute_modifiers:{modifiers:[],show_in_tooltip:0}}" to nbt compound of {_value}
+		set slot {_index} of metadata tag "health items" of {_p} to {_value} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set {_size} to size of lore of loop-value
+		if {_pos} = {_index}:
+			set line {_size} of lore of slot {_index} of metadata tag "health items" of {_p} to "&aSelected"
+		else:
+			set line {_size} of lore of slot {_index} of metadata tag "health items" of {_p} to "&7Click to select"
+
+	set {_enchant} to slot {_pos} of metadata tag "health items" of {_p}
+	enchant {_enchant} with unbreaking 1
+	set slot {_pos} of metadata tag "health items" of {_p} to {_enchant} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable	
+
+	# bottom
+
+	set slot 36 of metadata tag "health items" of {_p} to {class-bottom::back} 
+
+	open (metadata tag "health items" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "health items" of player):
+		cancel event
+		# row 1
+		if index of event-slot is 19:
+			set {_hi} to "MP"
+		else if index of event-slot is 20:
+			set {_hi} to "SP"
+		else if index of event-slot is 21:
+			set {_hi} to "HP"
+		else if index of event-slot is 22:
+			set {_hi} to "GA"
+		else if index of event-slot is 23:
+			set {_hi} to "CF"
+		else if index of event-slot is 24:
+			set {_hi} to "GP"
+		else if index of event-slot is 25:
+			set {_hi} to "GM"
+		# class functionality
+		if {_hi} is set:
+			set {health-item::%player's uuid%::pos} to index of event-slot
+			set {health-item::%player's uuid%::item} to {health-item::%{_hi}%}
+			healthSelect(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 36:
+			#if {duel::%player's uuid%::status} is "intermission":
+			#	duelRoundClassSelect(player)
+			# else:
+			ClassMenu(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+function classHeals(p: player):
+	set {healCount::%{_p}'s uuid%} to 1
+	loop {health-item::*}:
+		set {_name} to name of loop-value
+		loop {_p}'s inventory: # remove secondary
+			if name of loop-value-2 is {_name}:
+				remove loop-value-2 from inventory of {_p}
+
+	remove all golden apple from {_p} # remove primary
+	#add nbt compound of "{attribute_modifiers:{modifiers:[],show_in_tooltip:0}}" to nbt compound of {_value}
+	set slot {_index} of metadata tag "health items" of {_p} to {_value} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	give {_p} 2 of {health-item::GA}
+	if {health-item::%{_p}'s uuid%::pos} is 22: # if health item = GA
+		give {_p} 2 of {health-item::%{_p}'s uuid%::item}
+	else:
+		give {_p} 1 of {health-item::%{_p}'s uuid%::item}
+
+
+function healCount(p: player, id: string):
+	wait 1 tick
+	while {class-ID::%{_p}'s uuid%} = {_id}:
+		if {playerProtect::%{_p}'s uuid%} is set:
+			wait 1 second
+		else:
+			if {healCount::%{_p}'s uuid%} < 1:
+				add 1 to {healCount::%{_p}'s uuid%}
+				if {health-item::%{_p}'s uuid%::pos} is 22: # if health item = GA
+					give {_p} 2 of {health-item::%{_p}'s uuid%::item}
+				else:
+					give {_p} 1 of {health-item::%{_p}'s uuid%::item}	
+			wait 45 seconds
+
+on consume:
+	if name of event-item is "&cGolden Apple":
+		cancel event
+		if {health-item::%player's uuid%::pos} is 22: # if health item = GA
+			if {healCount::%player's uuid%} > 0:
+				remove 1 from {healCount::%player's uuid%} 
+		remove 1 golden apple from player
+		if {general-perk::%player's uuid%::perk} = 20:
+			heal player by 1.75 heart
+			add potion effect of regeneration 2 for 5 seconds to potion effects of player
+		else:
+			heal player by 1 heart
+			add potion effect of regeneration 2 for 5 seconds to potion effects of player
+		#
+		if {class::%player's uuid%} is "PT":
+			heal player by 0.5 heart
+	else if name of event-item is "&cHealth Potion":
+		cancel event
+		remove 1 from {healCount::%player's uuid%} 
+		remove 1 potion of health from player
+		heal player by 3 heart
+	else if name of event-item is "&cChorus Fruit":
+		remove 1 from {healCount::%player's uuid%} 
+		heal player by 0.5 heart
+		player.setArrowsInBody(0)
+		add potion effect of invisibility 1 without particles for 2 seconds to potion effects of player
+		add potion effect of regeneration 2 without particles for 5 seconds to potion effects of player
+	else if name of event-item is "&9Mana Potion":
+		cancel event
+		remove 1 from {healCount::%player's uuid%} 
+		remove 1 water bottle from player
+
+		set {_mana} to {mana::%player's uuid%::curr}
+		add 500 to {_mana}
+		if {_mana} > {mana::%player's uuid%::max}:
+			set {mana::%player's uuid%::curr} to {mana::%player's uuid%::max}
+		else:
+			add 500 to {mana::%player's uuid%::curr}
+	else if name of event-item is "&eStamina Potion":
+		remove 1 from {healCount::%player's uuid%} 
+		cancel event
+		remove 1 honey bottle from player
+		set {stamina::%player's uuid%::curr} to {stamina::%player's uuid%::max}
+
+on rightclick with golden carrot:
+	if {consume-cooldown::%player's uuid%} is set:
+		send "&cYou can't consume another item yet!" to player
+	else:
+		remove 1 from {healCount::%player's uuid%} 
+		set {consume-cooldown::%player's uuid%} to true
+		remove 1 golden carrot from player
+		add potion effect of regeneration 2 for 5 seconds to potion effects of player
+		add potion effect of speed 2 for 5 seconds to potion effects of player
+		play sound "ENTITY_GENERIC_EAT" at volume 1 at pitch 1 at player
+		wait 1 second
+		delete {consume-cooldown::%player's uuid%}
+
+on rightclick with glistering melon slice:
+	if {consume-cooldown::%player's uuid%} is set:
+		send "&cYou can't consume another item yet!" to player
+	else:
+		remove 1 from {healCount::%player's uuid%} 
+		set {consume-cooldown::%player's uuid%} to true
+		remove 1 glistering melon slice from player
+
+		cleanseEffect(player)
+		add potion effect of regeneration 2 for 5 seconds to potion effects of player
+		play sound "ENTITY_GENERIC_EAT" at volume 1 at pitch 1 at player
+
+		wait 1 second
+		delete {consume-cooldown::%player's uuid%}
+
+function cleanseEffect(p: player): # checks for negative effect over next 5 seconds, cleanses if true
+	loop 20 times:
+		if {_p}.getFireTicks() > 0:
+			set {_cleanse} to true
+		else if metadata value "marked" of {_p} is set:
+			set {_cleanse} to true
+		else:
+			set {_potions::*} to active potion effects of {_p}
+			if {_potions::*} is set:
+				loop {_potions::*}:
+					set {_effect} to "%loop-value-2%"
+					if {_effect} contains "poison" or "wither" or "weakness" or "mining fatigue":
+						set {_cleanse} to true
+
+		if {_cleanse} is true:
+			loop 10 times:
+				removeBadEffects({_p}, "victim")
+				wait 5 ticks
+			stop loop
+
+		wait 5 ticks
+
+
+
+	
+function stackItem(p: player, name: string):
+	if {_name} = "all":
+		loop {manualStackItems::*}:
+			stackItem({_p}, loop-value)
+	else:
+		loop {_p}'s inventory:
+			if name of loop-value is {_name}:
+				set {_i} to index of loop-value
+				add {_i} to {_slotList::*}
+
+				set {_amount} to item amount of slot {_i} of {_p}'s inventory
+				add {_amount} to {_total}
+		if size of {_slotList::*} > 1:
+			set {_itemToStack} to 1 of (slot {_slotList::1} of {_p}'s inventory)
+			set slot {_slotList::1} of {_p}'s inventory to {_total} of {_itemToStack}
+
+			set {_n} to 2
+			loop (size of {_slotList::*}) times:
+				set slot {_slotList::%{_n}%} of {_p}'s inventory to air
+				add 1 to {_n}
+
+command /stack:
+	trigger:
+		stackItem(player, "all")
+
+
+# GRENADE
+
+function nadeCount(p: player, id: string):
+	set {nadeCount::%{_p}'s uuid%} to 0
+	while {class-ID::%{_p}'s uuid%} = {_id}:
+		if {playerProtect::%{_p}'s uuid%} is set:
+			wait 1 second
+		else:
+			if {nadeCount::%{_p}'s uuid%} < 3:
+				add 1 to {nadeCount::%{_p}'s uuid%}
+				if {class::%{_p}'s uuid%} = "MMH":
+					if {class-perk::%{_p}'s uuid%::MMH::perk} = {perk-check::2}:
+						give {_p} 1 of {nade::flashbang}	
+					else:
+						give {_p} 1 of {nade::grenade}
+				else:
+					give {_p} 1 of {nade::grenade}	
+
+			set {_cd} to 30 seconds
+
+			if {class::%{_p}'s uuid%} = "MH":
+				if {class-perk::%{_p}'s uuid%::MH::perk} = {perk-check::1}:
+					remove 15 seconds from {_cd}
+			else if {class::%{_p}'s uuid%} = "MMH":
+				if {class-perk::%{_p}'s uuid%::MMH::perk} = {perk-check::2}:
+					remove 10 seconds from {_cd}
+
+			wait {_cd}
+
+function grenadeExplosion(e: entity, radius: number):
+	set {_r} to ceil({_radius} - 1)
+	if {_radius} > 3:
+		set {_s} to 2
+	else:
+		set {_s} to 1
+	create a fake explosion at {_e}
+	draw {_radius} of explosion at {_e} with offset vector({_s}, {_s}, {_s}) with extra 0
+	draw 10 of large_smoke at {_e} with extra 0.5
+	draw 50 of dust_color_transition using dustTransition(orange, white, {_s}) at {_e} with offset vector({_r}, {_r}, {_r}) with extra 0.5
+
+on right click: # grenade 
+	if name of player's held item is "&6Grenade":
+		set {_nade} to "grenade"
+	else if name of player's held item is "&6Flashbang":
+		set {_nade} to "flashbang"
+
+	if {_nade} is set:
+		cancel event
+		remove 1 of item from player's inventory
+		remove 1 from {nadeCount::%player's uuid%}
+
+		if {_nade} = "grenade":
+			make player shoot a dropped fire charge with speed 1
+			set item of last shot entity to fire charge of unbreaking 1 named "%unix timestamp of now%" 
+			set {_radius} to 3
+		else if {_nade} = "flashbang":
+			make player shoot a dropped light gray candle with speed 1
+			set item of last shot entity to light gray candle of unbreaking 1 named "%unix timestamp of now%" 
+			set {_radius} to 4.5
+
+		set {_e} to last shot entity
+		play sound "entity.tnt.primed" at volume 10 at pitch 1 at player
+			
+		if {general-perk::%player's uuid%::perk} = 23:
+			set {_tick} to 25 # 1.25 sec
+		else:
+			set {_tick} to 40 # 2 sec
+
+		loop {_tick} times: 
+			if {_e}.isOnGround() is true:
+				draw 1 of large_smoke at {_e} with extra 0.1
+			wait 1 tick
+		grenadeExplosion({_e}, {_radius})
+
+		loop all living entities in radius {_radius} around {_e}:
+			if loop-entity is not player:
+				updateAttacker(player, loop-entity)
+				directAttack(loop-entity)
+
+			if {_nade} = "grenade":
+				# dmg
+				set {_dis} to distance between {_e} and loop-entity
+				set {_d} to abs({_dis} - 3.5) # must be 0.5 bigger than radius
+				if {_d} > 2.5:
+					set {_d} to 3.5
+				else:
+					set {_d} to 3
+				if {class::%loop-entity's uuid%} = "MH":
+					set {_d} to ({_d} - 2)
+				set {_v} to vector between {_e} and loop-entity
+				wait 1 tick
+				damage loop-entity by {_d}
+				teleport loop-entity to loop-entity
+				push loop-entity upward at speed 0.5
+				push loop-entity {_v} at speed 1
+				dmgStats(player, loop-entity, {_d}, "nade")
+				kill {_e}
+			else if {_nade} = "flashbang":
+				kill {_e}
+				if loop-entity is not player:
+					add potion effect of blindness 1 without particles for 4 seconds to potion effects of loop-entity
+					add potion effect of wither 2 without particles for 5 seconds to potion effects of loop-entity
+					set {_shapes::%loop-entity%} to a circle with radius 0.5
+				add potion effect of slowness 1 without particles for 4 seconds to potion effects of loop-entity
+				# PART
+				set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(black, gray, 0.75)
+				set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+				loop 80 times:
+					loop {_shapes::*}:
+						set {_p} to loop-index parsed as player
+						set {_loc} to {_p}'s location
+						add 1.5 to y-coord of {_loc}
+						if {_p} is not invisible:
+							draw shapes {_shapes::%loop-index%} at {_loc}
+					rotate shapes {_shapes::*} by {_rotation}
+					wait 1 tick
+		kill {_e}

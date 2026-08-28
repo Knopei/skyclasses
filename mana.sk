@@ -1,0 +1,182 @@
+
+
+# New mana and stamina system
+
+function atkCHECK(p: player, mana: integer) :: boolean: # updates action bar
+	set {_mana} to {_mana}*10	
+	if {mana::%{_p}'s uuid%::curr} < {_mana}:
+		send "&cNot enough Mana!" to {_p}
+		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
+		stop
+	remove {_mana} from {mana::%{_p}'s uuid%::curr}
+	actionBar({_p})
+	return true
+
+function tacCHECK(p: player, mana: integer) :: boolean: # updates action bar
+	set {_mana} to {_mana}*10
+	if {ability-cooldown::%{_p}'s uuid%} is set:
+		if difference between now and {ability-cooldown::%{_p}'s uuid%} < 15 ticks:
+			send "&cAbility on Cooldown!" to {_p}
+			stop			
+	if {mana::%{_p}'s uuid%::curr} < {_mana}:
+		send "&cNot enough Mana!" to {_p}
+		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
+		stop
+	remove {_mana} from {mana::%{_p}'s uuid%::curr}
+	actionBar({_p})
+	set {ability-cooldown::%{_p}'s uuid%} to now
+	return true
+
+function ultCHECK(p: player, mana: integer) :: boolean: # updates action bar
+	if {general-perk::%{_p}'s uuid%::perk} = 22:
+		remove 15 from {_mana}
+		if {_mana} < 0:
+			set {_mana} to 0
+	set {_mana} to {_mana}*10		
+	if {mana::%{_p}'s uuid%::curr} < {_mana}:
+		send "&cNot enough Mana!" to {_p}
+		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
+		stop
+	remove {_mana} from {mana::%{_p}'s uuid%::curr}
+	actionBar({_p})
+	return true
+
+function staminaCHECK(p: player, stamina: integer) :: boolean: # updates action bar
+	set {_stamina} to {_stamina}*300
+	if {stamina-cooldown::%{_p}'s uuid%} is set:
+		if difference between now and {stamina-cooldown::%{_p}'s uuid%} < 15 ticks:
+			stop			
+	if {staminaPause::%{_p}'s uuid%} is set:
+		send "&cStamina Disabled!" to {_p}
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		stop		
+	if {stamina::%{_p}'s uuid%::curr} < {_stamina}:
+		send "&cNot enough Stamina!" to {_p}
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		stop
+	remove {_stamina} from {stamina::%{_p}'s uuid%::curr}
+	actionBar({_p})
+	set {stamina-cooldown::%{_p}'s uuid%} to now
+	return true
+
+on join:
+	if {mana::%player's uuid%::max} isn't set:
+		set {mana::%player's uuid%::max} to 1000
+		set {mana::%player's uuid%::curr} to 0
+	if {stamina::%player's uuid%::max} isn't set:
+		set {stamina::%player's uuid%::max} to 900
+		set {stamina::%player's uuid%::curr} to 0
+	delete {staminaPause::%player's uuid%} 
+	delete {stamina::%player's uuid%::pace}
+
+command /mana <text> [<integer>] [<player>]:
+	permission: op
+	trigger:
+		if arg 3 is online:
+			set {_player} to arg 3
+		else:
+			set {_player} to player
+		if arg-1 is "set":
+			if arg-2 is set:
+				set {_m} to arg-2
+				set {mana::%{_player}'s uuid%::curr} to {_m}
+				send "&aYou set your mana to %{_m}%!"
+		else if arg-1 is "pace":
+			if arg-2 is set:
+				set {_m} to arg-2
+				if {_m} > 10:
+					set {_m} to 10
+				send "&eYou now gain x%{_m}% times the mana!"
+				set {mana::%{_player}'s uuid%::pace} to {_m}
+		else if arg-1 is "max":
+			if arg-2 is set:
+				set {_m} to arg-2
+				send "&eYou set you max mana to %{_m}%"
+				set {mana::%{_player}'s uuid%::max} to arg-2
+
+command /stamina <text> [<integer>] [<player>]:
+	permission: op
+	trigger:
+		if arg 3 is online:
+			set {_player} to arg 3
+		else:
+			set {_player} to player
+		if arg-1 is "set":
+			if arg-2 is set:
+				set {_m} to arg-2
+				set {stamina::%{_player}'s uuid%::curr} to {_m}
+				send "&aYou set your stamina to %{_m}%!"
+		else if arg-1 is "pace":
+			if arg-2 is set:
+				set {_m} to arg-2
+				if {_m} > 10:
+					set {_m} to 10
+				send "&eYou now gain x%{_m}% times the stamina!"
+				set {stamina::%{_player}'s uuid%::pace} to {_m}
+		else if arg-1 is "max":
+			if arg-2 is set:
+				set {_m} to arg-2
+				send "&eYou set you max stamina to %{_m}%"
+				set {stamina::%{_player}'s uuid%::max} to arg-2
+		
+
+every 5 ticks: # 1 stamina = 300, 1 mana = 10
+	loop all players:
+		if {mana::%loop-player's uuid%::max} > {mana::%loop-player's uuid%::curr}:
+			if {mana::%loop-player's uuid%::pace} is set:
+				add 10*{mana::%loop-player's uuid%::pace} to {mana::%loop-player's uuid%::curr}
+			else:
+				add 10 to {mana::%loop-player's uuid%::curr}
+		if {stamina::%loop-player's uuid%::max} > {stamina::%loop-player's uuid%::curr}:
+			if {stamina::%loop-player's uuid%::pace} is set:
+				add 7.5*{stamina::%loop-player's uuid%::pace} to {stamina::%loop-player's uuid%::curr}
+			else:
+				set {_s} to 7.5
+				if {general-perk::%loop-player's uuid%::perk} = 25:
+					set {_s} to {gp-stamina}
+				add {_s} to {stamina::%loop-player's uuid%::curr}
+		actionBar(loop-player)
+
+function actionBar(p: player):
+	set {_uuid} to {_p}'s uuid
+	set {_mCurr} to floor({mana::%{_uuid}%::curr}/10)
+	set {_mMax} to {mana::%{_uuid}%::max}/10
+	set {_sCurr} to floor({stamina::%{_uuid}%::curr}/300)
+	set {_sMax} to {stamina::%{_uuid}%::max}/300
+	# ULT
+	set {_class} to {class::%{_uuid}%}
+	if {godlike-ULT-CD::%{_uuid}%::%{_class}%} is set:
+		set {_time} to difference between now and {godlike-ULT-CD::%{_uuid}%::%{_class}%}
+		if {special::%{_uuid}%::ULT-CD} is set:
+			set {_cooldown} to {special::%{_uuid}%::ULT-CD}
+		else if {_class} is "CB":
+			set {_cooldown} to cbCalcCooldownULT({_p})
+		else:
+			set {_cooldown} to {weapons::%{_class}%::ULT-CD}
+		if {_time} < {_cooldown}:
+			set {_time::*} to "%{_time}%" split at " "
+			set {_cd::*} to "%{_cooldown}%" split at " "
+			set {_time::1} to {_time::1} parsed as a number
+			set {_cd::1} to {_cd::1} parsed as a number
+			set {_ult} to floor(({_time::1}/{_cd::1})*100)
+	else:
+		set {_ult} to 100
+	# OTHER
+	if {_ult} isn't set:
+		set {_ult} to 100
+	if {staminaPause::%{_uuid}%} is set:
+		set {_sc} to "&7"
+	else:
+		set {_sc} to "&e"
+	# ACTION BAR
+	send action bar "%{_sc}%%{_sCurr}%/%{_sMax}% Stamina  &9%{_mCurr}%/%{_mMax}% Mana  &b%{_ult}%%% ULT" to {_p}
+
+
+on xp spawn:
+	cancel event
+	
+on player pickup xp:
+	cancel event
+
+
+

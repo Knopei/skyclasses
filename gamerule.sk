@@ -1,0 +1,521 @@
+
+on load:
+	set {skyfall} to location(-0.5, 0, 0.5, world "skyfall", -180, -0)
+	set {japan} to location(0.5, 0, 0.5, world "japan", -180, -0)
+	#
+	set {mapRotation} to false
+	execute console command "mv gamerule show_advancement_messages false skyfall"
+	execute console command "mv gamerule spread_vines false skyfall"
+	execute console command "mv gamerule fire_spread_radius_around_player false skyfall"
+	execute console command "mv gamerule fire_damage true skyfall"
+	execute console command "mv gamerule projectiles_can_break_blocks false skyfall"
+	execute console command "mv gamerule locator_bar false skyfall"
+
+	execute console command "mv gamerule show_advancement_messages false japan"
+	execute console command "mv gamerule spread_vines false japan"
+	execute console command "mv gamerule fire_spread_radius_around_player false japan"
+	execute console command "mv gamerule fire_damage true japan"
+	execute console command "mv gamerule projectiles_can_break_blocks false japan"
+	execute console command "mv gamerule locator_bar false japan"
+
+	
+
+on damage of iron golem:
+	wait 1 tick
+	broadcast "HP: &c%health of victim%"
+	if attacker's held item is air:
+		kill victim
+
+command /disableMapRotation:
+	permission: op
+	trigger:
+		if {mapRotation} is true:
+			set {mapRotation} to false
+			send "&cMap rotation Disabled!"
+		else if {mapRotation} is false:
+			set {mapRotation} to true
+			send "&aMap rotation Enabled!"
+
+
+on skript start:
+	set {_n} to random integer between 1 and 2
+	if {_n} is 1:
+		set {spawn} to {skyfall}
+		set {_name} to "&6&lFort Fucker"
+	else if {_n} is 2:
+		set {spawn} to {japan}
+		set {_name} to "&d&lHentai Temple"
+
+#	while {spawn} is set:
+#		if {mapRotation} is false:
+#			wait 5 seconds
+#		else: 
+#			# teleport
+#			loop all players:
+#				teleport loop-player to {spawn}
+#			wait 10 ticks
+#			loop all players:
+#				set gamemode of loop-player to adventure
+#			# wait
+#			wait 570 seconds # 9.5 minutes
+#			broadcast " " and "&e&lMap Rotating to %{_name}% &e&l in &f30 seconds" and " "
+#			wait 20 seconds
+#			broadcast " " and "&e&lMap Rotating to %{_name}% &e&l in &f10 seconds" and " "
+#			wait 7 seconds
+#			broadcast " " and "&e&lMap Rotating to %{_name}% &e&l in &f3 seconds" and " "
+#			wait 1 seconds
+#			broadcast " " and "&e&lMap Rotating to %{_name}% &e&l in &f2 seconds" and " "
+#			wait 1 seconds
+#			broadcast " " and "&e&lMap Rotating to %{_name}% &e&l in &f1 seconds" and " "
+#			wait 1 seconds
+#			# rotate
+#			if {spawn} = {skyfall}:
+#				set {spawn} to {japan}
+#				set {_name} to "&6&lHentai Temple"
+#			else if {spawn} = {japan}:
+#				set {spawn} to {skyfall}
+#				set {_name} to "&6&lFort Fucker"
+
+on join:
+	wait 1 tick
+	set gamemode of player to adventure
+	clear inventory of player
+	delete {class::%player's uuid%}
+	set {top::%player's uuid%} to true
+	if {tempSpawnLoc} is set:
+		set {spawnlocation::%player's uuid%} to {tempSpawnLoc}
+	else:
+		set {spawnlocation::%player's uuid%} to {spawn}
+	teleport player to {spawnlocation::%player's uuid%}
+	sidebar(player)
+
+	set {_displayName} to getDisplayName(player)
+	set join message to "%{_displayName}% &fjoined the game!"
+	wait 1 second
+	set gamemode of player to adventure
+
+on disconnect:
+	set leave message to ""
+	loop all players:
+		if loop-player is op:
+			send "&f%player% rage quit the game!" to loop-player
+		else if name of loop-player is "SwiftSwordMC":
+			send "&f%player% rage quit the game!" to loop-player
+
+on skript stop:
+	delete {tempSpawnLoc}
+	delete {spawn}
+
+command /spawnpoint:
+	permission: op
+	trigger:
+		set {_loc} to location of player
+		set {tempSpawnLoc} to {_loc}
+		loop all players:
+			teleport loop-player to {_loc}
+			set {spawnlocation::%loop-player's uuid%} to {_loc}
+			wait 1 tick
+			set gamemode of loop-player to adventure
+
+command /top:
+	permission: op
+	trigger:
+		if {top::%player's uuid%} isn't set:
+			set {top::%player's uuid%} to true
+		else:
+			delete {top::%player's uuid%}
+
+function sidebar(p: player):
+	clear fastboard of {_p} 
+	set title of {_p}'s fastboard to "&lHOW TO GET GOOD"
+	set line 1 of {_p}'s fastboard to ""
+	set line 2 of {_p}'s fastboard to "&7| Tactical Ability"
+	set line 3 of {_p}'s fastboard to "&8 (right or left click)"
+	set line 4 of {_p}'s fastboard to "&7| Ultimate Ability"
+	set line 5 of {_p}'s fastboard to "&8 (drop your weapon)"
+	set line 6 of {_p}'s fastboard to "&7| Dash forward"
+	set line 7 of {_p}'s fastboard to "&8 (Sneak While Airborne)"
+	set line 8 of {_p}'s fastboard to "&7| Dash upward"
+	set line 9 of {_p}'s fastboard to "&8 (S.W.A + look down)"
+	set line 10 of {_p}'s fastboard to ""
+	set line 11 of {_p}'s fastboard to "&7Classes: &e/class"
+	set line 12 of {_p}'s fastboard to "&7Discord: &9/discord"
+	set line 13 of {_p}'s fastboard to ""
+	set line 14 of {_p}'s fastboard to "&bSkyClasses.minehut.gg"
+	set line 15 of {_p}'s fastboard to ""
+
+command /dsb:
+	trigger:
+		clear fastboard of player
+		send "&ewhose a good boy-- you are- have you been behaving for mommy now?"
+
+on disconnect:
+	clear fastboard of player
+
+command /discord:
+	aliases: /disc
+	trigger:
+		set {_book} to written book
+		set book title of {_book} to "Discord Invitation Link"
+		set book author of {_book} to "HypeHub"
+
+		set {_component::1} to text component of "&9&lDISCORD INVITE:%nl%&0&nhttps://discord.com%nl%&n/invite/8ueucPjxS2%nl%%nl%"
+		set {_component::2} to text component of "&oSkyClasses &0will notify when players are online + view important news and updates; all in our &oDiscord%nl%%nl%%nl%%nl%"
+		set {_component::3} to text component of "HypeHub,%nl%Founder & Developer%nl%"
+
+		loop {_component::*}:
+			set {_i} to loop-index
+			set click event of {_component::%{_i}%} to click event to open url "https://discord.gg/8ueucPjxS2"
+			set hover event of {_component::%{_i}%} to hover event showing "&7Click ""YES"" on the pop up prompt to continue to our Discord!"  
+
+		set page 1 of book {_book} to {_component::*}
+
+		open book {_book} to player
+
+# Universal 
+
+function getDisplayName(p: player) :: string:
+	set {_class} to {class::%{_p}'s uuid%}
+	set {_color} to getClassDiv({_p}, {_class}, "color")
+	set {_division} to getClassDiv({_p}, {_class}, "long")
+	set {_name} to {class-name::%{_class}%}
+	return "%{_color}%&l[%{_division}% %{_name}%] %{_color}%%{_p}%"
+
+on chat:
+	cancel event
+	set {_displayName} to getDisplayName(player)
+	broadcast formatted "%{_displayName}%&f: %message%"
+
+
+on projectile hit:
+	if projectile is an arrow:
+		delete event-projectile
+	if event-block is decorated pot:
+		cancel event
+
+on spawn:
+	if "%spawn reason%" is "natural" or "mount" or "jockey" or "built wither" or "reinforcements":
+		cancel event
+
+on weather change to rain:
+	if {weatherChange} is set:
+		while {weatherChange} > 0:
+			remove 1 from {weatherChange}
+			wait 1 second
+		delete {weatherChange}
+		set {_world} to "%event-world%"
+		set weather in world {_world} to clear
+	else:
+		cancel event
+
+on weather change to thunder:
+	cancel event
+
+on food bar change:
+	cancel event
+	
+on join:
+	set player's food level to 10
+	set unsaturated regen rate of player to 100 ticks
+
+on block trample:
+	cancel event
+
+on death of living entity:
+	clear drops
+
+on entity drop:
+	cancel event
+
+
+# Game Specific
+
+on break:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on place:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+
+on player drop with priority low:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on pickup with priority low:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on swap hand items:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on player move:
+	if {top::%player's uuid%} is set:
+		if "%off hand item%" does not contain "air":
+			add off hand item to player's inventory
+			set off hand item to air
+
+on right click on anvil, chipped anvil, or damaged anvil:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on enchanting table:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click:
+	if "%event-block%" contains "trapdoor":
+		if {top::%player's uuid%} is set:
+			cancel event
+
+on right click on candle:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on flower pot:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on decorated pot:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on potted azure bluet:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on chiseled bookshelf:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click:
+	if "%event-block%" contains "sign":
+		if {top::%player's uuid%} is set:
+			cancel event
+
+on right click:
+	if "%event-block%" contains "fence gate":
+		if {top::%player's uuid%} is set:
+			cancel event
+
+import:
+	org.bukkit.event.Event
+	org.bukkit.event.block.BlockEvent
+	org.bukkit.event.block.BlockPhysicsEvent
+
+on BlockPhysicsEvent:
+	if {disableTrapdoor} isn't set: # command below
+
+		set {_block} to event.getSourceBlock()
+		set {_loc} to location of {_block}
+		if {stopPhysics::%{_loc}%} isn't set: # fixes inf loop
+			if "%{_block}%" contains "trapdoor":
+				if block data tag "open" of {_block} is true: # makes closed trapdoors stay closed
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to false
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+				else if block data tag "open" of {_block} is false: # makes open trapdoors stay open
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to true
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+			else if "%{_block}%" contains "fence gate":
+				if block data tag "open" of {_block} is true: # makes closed fence gate stay closed
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to false
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+				else if block data tag "open" of {_block} is false: # makes open fence gate stay open
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to true
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+			else if {_block} is a candle:
+				if block data tag "lit" of {_block} is false: # makes lit candles stay lit
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "lit" of {_update} to true
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+
+command /disabletrapdoor:
+	permission: op
+	trigger:
+		if {disableTrapdoor} isn't set:
+			set {disableTrapdoor} to true
+		else:
+			delete {disableTrapdoor}
+
+on load:
+	delete {disableTrapdoor}
+
+
+# Launch Pad
+
+on walking on slime block:
+	push player upward at speed 1
+	play sound "ENTITY_SLIME_JUMP" at volume 1 at pitch 0.75 at event-location
+
+
+
+# Door
+
+on right click on tripwire hook:
+	set {_loc} to location of event-block
+	set {_yaw} to yaw of {_loc}
+	if {_yaw} is 0:
+		set {_check} to block 2 north of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 east of {_loc}
+			#
+			set {_loc::1} to block 1 north of {_loc}
+			set {_loc::2} to block 1 west of {_loc::1}
+			set {_loc::3} to block 1 east of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::3} to tripwire_hook[facing=west]
+			else:
+				set block at {_loc::2} to tripwire_hook[facing=east]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 south of {_loc}
+			set {_loc::3} to block 2 south of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block east of {_loc::2} to tripwire_hook[facing=east]
+			set block west of {_loc::2} to tripwire_hook[facing=west]
+	else if {_yaw} is 90:
+		set {_check} to block 2 east of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 south of {_loc}
+			#
+			set {_loc::1} to block 1 east of {_loc}
+			set {_loc::2} to block 1 north of {_loc::1}
+			set {_loc::3} to block 1 south of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::3} to tripwire_hook[facing=north]
+			else:
+				set block at {_loc::2} to tripwire_hook[facing=south]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 west of {_loc}
+			set {_loc::3} to block 2 west of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block north of {_loc::2} to tripwire_hook[facing=north]
+			set block south of {_loc::2} to tripwire_hook[facing=south]
+	else if {_yaw} is 180:
+		set {_check} to block 2 south of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 west of {_loc}
+			#
+			set {_loc::1} to block 1 south of {_loc}
+			set {_loc::2} to block 1 west of {_loc::1}
+			set {_loc::3} to block 1 east of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::2} to tripwire_hook[facing=east]
+			else:
+				set block at {_loc::3} to tripwire_hook[facing=west]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 north of {_loc}
+			set {_loc::3} to block 2 north of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block east of {_loc::2} to tripwire_hook[facing=east]
+			set block west of {_loc::2} to tripwire_hook[facing=west]
+	else if {_yaw} is 270:
+		set {_check} to block 2 west of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 north of {_loc}
+			#
+			set {_loc::1} to block 1 west of {_loc}
+			set {_loc::2} to block 1 north of {_loc::1}
+			set {_loc::3} to block 1 south of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::2} to tripwire_hook[facing=south]
+			else:
+				set block at {_loc::3} to tripwire_hook[facing=north]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 east of {_loc}
+			set {_loc::3} to block 2 east of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block north of {_loc::2} to tripwire_hook[facing=north]
+			set block south of {_loc::2} to tripwire_hook[facing=south]
+
+
+command /sidebar:
+	permission: op
+	trigger:
+		sidebar(player)
+
+
+	
+
+
+
+

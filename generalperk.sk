@@ -1,0 +1,145 @@
+
+on load:
+	#Display
+	set {gp-caption} to glowstone dust of unbreaking 1 named "&e&lGeneral Perks" with lore "" and "&8&oChoose a passive perk that best" and "&8&omatches your playstyle." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set {gp-display::19} to apple named "&c&lHealthly Boy" with lore "" and "&f&lPASSIVE" and "&8&oGain an extra heart that regenerates" and "&8&oon kill or death." and "" and "" 
+	set {gp-display::25} to feather named "&e&lStamina Recovery" with lore "" and "&f&lPASSIVE" and "&8&oStamina regenerates 25%% quicker." and "" and "" 
+	set {gp-display::21} to golden helmet named "&c&lReinforced Dash" with lore "" and "&f&lPASSIVE" and "&8&oTake 40%% less damage during" and "&8&ostamina usage." and "" and "" 
+	set {gp-display::22} to water bottle named "&9&lSpell Caster" with lore "" and "&f&lPASSIVE" and "&8&oUltimate cost reduced by &9🧪15 mana" and "&8&o+ ultimate cooldown reduced by" and "&f⌚5 seconds &8&ofor ultimates where the" and "&8&ocooldown is greater than 20 seconds."  and "" and "" 
+	set {gp-display::20} to golden apple named "&6&lEnchanted Apple" with lore "" and "&f&lPASSIVE" and "&8&oIncreased Golden apple" and "&8&ohealing."  and "" and "" 
+	set {gp-display::24} to rabbit foot named "&b&lNimble Feet" with lore "" and "&f&lPASSIVE" and "&8&oTake zero fall damage stun."  and "" and "" 
+	set {gp-display::23} to fire charge named "&2&lQuick Fuse" with lore "" and "&f&lPASSIVE" and "&8&oAll grenades explode quicker."  and "" and "" 
+	# vars
+	set {gp-dmgReduction} to 40 # take 40% less dmg
+	set {gp-healthlyBoy} to 20 seconds # cooldown
+	set {gp-stamina} to 9.375 # stamina per sec
+	set {gp-ultCD} to 5 seconds # reduces ult cd by...
+
+
+on join:
+	if {general-perk::%player's uuid%::perk} isn't set:
+		set {general-perk::%player's uuid%::perk} to 22
+
+function perkSelect(p: player):
+	set metadata tag "general perk" of {_p} to chest inventory with 5 rows named "General Perks"
+	set slot (integers between 9 and 35) of metadata tag "general perk" of {_p} to gray stained glass pane named " " 
+	set slot (integers between 0 and 8) of metadata tag "general perk" of {_p} to yellow stained glass pane named " " 
+	set slot (integers between 36 and 44) of metadata tag "general perk" of {_p} to yellow stained glass pane named " " 
+
+	set slot 4 of metadata tag "general perk" of {_p} to {gp-caption}
+
+	set {_pos} to {general-perk::%{_p}'s uuid%::perk}
+	set {_display::19} to {gp-display::19}
+	set {_display::20} to {gp-display::20}
+	set {_display::21} to {gp-display::21}
+	set {_display::22} to {gp-display::22}
+	set {_display::23} to {gp-display::23}
+	set {_display::24} to {gp-display::24}
+	set {_display::25} to {gp-display::25}
+
+	loop {_display::*}:
+		set {_index} to loop-index parsed as a integer
+		set {_value} to loop-value 
+		#add nbt compound of "{attribute_modifiers:{modifiers:[],show_in_tooltip:0}}" to nbt compound of {_value}
+		set slot {_index} of metadata tag "general perk" of {_p} to {_value} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set {_size} to size of lore of loop-value
+		if {_pos} = {_index}:
+			set line {_size} of lore of slot {_index} of metadata tag "general perk" of {_p} to "&aSelected"
+		else:
+			set line {_size} of lore of slot {_index} of metadata tag "general perk" of {_p} to "&7Click to select"
+
+	set {_enchant} to slot {_pos} of metadata tag "general perk" of {_p}
+	enchant {_enchant} with unbreaking 1
+	set slot {_pos} of metadata tag "general perk" of {_p} to {_enchant} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable	
+
+	# bottom
+
+	set slot 36 of metadata tag "general perk" of {_p} to {class-bottom::back} 
+
+	open (metadata tag "general perk" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "general perk" of player):
+		cancel event
+		# row 1
+		if index of event-slot is 19:
+			set {_gp} to true
+		else if index of event-slot is 20:
+			set {_gp} to true
+		else if index of event-slot is 21:
+			set {_gp} to true
+		else if index of event-slot is 22:
+			set {_gp} to true
+		else if index of event-slot is 23:
+			set {_gp} to true
+		else if index of event-slot is 24:
+			set {_gp} to true
+		else if index of event-slot is 25:
+			set {_gp} to true
+		# class functionality
+		if {_gp} is set:
+			set {general-perk::%player's uuid%::perk} to index of event-slot
+			set {general-perk::%player's uuid%::cd} to now
+			perkSelect(player)
+			maxHealth(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 36:
+			# if {duel::%player's uuid%::status} is "intermission":
+			# 	duelRoundClassSelect(player)
+			# else:
+			ClassMenu(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+function maxHealth(p: player):	
+	set {_uuid} to {_p}'s uuid
+	if {class::%{_uuid}%} = "FH":
+		if {class-perk::%{_uuid}%::FH::perk} = {perk-check::1}:
+			add 1 to {_health}
+		add 1 to {_health}
+	else if {class::%{_uuid}%} = "BS":
+		if {class-perk::%{_uuid}%::BS::perk} = {perk-check::1}:
+			add 1 to {_health}	
+	if {general-perk::%{_uuid}%::perk} = 19:
+		set {general-perk::%{_uuid}%::cd} to now
+		add 1 to {_health}
+	if {_health} is set:
+		set {_max} to 9 + {_health}
+		set max health of {_p} to {_max}
+		set {maxHealth::%{_uuid}%} to {_max}
+		heal {_p} by {_health}
+	else:
+		set max health of {_p} to 9
+		set {maxHealth::%{_uuid}%} to 9
+
+function perkStamina(p: player):
+	if {general-perk::%{_p}'s uuid%::perk} is set:
+		if {general-perk::%{_p}'s uuid%::perk} = 21:
+			loop 10 times:
+				add 1 to {_n}
+				if {_p} isn't on ground:
+					set {playerDefense::%{_p}'s uuid%} to {gp-dmgReduction}
+				else if {_n} < 3:
+					set {playerDefense::%{_p}'s uuid%} to {gp-dmgReduction}
+				else:
+					stop loop
+				wait 5 ticks
+			delete {playerDefense::%{_p}'s uuid%} 
+
+on damage of player:
+	if {general-perk::%victim's uuid%::perk} = 19:
+		wait 1 tick
+		set {_max} to {maxHealth::%victim's uuid%}
+		set {_cut} to {_max} - 1
+		set {_curr} to health of victim
+		if max health of victim > {_cut}:
+			if {_curr} <= {_cut}:
+				if event-damagecause is not fall:
+					set max health of victim to {_cut}
+					#wait {gp-healthlyBoy}
+					#set {_time} to difference between now and {general-perk::%victim's uuid%::cd}
+					#if {_time} > 19 seconds:
+					#	set max health of victim to 10
+					#	heal victim by 1 heart
+					#	set {general-perk::%victim's uuid%::cd} to now
+

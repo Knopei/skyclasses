@@ -1,0 +1,384 @@
+
+on load:
+	# Class Info Bottom
+	set {class-bottom::back} to spectral arrow named "&7Back to Select"
+	set {class-bottom::lb} to heart of the sea named "&9&lLeaderboard" with lore "" and "&8&lComing Soon"
+	set {class-bottom::stats} to book named "&f&lStatistics" with lore "" and "" and "" and "" and "" and "" and "" and "" and ""
+	# Division Colors
+	set {division-color::TRASH} to "&8"
+	set {division-color::ROOKIE} to "&7"
+	set {division-color::BRONZE} to "<##6E4D25>"
+	set {division-color::SILVER} to "&f"
+	set {division-color::GOLD} to "&6"
+	set {division-color::DIAMOND} to "&b"
+	set {division-color::MASTER} to "&2"
+	set {division-color::GRAND-MASTER} to "&5"
+	set {division-color::ELITE-GRANDMASTER} to "&d"
+	# Class Division ----------------------------
+	set {class-division::TRASH} to nether brick named "%{division-color::TRASH}%&lTrash" with lore "" and "&7&l&oRewards" and "  &eTrash Title" and "" and ""  
+	set {class-division::ROOKIE} to brick named "%{division-color::ROOKIE}%&lRookie" with lore "" and "&7&l&oRewards" and "  &eRookie Title" and "" and ""  
+	set {class-division::BRONZE} to copper ingot named "%{division-color::BRONZE}%&lBronze" with lore "" and "&7&l&oRewards" and "  &eBronze Title" and "  &dPerk Unlock" and "" and ""
+	set {class-division::SILVER} to iron ingot named "%{division-color::SILVER}%&lSilver" with lore "" and "&7&l&oRewards" and "  &eSilver Title" and "  &dPerk Unlock" and "" and ""
+	set {class-division::GOLD} to gold ingot named "%{division-color::GOLD}%&lGold" with lore "" and "&7&l&oRewards" and "  &eGold Title" and "  &dPerk Unlock" and "" and ""
+	set {class-division::DIAMOND} to diamond named "%{division-color::DIAMOND}%&lDiamond" with lore "" and "&7&l&oRewards" and "  &eDiamond Title" and "" and ""
+	set {class-division::MASTER} to emerald named "%{division-color::MASTER}%&lMaster" with lore "" and "&7&l&oRewards" and "  &eMaster Title" and "" and ""  
+	set {class-division::GRAND-MASTER} to amethyst shard named "%{division-color::GRAND-MASTER}%&lGrandmaster" with lore "" and "&7&l&oRewards" and "  &eGrandmaster Title" and "" and ""
+	set {class-division::ELITE-GRANDMASTER} to cherry sapling named "%{division-color::ELITE-GRANDMASTER}%&lElite Grandmaster" with lore "" and "&7&l&oRewards" and "  &eElite Grandmaster Title" and "" and ""  
+
+	set {class-requirement::9} to 0
+	set {class-requirement::10} to 25
+	set {class-requirement::11} to 50
+	set {class-requirement::12} to 100
+	set {class-requirement::13} to 250
+	set {class-requirement::14} to 500
+	set {class-requirement::15} to 1000
+	set {class-requirement::16} to 5000
+	set {class-requirement::17} to 10000
+	# Class Display -----------------------------
+	wait 1 tick
+		# Special Case
+	set {class-display::CB1} to diamond sword named "&eClass: %{class-color::CB}%&l%{class-name::CB}%" with lore "" and "&e&lPASSIVE" and "&9Mana Breach" and "&8&oWhen below half max mana, damage you" and "&8&odo will steal a portion of mana from the" and "&8&oenemy and transfer it to you." and "" and "&e&lTACTICAL" and "&6Cyber Glitch &7[RIGHT] &9🧪%{weapons::CB::TAC-COST}%" and "&8&oPhase through doors and solid terrain." and "" and "&e&lULTIMATE" and "&aMalicious Dart &7[DROP] &9🧪%{weapons::CB::ULT-COST}% &f⌚%{weapons::CB1::ULT-CD}%" and "&8&oShoot a dart that briefly disables" and "&8&ostamina usage." and ""
+
+	set {class-display::RB1} to bow named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&6&lATTACK &7[HOLD+RIGHT] &9🧪%{weapons::RB::ATK-COST}%" and "&8&oThe longer you hold, the more rapid the" and "&8&ofire rate." and "" and "&e&lPASSIVE" and "&6Rapid Bow" and "&8&oYour bow is always active." and "" and "&e&lTACTICAL" and "&eEnergize &7[LEFT] &9🧪%{weapons::RB1::TAC-COST}%" and "&8&oCharge your bow to the maximum fire rate." and "" and "&e&lULTIMATE" and "&cMachine Gun &7[DROP] &9🧪%{weapons::RB1::ULT-COST}% &f⌚%{weapons::RB1::ULT-CD}%" and "&8&oPlow anything in your way." and ""
+	set {class-display::RD1} to stone sword named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&e&lPASSIVE" and "&6Rapid Bow" and "&8&oYour bow is always active." and "" and "&e&lTACTICAL" and "&bSprint II &7[RIGHT] &9🧪%{weapons::RD::TAC-COST}%" and "&8&oBriefly gain great speed that declines." and "" 
+		# LORE INFO
+	set {class-display::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&e&lPASSIVE" and "&3Pitch Fork" and "&8&oExtended your trident forward dealing" and "&8&odamage in front of you, every 4th hit." and "" and "&e&lTACTICAL" and "&bEmpowered Throw &7[RIGHT] &9🧪%{weapons::ZT::TAC-COST}%" and "&8&oThrow your trident and strike lightning" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&bThunderstorm &7[DROP] &9🧪%{weapons::ZT::ULT-COST}% &f⌚%{weapons::ZT::ULT-CD}%" and "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance." and ""
+	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oPermanent regeneration." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%{weapons::PGS::ULT-CD}%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
+	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bQuick Feet" and "&8&oPermanent increased speed." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%{weapons::GD::ULT-CD}%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis, does a large" and "&8&opercent of the enemies current health." and ""
+	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&oGain attack damage and speed the lower" and "&8&oyour health." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%{weapons::VBA::ULT-CD}%" and "&8&oLittle Rage but more furious." and ""
+	set {class-display::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&e&lPASSIVE" and "&4Life Steal" and "&8&oHeal when damaging enemies." and "" and "&e&lTACTICAL" and "&cBlood Beam &7[RIGHT] &9🧪%{weapons::DS::TAC-COST}%" and "&8&oTarget a enemy to damage and heal from." and "" and "&e&lULTIMATE" and "&4Blood Harvest &7[DROP] &9🧪%{weapons::DS::ULT-COST}% &f⌚%{weapons::DS::ULT-CD}%" and "&8&oAutomatically shoot Blood Beams at all" and "&8&onearby enemies." and ""
+	set {class-display::MH} to mace named "&eClass: %{class-color::MH}%&l%{class-name::MH}%" with lore "" and "&e&lPASSIVE" and "&2Grenade Protection" and "&8&oTake less damage to grenades." and "" and "&e&lTACTICAL" and "&3Explode &7[RIGHT] &9🧪%{weapons::MH::TAC-COST}%" and "&8&oCreate an explosion at your location damaging" and "&8&oand knocking up any enemies nearby." and "" and "&e&lULTIMATE" and "&bMighty Leap &7[DROP] &9🧪%{weapons::MH::ULT-COST}% &f⌚%{weapons::MH::ULT-CD}%" and "&8&oLeap high into the air and create a big explosion" and "&8&oupon landing that damages and pushes enemies away" and "&8&o+ &7[DROP] &8&oWhile airborne to directional dash." and ""
+	set {class-display::RS} to netherite hoe named "&eClass: %{class-color::RS}%&l%{class-name::RS}%" with lore "" and "&e&lPASSIVE" and "&cReaping Slash" and "&8&oSlash around you applying wither on every" and "&8&o3rd hit." and "" and "&e&lTACTICAL" and "&eGrapple &7[RIGHT] &9🧪%{weapons::RS::S-TAC-COST}%-%{weapons::RS::L-TAC-COST}%" and "&8&oThrow a grapple that pulls you toward solid" and "&8&oobjects or pulls enemies toward you." and "" and "&e&lULTIMATE" and "&4Soul Collector &7[DROP] &9🧪%{weapons::RS::ULT-COST}% &f⌚%{weapons::RS::ULT-CD}%" and "&8&oSwing your scythe around you, and apply" and "&8&owithering and blindness to hit enemies." and ""
+	set {class-display::NS} to nether star named "&eClass: %{class-color::NS}%&l%{class-name::NS}%" with lore "" and "&e&lPASSIVE" and "&eImproved Stamina" and "&8&oStamina dashes will launch you further." and "" and "&e&lTACTICAL" and "&cShuriken Throw &7[RIGHT] &9🧪%{weapons::NS::TAC-COST}%" and "&8&oConsecutively throw 3 ninja stars." and "" and "&e&lULTIMATE" and "&6Dragon Blade &7[DROP] &9🧪%{weapons::NS::ULT-COST}% &f⌚%{weapons::NS::ULT-CD}%" and "&8&oPull out a fiery katana and gain immense" and "&8&ospeed and jumboost." and ""
+	set {class-display::PT} to trident named "&eClass: %{class-color::PT}%&l%{class-name::PT}%" with lore "" and "&e&lPASSIVE" and "&6Moist Apples" and "&8&oGain more healing for golden apples." and "" and "&e&lTACTICAL" and "&9Harpoon &7[RIGHT] &9🧪%{weapons::PT::TAC-COST}%" and "&8&oThrow your trident and teleport to" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&1Aura Farm &7[DROP] &9🧪%{weapons::PT::ULT-COST}% &f⌚%{weapons::PT::ULT-CD}%" and "&8&oExpand your frame and begin aura farming" and "&8&olike the ASU Frat leader." and ""
+	set {class-display::CB} to diamond sword named "&eClass: %{class-color::CB}%&l%{class-name::CB}%" with lore "" and "&e&lPASSIVE" and "&9Mana Breach" and "&8&oWhen below half max mana, damage you" and "&8&odo will steal a portion of mana from the" and "&8&oenemy and transfer it to you." and "" and "&e&lTACTICAL" and "&aMalicious Dart &7[RIGHT] &9🧪%{weapons::CB::TAC-COST}%" and "&8&oShoot a dart that briefly disables" and "&8&ostamina usage." and "" and "&e&lULTIMATE" and "&6Cyber Glitch &7[DROP] &9🧪%{weapons::CB::ULT-COST}% &f⌚%{weapons::CB::ULT-CD}%" and "&8&oPhase through doors and solid terrain." and ""
+	set {class-display::FH} to mace named "&eClass: %{class-color::FH}%&l%{class-name::FH}%" with lore "" and "&e&lPASSIVE" and "&cBig Boy" and "&8&oGain +1 max heatlh." and "" and "&e&lTACTICAL" and "&3Leap &7[RIGHT] &9🧪%{weapons::FH::TAC-COST}%" and "&8&oLeap into the air, and create a damaging" and "&8&oand slowing radius on impact." and "" and "&e&lULTIMATE" and "&bIt's Alive! &7[DROP] &9🧪%{weapons::FH::ULT-COST}% &f⌚%{weapons::FH::ULT-CD}%" and "&8&oCreate a powerful electric shield around" and "&8&oyou that reflects projectiles." and ""
+	set {class-display::BS} to shield named "&eClass: %{class-color::BS}%&l%{class-name::BS}%" with lore "" and "&e&lPASSIVE" and "&eStamina Recharge" and "&8&oHitting Bash refunds a small portion" and "&8&oof Stamina." and "" and "&e&lTACTICAL" and "&3Shield &7[RIGHT+HOLD] &9🧪%{weapons::BS::TAC-COST}% PER SECOND" and "&8&oUse your shield to block all sources" and "&8&oof damage." and "" and "&e&lSPECIAL" and "&cBash &7[RIGHT+HOLD+STAMINA]" and "&8&oWhile in Shield State, using Stamina will" and "&8&odamage and knock back any enemies in" and "&8&oyour way." and "" and "&e&lULTIMATE" and "&6Shield Quake &7[DROP] &9🧪%{weapons::BS::ULT-COST}% &f⌚%{weapons::BS::ULT-CD}%" and "&8&oSlam your shield on the ground mutliple" and "&8&otimes, knocking up enemies and briefly" and "&8&odisabling thier stamina usage." and ""
+	set {class-display::WH} to netherite axe named "&eClass: %{class-color::WH}%&l%{class-name::WH}%" with lore "" and "&e&lPASSIVE" and "&7Fragile Stacking" and "&8&oYou Sonic Beams will briefly apply a stack " and "&8&oof fragile to an enemy, enemies with fragile" and "&8&ostacks will take more damage to your next" and "&8&oSonic Beams." and "" and "&e&lTACTICAL" and "&bSonic Beam &7[RIGHT] &9🧪%{weapons::WH::TAC-COST}%" and "&8&oCharge up, then shoot a Sonic Beam." and "" and "&e&lULTIMATE" and "&1Warden Summon &7[DROP] &9🧪%{weapons::WH::ULT-COST}% &f⌚%{weapons::WH::ULT-CD}%" and "&8&oSummon a Warden that will assist you in battle." and ""
+
+	set {class-display::RB} to bow named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&6&lATTACK &7[HOLD+RIGHT] &9🧪%{weapons::RB::ATK-COST}%" and "&8&oThe longer you hold, the more rapid the" and "&8&ofire rate." and "" and "&e&lPASSIVE" and "&bSprint" and "&8&oBriefly gain speed when swapping weapons." and "" and "&e&lTACTICAL" and "&eEnergize &7[LEFT] &9🧪%{weapons::RB::TAC-COST}%" and "&8&oCharge your bow to the maximum fire rate." and "" and "&e&lULTIMATE" and "&6Holster &7[DROP] &9🧪%{weapons::RB::ULT-COST}% &f⌚%{weapons::RB::ULT-CD}%" and "&8&oSwap to your dagger." and "" and "&7Click to swap"
+	set {class-display::RD} to stone sword named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&e&lPASSIVE" and "&bSprint" and "&8&oBriefly gain speed when swapping weapons." and "" and "&e&lTACTICAL" and "&bSprint II &7[RIGHT] &9🧪%{weapons::RD::TAC-COST}%" and "&8&oBriefly gain great speed that declines." and "" and "&e&lULTIMATE" and "&6Holster &7[DROP] &9🧪%{weapons::RB::ULT-COST}% &f⌚%{weapons::RB::ULT-CD}%" and "&8&oSwap to your bow." and "" and "&7Click to swap"
+
+	set {class-display::PF} to leather horse armor named "&eClass: %{class-color::PF}%&l%{class-name::PF}%" with lore "" and "&6&lATTACK &7[RIGHT] &9🧪%{weapons::PF::ATK-COST}%" and "&8&oShoot a bullet that does more damage the" and "&8&ofurther it travels." and "" and "&e&lPASSIVE" and "&cReady n' Steady" and "&8&oYour next attack after swapping weapons" and "&8&owill do more damage." and "" and "&e&lTACTICAL" and "&cCannon Ball &7[LEFT] &9🧪%{weapons::PF::TAC-COST}%" and "&8&oShoot a bullet that knocks enemies back." and "" and "&e&lULTIMATE" and "&6Holster &7[DROP] &9🧪%{weapons::PF::ULT-COST}% &f⌚%{weapons::PF::ULT-CD}%" and "&8&oSwap to your cutlass." and "" and "&7Click to swap"
+	set {class-display::PC} to iron sword named "&eClass: %{class-color::PF}%&l%{class-name::PF}%" with lore "" and "&e&lPASSIVE" and "&cReady n' Steady" and "&8&oYour next attack after swapping weapons" and "&8&owill do more damage." and "" and "&e&lTACTICAL" and "&cSwing n' Pray &7[RIGHT] &9🧪%{weapons::PC::TAC-COST}%" and "&8&oBriefly gain zero attack cooldown." and "" and "&e&lULTIMATE" and "&6Holster &7[DROP] &9🧪%{weapons::PF::ULT-COST}% &f⌚%{weapons::PF::ULT-CD}%" and "&8&oSwap to your flintlock." and "" and "&7Click to swap"
+ 
+	set {class-display::MMS} to spyglass named "&eClass: %{class-color::MMH}%&l%{class-name::MMH}%" with lore "" and "&6&lATTACK &7[DROP] &9🧪%{weapons::MMS::ULT-COST}%" and "&8&oShoot a high damaging bullet that does more" and "&8&odamage the further it travels." and "" and "&e&lPASSIVE" and "&cWounded" and "&8&oSniper shots briefly slow enemies." and "" and "&e&lTACTICAL" and "&cMarked Target &7[LEFT] &9🧪%{weapons::MMH::TAC-COST}%" and "&8&oMarked enemies take more damage to your" and "&8&oattacks." and "" and "&e&lTACTICAL" and "&6Scoped &7[RIGHT]" and "&8&oUse your sniper scope to zoom in and increase" and "&8&oyour accuracy." and "" and "&e&lULTIMATE" and "&4Sniper Rifle &f⌚%{weapons::MMH::ULT-CD}%" and "&8&oYour rifle is always active + your rifle" and "&8&ogains ammo over time." and "" and "&7Click to swap"
+	set {class-display::MMH} to stone axe named "&eClass: %{class-color::MMH}%&l%{class-name::MMH}%" with lore "" and "&e&lPASSIVE" and "&6Sniper Rifle" and "&8&oYour sniper rifle is always active." and "" and "&e&lTACTICAL" and "&cMarked Target &7[RIGHT] &9🧪%{weapons::MMH::TAC-COST}%" and "&8&oMarked enemies take more damage to your" and "&8&oattacks." and "" and "&7Click to swap"
+
+	set {class-display::HC} to crossbow named "&eClass: %{class-color::HC}%&l%{class-name::HC}%" with lore "" and "&6&lATTACK &7[RIGHT] &9🧪%{weapons::HC::ATK-COST}%" and "&8&oCharge up and fire a triple shot of arrows." and "" and "&e&lPASSIVE" and "&eWolf Companion" and "&8&oGet a Leash that can be used to summon" and "&8&oand command your wolf." and "" and "&e&lTACTICAL" and "&2Poison Tipped &7[LEFT] &9🧪%{weapons::HC::TAC-COST}%" and "&8&oYour next attack will apply poison." and "" and "&e&lULTIMATE" and "&6Holster &7[DROP] &9🧪%{weapons::HC::ULT-COST}% &f⌚%{weapons::HC::ULT-CD}%" and "&8&oSwap to your knife." and "" and "&7Click to swap"
+	set {class-display::HK} to iron sword named "&eClass: %{class-color::HC}%&l%{class-name::HC}%" with lore "" and "&e&lPASSIVE" and "&eWolf Companion" and "&8&oGet a Leash that can be used to summon" and "&8&oand command your wolf." and "" and "&e&lTACTICAL" and "&2Poison Tipped &7[RIGHT] &9🧪%{weapons::HK::TAC-COST}%" and "&8&oYour next attack will apply poison." and "" and "&e&lULTIMATE" and "&6Holster &7[DROP] &9🧪%{weapons::HC::ULT-COST}% &f⌚%{weapons::HK::ULT-CD}%" and "&8&oSwap to your crossbow." and "" and "&7Click to swap"
+	set {class-display::HWL} to lead named "&eClass: %{class-color::HC}%&l%{class-name::HC}%" with lore "" and "&e&lTACTICAL" and "&eTug &7[LEFT] &9🧪%{weapons::HWL::L-COST}%" and "&8&oCommand you wolf to come to you." and "" and "&e&lTACTICAL" and "&6Summon &7[RIGHT] &9🧪%{weapons::HWL::R-COST}% &f⌚%{weapons::HWL::CD}%" and "&8&oSummon a wolf that will assist you in battle." and "" and "&7Click to swap"
+
+	set {class-display::TB} to bow named "&eClass: %{class-color::TB}%&l%{class-name::TB}%" with lore "" and "&6&lATTACK &7[HOLD+RIGHT] &9🧪%{weapons::TB::ATK-COST}%" and "&8&oShoot a wind burst that travels quicker" and "&8&oand does more damage the longer charged." and "" and "&e&lPASSIVE" and "&bWindy Feet" and "&8&oPermanent increased speed." and "" and "&e&lTACTICAL" and "&fGlide &7[LEFT] &9🧪%{weapons::TB::TAC-COST}% PER SECOND" and "&8&oToggle to begin gliding." and "" and "&e&lULTIMATE" and "&4Tornado &7[DROP] &9🧪%{weapons::TB::ULT-COST}% &f⌚%{weapons::TB::ULT-CD}%" and "&8&oSummon a directional tornado that pushes" and "&8&oand damages enemies." and "" and "&7Click to swap"
+	set {class-display::TS} to iron hoe named "&eClass: %{class-color::TB}%&l%{class-name::TB}%" with lore "" and "&e&lPASSIVE" and "&6Tempest Bow" and "&8&oYour bow is always active." and "" and "&e&lTACTICAL" and "&fGlide &7[RIGHT] &9🧪%{weapons::TB::TAC-COST}% PER SECOND" and "&8&oToggle to begin gliding." and "" and "&7Click to swap"
+	
+	loop {class-display::*}:
+		set {_v} to loop-value
+		set {_i} to loop-index
+		#add nbt compound of "{attribute_modifiers:{modifiers:[],show_in_tooltip:0}}" to nbt compound of {_v}
+		set {class-display::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 
+
+	# Perks ------------------------------------- # dyes (red: DMG, orange: DEF, yellow: Range, cyan: Movement)
+	set {perk-check::1} to 29
+	set {perk-check::2} to 31
+	set {perk-check::3} to 33
+	# ZT
+	set {class-perk::ZT::%{perk-check::1}%} to cyan dye named "&dPerk: &lWeight Reduction" with lore "" and "&5&lPASSIVE" and "&8&oBriefly gain speed after &bEmpowered Throw." and ""
+	set {class-perk::ZT::%{perk-check::2}%} to red dye named "&dPerk: &lLightning Speed" with lore "" and "&5&lPASSIVE" and "&bThunderstorm &8&ois summoned quicker." and ""
+	set {class-perk::ZT::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# PGS
+	set {class-perk::PGS::%{perk-check::1}%} to cyan dye named "&dPerk: &lAgile Shield" with lore "" and "&5&lPASSIVE" and "&8&oGain speed while &eHoly Shield &8&ois active." and ""
+	set {class-perk::PGS::%{perk-check::2}%} to orange dye named "&dPerk: &lSupreme Radiance" with lore "" and "&5&lPASSIVE" and "&8&oIncreases the radius of &6Holy Radiance." and ""
+	set {class-perk::PGS::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# GD
+	set {class-perk::GD::%{perk-check::1}%} to cyan dye named "&dPerk: &lLunge Master" with lore "" and "&5&lPASSIVE" and "&cLunge &8&ocosts less mana to use." and ""
+	set {class-perk::GD::%{perk-check::2}%} to orange dye named "&dPerk: &lParried Lunge" with lore "" and "&5&lPASSIVE" and "&8&oTake reduced damage during &cLunge." and ""
+	set {class-perk::GD::%{perk-check::3}%} to orange dye named "&dPerk: &lSupportive Ghost" with lore "" and "&5&lPASSIVE" and "&8&oCleanse + Heal during the duration of &4Ghost." and ""
+	# VBA
+	set {class-perk::VBA::%{perk-check::1}%} to red dye named "&dPerk: &lJoyful to Furious" with lore "" and "&5&lPASSIVE" and "&cLittle Rage &8&obecomes more dramatic." and ""
+	set {class-perk::VBA::%{perk-check::2}%} to cyan dye named "&dPerk: &lVictim Chase" with lore "" and "&5&lPASSIVE" and "&8&oGain more speed during the duration" and "&8&oof &4Big Rage." and ""
+	set {class-perk::VBA::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# DS
+	set {class-perk::DS::%{perk-check::1}%} to yellow dye named "&dPerk: &lExtended Siphon" with lore "" and "&5&lPASSIVE" and "&8&oIncreases the range of &cBlood Beam." and ""
+	set {class-perk::DS::%{perk-check::2}%} to orange dye named "&dPerk: &lVampire" with lore "" and "&5&lPASSIVE" and "&8&oDuring the duration of &4Blood Harvest" and "&8&odo increased &4Life Steal." and ""
+	set {class-perk::DS::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# RB/RD
+	set {class-perk::RB::%{perk-check::1}%} to cyan dye named "&dPerk: &lSprint III" with lore "" and "&5&lPASSIVE" and "&bSprint II &8&oDoes not decline + Lasts longer." and ""
+	set {class-perk::RB::%{perk-check::2}%} to red dye named "&dPerk: &lRapid Forgiveness" with lore "" and "&5&lPASSIVE" and "&8&oArrows consume less mana." and ""
+	set {class-perk::RB::%{perk-check::3}%} to yellow dye named "&dPerk: &lMachine Gun" with lore "" and "&5&lPASSIVE" and "&8&oTrade overall consistency for insane burst potential." and "&6Holster &8&ois replaced by &cMachine Gun." and ""
+	# PF/PC
+	set {class-perk::PF::%{perk-check::1}%} to cyan dye named "&dPerk: &lQuick Feet" with lore "" and "&5&lPASSIVE" and "&8&oGain permanent speed while" and "&8&ousing &7Flintlock." and ""
+	set {class-perk::PF::%{perk-check::2}%} to red dye named "&dPerk: &lFire Ball" with lore "" and "&5&lPASSIVE" and "&8&oIgnite your bullet with fire" and "&8&oevery 3rd shot." and ""
+	set {class-perk::PF::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# MH
+	set {class-perk::MH::%{perk-check::1}%} to red dye named "&dPerk: &lMore Explosions!" with lore "" and "&5&lPASSIVE" and "&8&oGreatly increase the rate at which" and "&8&oyou get &2Grenades." and ""
+	set {class-perk::MH::%{perk-check::2}%} to red dye named "&dPerk: &lFire Pit" with lore "" and "&5&lPASSIVE" and "&8&oUpon landing &bMighty Leap&8&o, create a radius" and "&8&oof fire that ignites enemies." and ""
+	set {class-perk::MH::%{perk-check::3}%} to cyan dye named "&dPerk: &lBouncy Explode" with lore "" and "&5&lPASSIVE" and "&3Explode &8&onow pushes you upward when" and "&8&olooking down." and ""
+	# RS
+	set {class-perk::RS::%{perk-check::1}%} to yellow dye named "&dPerk: &lExtended Grapple" with lore "" and "&5&lPASSIVE" and "&8&oIncreases the range of &eGrapple." and ""
+	set {class-perk::RS::%{perk-check::2}%} to red dye named "&dPerk: &lReaping Grapple" with lore "" and "&5&lPASSIVE" and "&eGrapple &8&obriefly applies wither to" and "&8&ohit enemies." and ""
+	set {class-perk::RS::%{perk-check::3}%} to orange dye named "&dPerk: &lSoul Collector" with lore "" and "&5&lPASSIVE" and "&8&oAfter using &4Soul Collector &8&odeal" and "&8&omore damage and heal from enemies" and "&8&owho are blinded." and ""
+	# MMH/MMS
+	set {class-perk::MMH::%{perk-check::1}%} to yellow dye named "&dPerk: &lTrickshot" with lore "" and "&5&lPASSIVE" and "&8&oWhen your &aXP Bar &8&ois full, regain ammo" and "&8&oafter shooting an enemy." and ""
+	set {class-perk::MMH::%{perk-check::2}%} to red dye named "&dPerk: &lFlashbang" with lore "" and "&5&lPASSIVE" and "&8&oGreatly increase the rate at which you" and "&8&oget &7Grenades &8&o+ &7Grenades &8&oare converted" and "&8&ointo &6Flashbangs." and ""
+	set {class-perk::MMH::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# NS
+	set {class-perk::NS::%{perk-check::1}%} to cyan dye named "&dPerk: &lStamina Master" with lore "" and "&5&lPASSIVE" and "&8&oGain increased max stamina." and ""
+	set {class-perk::NS::%{perk-check::2}%} to red dye named "&dPerk: &lFiery Shurikens" with lore "" and "&5&lPASSIVE" and "&8&oDuring the duration of &6Dragon Blade" and "&8&oyour shurikens are ignited with fire." and ""
+	set {class-perk::NS::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon"  
+	# PT
+	set {class-perk::PT::%{perk-check::1}%} to orange dye named "&dPerk: &lDemonic Harpoon" with lore "" and "&5&lPASSIVE" and "&9Harpoon &8&onow damages based on a percentage" and "&8&oof the targets current health, and heals" and "&8&oyou that same percentage." and ""
+	set {class-perk::PT::%{perk-check::2}%} to cyan dye named "&dPerk: &lHarpoon Dive" with lore "" and "&5&lPASSIVE" and "&8&oBriefly gain speed after &9Harpoon &8&o+ &7[RIGHT]" and "&8&owhile &9Harpoon &8&ois airborne to cause it to" and "&8&onosedive." and ""
+	set {class-perk::PT::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# HC
+	set {class-perk::HC::%{perk-check::1}%} to yellow dye named "&dPerk: &lSkilled Shot" with lore "" and "&5&lPASSIVE" and "&8&oIncreases the speed of loading" and "&8&oyour &7Crossbow." and ""
+	set {class-perk::HC::%{perk-check::2}%} to red dye named "&dPerk: &lAlpha Wolf" with lore "" and "&5&lPASSIVE" and "&6Summon &8&ogains increased speed," and "&8&ohealth, and damage." and ""
+	set {class-perk::HC::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# TB
+	set {class-perk::TB::%{perk-check::1}%} to cyan dye named "&dPerk: &lWind Maker" with lore "" and "&5&lPASSIVE" and "&8&oBow &7Attacks &8&oconsume less mana." and ""
+	set {class-perk::TB::%{perk-check::2}%} to red dye named "&dPerk: &lCategory 5" with lore "" and "&5&lPASSIVE" and "&8&oIncreases the distance &4Tornado &8&otravels." and ""
+	set {class-perk::TB::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# CB
+	set {class-perk::CB::%{perk-check::1}%} to orange dye named "&dPerk: &lSystem Overload" with lore "" and "&5&lPASSIVE" and "&aMalicious Dart &8&obriefly slows enemies." and ""
+	set {class-perk::CB::%{perk-check::2}%} to cyan dye named "&dPerk: &lAbility Swap" with lore "" and "&5&lPASSIVE" and "&8&oThe cooldown of your &7Ultimate &8&ois decreased +" and "&aMalicious Dart &8&oand &6Cyber Glitch &8&oswap places." and ""
+	set {class-perk::CB::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon"  
+	# FH
+	set {class-perk::FH::%{perk-check::1}%} to orange dye named "&dPerk: &lThe Biggest Boy" with lore "" and "&5&lPASSIVE" and "&8&oGain +1 max heatlh." and ""
+	set {class-perk::FH::%{perk-check::2}%} to orange dye named "&dPerk: &lUndying" with lore "" and "&5&lPASSIVE" and "&8&oGreatly increases the strength of the" and "&8&oshield provided by &bIt's Alive!" and ""
+	set {class-perk::FH::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# BS
+	set {class-perk::BS::%{perk-check::1}%} to orange dye named "&dPerk: &lHealthy Boy" with lore "" and "&5&lPASSIVE" and "&8&oGain +1 max heatlh." and ""
+	set {class-perk::BS::%{perk-check::2}%} to cyan dye named "&dPerk: &lResilient Basher" with lore "" and "&eStamina Recharge &8&orefunds a larger portion" and "&8&oof stamina &8&o+ briefly gain speed." and ""
+	set {class-perk::BS::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# WH
+	set {class-perk::WH::%{perk-check::1}%} to orange dye named "&dPerk: &lInntertwined" with lore "" and "&5&lPASSIVE" and "&8&oDuring &1Warden Summon &8&odamage your" and "&8&oWarden does heals you, and damage you" and "&8&odo heals your Warden." and "" 
+	set {class-perk::WH::%{perk-check::2}%} to red dye named "&dPerk: &lFragile Stacker" with lore "" and "&5&lPASSIVE" and "&8&oYour Warden will now apply &7Fragile Stacks" and "&8&oto enemies it damages." and ""
+	set {class-perk::WH::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+	# TEMP
+	#set {class-perk::TEMP::%{perk-check::1}%} to gray dye named "&dPerk: &lComing Soon" 
+	#set {class-perk::TEMP::%{perk-check::2}%} to gray dye named "&dPerk: &lComing Soon" 
+	#set {class-perk::TEMP::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
+
+
+function getClassDiv(p: player, class: string, type: string) :: string:
+	set {_uuid} to uuid of {_p}
+	set {_prog} to {class-kill::%{_uuid}%::%{_class}%}
+	if {_prog} >= {class-requirement::17}:
+		set {_long} to "%{division-color::ELITE-GRANDMASTER}%&lElite-Grandmaster" 
+		set {_short} to "%{division-color::ELITE-GRANDMASTER}%&lEGM"
+		set {_color} to {division-color::ELITE-GRANDMASTER}
+	else if {_prog} >= {class-requirement::16}:
+		set {_long} to "%{division-color::GRAND-MASTER}%&lGrandmaster" 
+		set {_short} to "%{division-color::GRAND-MASTER}%&lGM"
+		set {_color} to {division-color::GRAND-MASTER}
+	else if {_prog} >= {class-requirement::15}:
+		set {_long} to "%{division-color::MASTER}%&lMaster" 
+		set {_short} to "%{division-color::MASTER}%&lM"
+		set {_color} to {division-color::MASTER}
+	else if {_prog} >= {class-requirement::14}:
+		set {_long} to "%{division-color::DIAMOND}%&lDiamond" 
+		set {_short} to "%{division-color::DIAMOND}%&lD"
+		set {_color} to {division-color::DIAMOND}
+	else if {_prog} >= {class-requirement::13}:
+		set {_long} to "%{division-color::GOLD}%&lGold" 
+		set {_short} to "%{division-color::GOLD}%&lG"
+		set {_color} to {division-color::GOLD}
+	else if {_prog} >= {class-requirement::12}:
+		set {_long} to "%{division-color::SILVER}%&lSilver" 
+		set {_short} to "%{division-color::SILVER}%&lS"
+		set {_color} to {division-color::SILVER}
+	else if {_prog} >= {class-requirement::11}:
+		set {_long} to "%{division-color::BRONZE}%&lBronze" 
+		set {_short} to "%{division-color::BRONZE}%&lB"
+		set {_color} to {division-color::BRONZE}
+	else if {_prog} >= {class-requirement::10}:
+		set {_long} to "%{division-color::ROOKIE}%&lRookie" 
+		set {_short} to "%{division-color::ROOKIE}%&lR"
+		set {_color} to {division-color::ROOKIE}
+	else if {_prog} >= {class-requirement::9}:
+		set {_long} to "%{division-color::TRASH}%&lTrash" 
+		set {_short} to "%{division-color::TRASH}%&lT"
+		set {_color} to {division-color::TRASH}
+	if {_type} = "color":
+		return {_color}
+	else if {_type} = "long":
+		return {_long}
+	else:
+		return {_short}
+
+
+
+function ClassInfo(p: player, class: string):
+	set {_uuid} to uuid of {_p}
+	set metadata tag "class info" of {_p} to chest inventory with 6 rows named "Class Info"
+	set slot (integers between 9 and 44) of metadata tag "class info" of {_p} to gray stained glass pane named " " 
+	set slot (integers between 0 and 8) of metadata tag "class info" of {_p} to black stained glass pane named " " 
+	set slot (integers between 45 and 53) of metadata tag "class info" of {_p} to black stained glass pane named " " 
+	# info
+	set name of slot 0 of metadata tag "class info" of {_p} to {_class}
+	set slot 4 of metadata tag "class info" of {_p} to {class-display::%{_class}%} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 
+	# division
+	set {_prog} to {class-kill::%{_uuid}%::%{_class}%}
+	set {_division::9} to {class-division::TRASH}
+	set {_division::10} to {class-division::ROOKIE}
+	set {_division::11} to {class-division::BRONZE}
+	set {_division::12} to {class-division::SILVER}
+	set {_division::13} to {class-division::GOLD}
+	set {_division::14} to {class-division::DIAMOND}
+	set {_division::15} to {class-division::MASTER}
+	set {_division::16} to {class-division::GRAND-MASTER}
+	set {_division::17} to {class-division::ELITE-GRANDMASTER}
+	
+	loop {_division::*}:
+		set {_index} to loop-index parsed as a integer
+		set slot {_index} of metadata tag "class info" of {_p} to loop-value
+		set {_size} to size of lore of loop-value
+		if {_prog} >= {class-requirement::%{_index}%}:
+			set {_division} to {_index}
+			set line {_size} of lore of slot {_index} of metadata tag "class info" of {_p} to "&aProgress [%{_prog}%/%{class-requirement::%{_index}%}%]"
+		else:
+			set line {_size} of lore of slot {_index} of metadata tag "class info" of {_p} to "&cProgress [%{_prog}%/%{class-requirement::%{_index}%}%]"
+
+	set {_enchant} to slot {_division} of metadata tag "class info" of {_p}
+	enchant {_enchant} with unbreaking 1
+	set slot {_division} of metadata tag "class info" of {_p} to {_enchant} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 	
+	# perks
+	set {_pos} to {class-perk::%{_uuid}%::%{_class}%::perk}
+	set {_perk::%{perk-check::1}%} to {class-perk::%{_class}%::%{perk-check::1}%}
+	set {_perk::%{perk-check::2}%} to {class-perk::%{_class}%::%{perk-check::2}%}
+	set {_perk::%{perk-check::3}%} to {class-perk::%{_class}%::%{perk-check::3}%}
+
+	loop {_perk::*}:
+		set {_index} to loop-index parsed as a integer
+		set {_value} to loop-value 
+		set {_size} to (size of lore of loop-value) + 1
+		if {_pos} = {_index}:
+			set line {_size} of lore of slot {_index} of metadata tag "class info" of {_p} to "&aSelected"
+			enchant {_value} with unbreaking 1
+			set line {_size} of lore of {_value} to "&aSelected"
+		else if {class-perk::%{_uuid}%::%{_class}%::owned::*} contains {_index}:
+			set line {_size} of lore of {_value} to "&7Click to select"
+		else:
+			set line {_size} of lore of {_value} to "&5Click to unlock"
+		set slot {_index} of metadata tag "class info" of {_p} to {_value} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 	
+	
+	# bottom
+	set {_bottom::45} to {class-bottom::back} 
+	set {_bottom::49} to {class-bottom::lb} 
+	set {_bottom::53} to {class-bottom::stats} 
+
+	set {_lore::*} to leaderboard("Kill", {_class})
+	set lore of {_bottom::49} to {_lore::*}
+
+	set slot 45 of metadata tag "class info" of {_p} to {_bottom::45} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 
+	set slot 49 of metadata tag "class info" of {_p} to {_bottom::49} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 
+	set slot 53 of metadata tag "class info" of {_p} to {_bottom::53} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable 
+
+	set line 1 of lore of slot 53 of metadata tag "class info" of {_p} to "&e&o%{class-name::%{_class}%}%"
+
+	set {_kill} to formatNumber({class-kill::%{_uuid}%::%{_class}%}) 
+	set {_death} to formatNumber({class-death::%{_uuid}%::%{_class}%})
+	set {_assist} to formatNumber({class-assist::%{_uuid}%::%{_class}%}) 
+	set {_ks} to formatNumber({class-ks::%{_uuid}%::%{_class}%::top}) 
+	set {_dmg} to formatNumber({class-damage::%{_uuid}%::%{_class}%}) 
+	set {_kdr} to {class-kill::%{_uuid}%::%{_class}%}/{class-death::%{_uuid}%::%{_class}%}
+
+	set line 3 of lore of slot 53 of metadata tag "class info" of {_p} to "&8Kills &f%{_kill}%"
+	set line 4 of lore of slot 53 of metadata tag "class info" of {_p} to "&8K.D.R &f%{_kdr}%"
+	set line 5 of lore of slot 53 of metadata tag "class info" of {_p} to "&8Deaths &f%{_death}%"
+	set line 6 of lore of slot 53 of metadata tag "class info" of {_p} to "&8Assists &f%{_assist}%"
+	set line 7 of lore of slot 53 of metadata tag "class info" of {_p} to "&8Damage &f%{_dmg}%"
+	set line 8 of lore of slot 53 of metadata tag "class info" of {_p} to "&8Top Killstreak &f%{_ks}%"
+
+	open (metadata tag "class info" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "class info" of player):
+		cancel event
+
+		set {_class} to name of slot 0 of player's current inventory
+		set {_index} to index of event-slot
+
+		if index of event-slot is 45:
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			#if {duel::%player's uuid%::status} is "select":
+			#	duelClassMenu(player)
+			#else if {duel::%player's uuid%::status} is "intermission":
+			#	duelRoundClassSelect(player)
+			#else:
+			ClassMenu(player)
+		else if index of event-slot is 4:
+			set {_name} to name of event-slot
+			# RB
+			if {_name} = "&eClass: %{class-color::RB}%&lRapid":
+				if event-slot is bow:
+					set slot 4 of player's current inventory to {class-display::RD}
+				else if event-slot is stone sword:
+					set slot 4 of player's current inventory to {class-display::RB}
+			# PF
+			else if {_name} = "&eClass: %{class-color::PF}%&lPirate":
+				if event-slot is leather horse armor:
+					set slot 4 of player's current inventory to {class-display::PC}
+				else if event-slot is iron sword:
+					set slot 4 of player's current inventory to {class-display::PF}
+			# MMH
+			else if {_name} = "&eClass: %{class-color::MMH}%&lMarksman":
+				if event-slot is spyglass:
+					set slot 4 of player's current inventory to {class-display::MMH}
+				else if event-slot is stone axe:
+					set slot 4 of player's current inventory to {class-display::MMS}
+			# HC
+			else if {_name} = "&eClass: %{class-color::HC}%&lHunter":
+				if event-slot is crossbow:
+					set slot 4 of player's current inventory to {class-display::HK}
+				else if event-slot is iron sword:
+					set slot 4 of player's current inventory to {class-display::HWL}
+				else if event-slot is lead:
+					set slot 4 of player's current inventory to {class-display::HC}
+			# TB
+			else if {_name} = "&eClass: %{class-color::TB}%&lTempest":
+				if event-slot is bow:
+					set slot 4 of player's current inventory to {class-display::TS}
+				else if event-slot is iron hoe:
+					set slot 4 of player's current inventory to {class-display::TB}
+		else if index of event-slot is 49: # LEADERBOARDS
+			if line 1 of lore of event-slot contains "Killstreak":
+				set {_lore::*} to leaderboard("Kill", {_class})
+				set lore of event-slot to {_lore::*}
+			else if line 1 of lore of event-slot contains "Damage": 
+				set {_lore::*} to leaderboard("Killstreak", {_class})
+				set lore of event-slot to {_lore::*}
+			else if line 1 of lore of event-slot contains "Kill": 
+				set {_lore::*} to leaderboard("Damage", {_class})
+				set lore of event-slot to {_lore::*}
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		# PERKS
+		else if index of event-slot is {perk-check::1}, {perk-check::2}, or {perk-check::3}:
+			set {_lore::*} to lore of event-slot
+			set {_size} to size of {_lore::*}
+			if line {_size} of lore of event-slot is "&7Click to select":
+				set {class-perk::%player's uuid%::%{_class}%::perk} to {_index}
+				classSelect(player, {_class})
+				ClassInfo(player, {_class})
+				play sound "block.enchantment_table.use" at volume 1 at pitch 1.5 to player
+			else if line {_size} of lore of event-slot is "&5Click to unlock":
+				set {_prog} to {class-kill::%player's uuid%::%{_class}%}
+				if {_prog} >= {class-requirement::13}:
+					set {_perkUnlock} to 3
+				else if {_prog} >= {class-requirement::12}:
+					set {_perkUnlock} to 2
+				else if {_prog} >= {class-requirement::11}:
+					set {_perkUnlock} to 1
+				else: 
+					set {_perkUnlock} to 0
+				if {_perkUnlock} > 0:
+					set {_size} to size of {class-perk::%player's uuid%::%{_class}%::owned::*}
+					if {_size} >= {_prog}:
+						send "&cInsufficient perk unlocks!"
+						play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
+					else:
+						add {_index} to {class-perk::%player's uuid%::%{_class}%::owned::*}
+						ClassInfo(player, {_class})
+				else:
+					send "&cInsufficient perk unlocks!"
+					play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player

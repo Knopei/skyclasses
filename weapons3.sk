@@ -1,0 +1,775 @@
+
+on load:
+	# CB
+	set {weapons::CB::TAC-COST} to 45
+	set {weapons::CB::ULT-COST} to 45
+	set {weapons::CB::ULT-CD} to 30 seconds
+
+	set {weapons::CB1::ULT-CD} to 30 seconds
+	# FH
+	set {weapons::FH::TAC-COST} to 50
+	set {weapons::FH::ULT-COST} to 60
+	set {weapons::FH::ULT-CD} to 45 seconds
+	# BS
+	set {weapons::BS::TAC-COST} to 40 # must be divisible by 10
+	set {weapons::BS::ULT-COST} to 60 
+	set {weapons::BS::ULT-CD} to 40 seconds
+	set {weapons::BS::SS} to 5 # 5, shield health
+	# WH
+	set {weapons::WH::TAC-COST} to 45
+	set {weapons::WH::ULT-COST} to 60
+	set {weapons::WH::ULT-CD} to 45 seconds
+
+
+# on disconnect & on skript stop = weapons.sk 
+
+function staminaPause(p: player, time: number):
+	set {staminaPause::%{_p}'s uuid%} to true
+	set {_time} to "%{_time}% seconds" parsed as a timespan
+	wait {_time}
+	delete {staminaPause::%{_p}'s uuid%}
+
+# CYBER BLADE
+
+function cbPSS(a: player, v: living entity, mana: integer):
+	set {_uuid} to {_a}'s uuid
+	set {_check} to {mana::%{_uuid}%::max} / 2
+	if {mana::%{_uuid}%::curr} <= {_check}:
+		set {_mana} to {_mana} * 10
+		add {_mana} to {mana::%{_uuid}%::curr}
+		remove {_mana} from {mana::%{_v}'s uuid%::curr}
+
+function cbDart(p: player):
+	shoot a arrow from {_p} at speed 2.5
+	set metadata value "type" of shot projectile to "CB"
+	set metadata value "attacker" of shot projectile to {_p}
+	play sound "entity_arrow_shoot" with volume 3 and pitch 1.5 at {_p}
+	while metadata value "hit" of shot projectile isn't set:
+		draw 5 of dust_color_transition using dustTransition(cyan, light green, 0.5) at shot projectile with offset vector(0, 0, 0) with extra 0 
+		if (y-coord of shot projectile) < -75:
+			set metadata value "hit" of shot projectile to true
+		wait 1 tick
+	kill shot projectile
+
+function cbPhaseableBlocks(loc: location, type: string) :: boolean:
+	if {_type} is "is":
+		if block at {_loc} is air, fern, short grass, torch, or water:
+			return true
+		else:
+			#set {_block} to block at {_loc}
+			#if "%{_block}%" contains "trapdoor" or "fence gate":
+			#	broadcast "is 1.5"
+			#	return true
+			#else:
+			#	broadcast "is 2"
+			return false
+	else if {_type} is "not":
+		if block at {_loc} is not air, fern, short grass, torch, or water:
+			return true
+		else:
+			#set {_block} to block at {_loc}
+			#if "%{_block}%" doesn't contain "trapdoor" or "fence gate":
+			#	broadcast "not 1.5"
+			#	return true
+			#else:
+			#	broadcast "not 2"
+			return false
+
+
+function cbPhase(p: player, type: text):
+	if {_type} = "ult":
+		if {cb-ULT-count::%{_p}'s uuid%} <= 0:
+			send "&cULT NOT READY!" to {_p}
+			stop
+	
+	set {_loc} to {_p}'s location
+	loop 10 times: # Finds target block
+		add 0.5 to {_dis}
+		set {_temp} to location {_dis} blocks infront of {_p}
+		if cbPhaseableBlocks({_temp}, "not") is true:
+			set {_block} to block at {_temp}
+			stop loop
+	if {_block} is set:
+		set {_dis} to distance between {_loc} and location of {_block}
+		if {_dis} <= 5:
+			set {_pitch} to pitch of {_p}
+			loop 6 times: 
+				set {_loc} to location {_dis} blocks infront of {_p}
+				add 0.5 to {_dis}
+				if {_p} is in world "skyfall":
+					set {_lowestPhase} to -50
+				else if {_p} is in world "japan":
+					set {_lowestPhase} to -55
+				set {_above} to location of block above {_loc}
+				set {_below} to location of block below {_loc}
+				if y coord of {_loc} < {_lowestPhase}: # lowest possible point that allows phase
+					stop loop
+
+				else if cbPhaseableBlocks({_loc}, "is") is true:
+					if cbPhaseableBlocks({_above}, "is") is true:
+						add 0.5 to {_dis}
+						set {_tp} to true
+						stop loop
+				else if cbPhaseableBlocks({_above}, "is") is true: 
+					if {_pitch} < -60: # do not trigger when looking down ( must look far up )
+						add 0.5 to {_dis}
+						set {_tp} to true
+						stop loop
+					else if {_pitch} < 30: # triggers when looking slightly down
+						
+						add 1.5 to {_dis}
+						set {_ycoord} to 1.5
+						set {_tp} to true
+						stop loop
+				else if cbPhaseableBlocks({_below}, "is") is true:
+					if {_pitch} > 75: # do not trigger when looking up
+						add 0.5 to {_dis}
+						set {_tp} to true
+						set {_ycoord} to -1.5
+						stop loop
+			if {_tp} is set:
+				if {_type} = "ult":
+					if {cb-ULT-count::%{_p}'s uuid%} > 0:
+						if ultCHECK({_p}, {weapons::CB::ULT-COST}) is true: # MANA CHECK
+							set {_manaPass} to true
+							remove 1 from {cb-ULT-count::%{_p}'s uuid%}
+				else if {_type} = "tac":
+					if tacCHECK({_p}, {weapons::CB::TAC-COST}) is true: # MANA CHECK
+						set {_manaPass} to true
+				if {_manaPass} is set:
+
+					set {_oldLoc} to {_p}'s location
+					cbUltParticle({_oldLoc}, {_loc})
+
+					set {_loc} to location {_dis} blocks infront of {_p}
+					if {_ycoord} is set:
+						add {_ycoord} to y coord of {_loc}
+
+					#wait 4 ticks
+					teleport {_p} to {_loc}
+		else:
+			send action bar "&cTarget too far!" to {_p}
+
+
+on right click with diamond sword: # TAC
+	if name of player's held item contains "%{wc}%Cyberpunk Blade":
+		if {class-perk::%player's uuid%::CB::perk} = {perk-check::2}:
+			cbPhase(player, "tac") # MANA CHECK IN FUNCTION
+		else if tacCHECK(player, {weapons::CB::TAC-COST}) is true:
+			cbDart(player)
+
+on damage of living entity:
+	set {_cause} to "%event-damagecause%"
+	if {_cause} = "projectile":
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "CB":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+				cbPSS({_attacker}, victim, 5)
+				staminaPause(victim, 2)
+				if {class-perk::%{_attacker}'s uuid%::CB::perk} = {perk-check::1}:
+					add potion effect of slowness 1 for 2 seconds to potion effects of victim
+	else if {_cause} = "attack":
+		if name of attacker's held item contains "%{wc}%Cyberpunk Blade":
+			cbPSS(attacker, victim, 5)
+
+function cbCalcCooldownULT(p: player) :: timespan:
+	set {_uuid} to {_p}'s uuid
+	if {class-perk::%{_uuid}%::CB::perk} = {perk-check::2}:
+		set {_ultCooldown} to {weapons::CB1::ULT-CD}
+	else:
+		set {_ultCooldown} to {weapons::CB::ULT-CD}
+	
+	if {general-perk::%{_uuid}%::perk} = 22:
+		if {_ultCooldown} > 20 seconds:
+			set {special::%{_uuid}%::ULT-CD} to {_ultCooldown} - {gp-ultCD}
+			set {_ultCooldown} to {special::%{_uuid}%::ULT-CD}
+
+	return {_ultCooldown}
+
+function cbULT(p: player, id: string):
+	set {_uuid} to {_p}'s uuid
+
+	set {cb-ULT-count::%{_uuid}%} to 0
+	set {_ultCooldown} to cbCalcCooldownULT({_p})
+	wait {_ultCooldown}
+	wait 1 second
+	if {class-ID::%{_uuid}%} = {_id}: 
+		set {cb-ULT-count::%{_uuid}%} to 1
+		cbUpdateName({_p})
+
+	while {class-ID::%{_uuid}%} = {_id}:
+		set {godlike-ULT-CD::%{_uuid}%::CB} to now
+		set {_ultCooldown} to cbCalcCooldownULT({_p})
+		wait {_ultCooldown}
+
+		if {class-ID::%{_uuid}%} = {_id}: 
+			delete {godlike-ULT-CD::%{_uuid}%::CB}
+
+			if {cb-ULT-count::%{_uuid}%} < 2:
+				add 1 to {cb-ULT-count::%{_uuid}%}
+				cbUpdateName({_p})
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+
+
+function cbUpdateName(p: player):
+	set {_count} to {cb-ULT-count::%{_p}'s uuid%}
+	if {_count} = 0:
+		set {_update} to "&7● ●"
+	else if {_count} = 1:
+		set {_update} to "&7● &e●"
+	else if {_count} = 2:
+		set {_update} to "&e● ●"
+	loop {_p}'s inventory:
+		if name of loop-value contains "%{wc}%Cyberpunk Blade":
+			set {_i} to index of loop-value
+			set name of slot {_i} of {_p}'s inventory to "%{wc}%Cyberpunk Blade %{_update}%"
+			stop loop
+	if {_i} isn't set:
+		wait 5 ticks
+		loop {_p}'s inventory:
+			if name of loop-value contains "%{wc}%Cyberpunk Blade":
+				set {_i} to index of loop-value
+				set name of slot {_i} of {_p}'s inventory to "%{wc}%Cyberpunk Blade %{_update}%"
+				stop loop		
+
+
+on drop of diamond sword with priority low:
+	if name of event-item contains "%{wc}%Cyberpunk Blade": 
+		cancel event
+		if {class-perk::%player's uuid%::CB::perk} = {perk-check::2}:
+			if {cb-ULT-count::%player's uuid%} > 0:
+				if ultCHECK(player, {weapons::CB::ULT-COST}) is true:
+					cbDart(player)
+					remove 1 from {cb-ULT-count::%player's uuid%}
+			else:
+				send "&cULT NOT READY!" to player
+		else:
+			cbPhase(player, "ult") # MANA CHECK IN FUNCTION
+		
+		wait 5 ticks
+		if name of player's held item contains "%{wc}%Cyberpunk Blade": 
+			cbUpdateName(player)
+		else:
+			wait 5 ticks
+			cbUpdateName(player)
+
+function cbUltParticle(oldLoc: location, newLoc: location) :: number: 
+	set {_v} to vector from {_oldLoc} to {_newLoc}
+	set vector length of {_v} to 0.1
+	set {_loc} to {_oldLoc}
+	play sound "entity.goat.long_jump" with volume 10 and pitch 1.25 at {_newLoc}
+	loop 5 times:
+		loop (distance between {_loc} and {_newLoc}) / 0.1 times:
+			set {_temp} to {_loc}
+			draw 1 of dust_color_transition using dustTransition(cyan, light green, 0.75) at {_temp} with offset vector(0, 0, 0) with extra 0
+			add 0.5 to y coord of {_temp}
+			draw 1 of dust_color_transition using dustTransition(cyan, light green, 0.75) at {_temp} with offset vector(0, 0, 0) with extra 0
+			add 0.5 to y coord of {_temp}
+			draw 1 of dust_color_transition using dustTransition(cyan, light green, 0.75) at {_temp} with offset vector(0, 0, 0) with extra 0
+			set {_loc} to {_loc} ~ {_v}
+		set {_loc} to location of {_oldLoc}
+		wait 10 ticks
+
+
+on damage of player with priority low: # suff mitigate
+	if {class::%victim's uuid%} = "CB":
+		set {_cause} to "%event-damagecause%"
+		if {_cause} = "suffocation":
+			cancel event
+
+# FRANKENSTEIN HAMMER
+
+on right click with mace: # TAC
+	if name of player's held item is "%{wc}%Frankenstein Hammer": 
+		if tacCHECK(player, {weapons::FH::TAC-COST}) is true:
+			push player upwards at speed 0.85
+			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
+
+			wait 5 ticks
+			while player isn't on ground:
+				set {_loc} to location of player
+				draw 3 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+				add 0.5 to y coord of {_loc}
+				draw 3 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+				wait 1 tick
+
+			set {_loc} to location of player
+			play sound "entity.warden.attack_impact" with volume 3 and pitch 0.5 at {_loc}
+			loop all living entities in radius 2.5 around {_loc}:
+				if loop-entity is not player:
+					updateAttacker(player, loop-entity)
+					directAttack(loop-entity)
+					damage loop-entity by 0.5
+					add potion effect of slowness 1 without particles for 2 seconds to potion effects of loop-entity
+
+				set {_shapes::circle} to a circle with radius 2.5
+				set particle of {_shapes::circle} to 2 of dust_color_transition particle using dustTransition(light gray, blue, 1)
+				draw shape {_shapes::circle} at {_loc}
+
+
+on drop of mace with priority low: # ULT USE
+	if name of event-item is "%{wc}%Frankenstein Hammer":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::FH::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::FH} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::FH} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::FH}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::FH::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::FH} to now	
+			# ULT PART
+			if {class-perk::%player's uuid%::FH::perk} = {perk-check::2}:
+				add potion effect of absorption 3 without particles for 5 seconds to potion effects of player
+			else:
+				add potion effect of absorption 1 without particles for 5 seconds to potion effects of player
+			play sound "entity.warden.emerge" with volume 1 and pitch 1.5 at player
+			set {_shapes::triangle} to a triangle with radius 1.5
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			# PHY TAC
+			while (absorption amount of player) > 0:
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				wait 2 tick
+
+			set {godlike-ULT-CD::%player's uuid%::FH} to now	
+			delete {godlike-ULT-USE::%player's uuid%::FH}	
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::FH}	
+			if {class::%player's uuid%} = "FH":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function fhULT(a: living entity, p: player, dmg: number) :: number: # {_p} is frankenstein
+	set {_v} to vector from {_p} to {_a}
+	set vector length of {_v} to 0.1
+	set {_loc} to location of {_p}
+	add 1.25 to y-coord of {_loc}
+	loop (distance between {_loc} and {_a}) / 0.1 times:
+		draw 1 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0, 0, 0) with extra 0
+		set {_loc} to {_loc} ~ {_v}
+	play sound "entity.warden.hurt" at volume 5 and pitch 0.75 at location of {_p}
+	play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_a}
+	updateAttacker({_p}, {_a})
+	set {_dmg} to {_dmg} / 2
+	damage {_a} by {_dmg}
+	return 0
+
+on damage of player:
+	if (absorption amount of victim) > 0:
+		if {class::%victim's uuid%} = "FH":
+			set {_loc} to location of victim
+			set {_x} to random number between -1 and 1
+			set {_y} to random number between 1 and 1.5
+			add {_x} to x-coord of {_loc}
+			add {_y} to y-coord of {_loc}
+			spawn 1 armor stand at {_loc}
+			set {_ls} to last spawned armor stand
+			add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
+			set name of last spawned armor stand to "&3✧&b&oSHIELDED&3✧"
+			wait 1 second
+			kill {_ls}		
+
+# BASHER SHIELD
+
+function bsPSS(p: player, stamina: integer): # 1 stamina = 300 = 30*10
+	set {_uuid} to {_p}'s uuid
+	set {_stamina} to {_stamina} * 10
+	set {_check} to {stamina::%{_uuid}%::curr} + {_stamina}
+
+	if {_check} > {stamina::%{_uuid}%::max}:
+		set {stamina::%{_uuid}%::curr} to {stamina::%{_uuid}%::max}
+	else:
+		add {_stamina} to {stamina::%{_uuid}%::curr}
+
+import:
+	io.papermc.paper.event.player.PlayerShieldDisableEvent
+
+on PlayerShieldDisableEvent:
+	cancel event
+
+function disableShield(p: player, type: text):
+	play sound "item.shield.break" with volume 1 and pitch 1 at {_p}
+	delete {isShielding::%{_p}'s uuid%} 
+	set {_slot} to index of {_p}'s held item
+	set {_p}'s held item to air
+	wait 3 tick
+	if {_type} = "temp":
+		set {_cd} to 1 seconds
+	else if {_type} = "disable":
+		set {_cd} to 3 seconds
+
+	# set item cooldown of {_p}'s held item for {_p} to {_cd}
+	set slot {_slot} of {_p}'s inventory to {class::weapon::BS}
+	set item cooldown of slot {_slot} of {_p}'s inventory for {_p} to {_cd}
+	set {shieldCooldownTracker::%{_p}'s uuid%} to now
+	set {shieldCooldown::%{_p}'s uuid%} to {_cd}
+
+	if {_type} = "disable":
+		wait {_cd}
+		set {shieldStrength::%{_p}'s uuid%}  to {weapons::BS::SS}
+		set level of {_p} to 0
+		set level progress of {_p} to 0.99
+
+
+on held item change:
+	delete {isShielding::%player's uuid%} 
+
+on right click with shield:
+	if name of event-item contains "%{wc}%Basher Shield": 
+		if {shieldCooldownTracker::%player's uuid%} is set:
+			set {_time} to difference between now and {shieldCooldownTracker::%player's uuid%}
+			if {_time} < {shieldCooldown::%player's uuid%}:
+				send "&cSHIELD ON COOLDOWN!" to player
+				cancel event
+				stop
+			else:
+				delete {shieldCooldownTracker::%player's uuid%}
+				delete {shieldCooldown::%player's uuid%}
+		# PART
+		set {_shapes::circle} to a circle with radius 1.25
+		set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 0.75)
+		# 
+		set {isShielding::%player's uuid%} to now
+		wait 6 ticks
+		while {isShielding::%player's uuid%} is set:
+			if player.isBlocking():
+				set {_mana} to {weapons::BS::TAC-COST} / 10
+				if atkCHECK(player, {_mana}) is true:
+					set {_loc} to player's location
+					add 1 to y-coord of {_loc}
+					draw shapes {_shapes::*} at {_loc}
+					wait 2 ticks
+				else: 
+					disableShield(player, "temp")
+			else: 
+				delete {isShielding::%player's uuid%} 
+
+on stop using item:
+	if name of event-item contains "%{wc}%Basher Shield":
+		delete {isShielding::%player's uuid%} 
+
+function bsCHECK(p: player, dmg: number, cause: text):
+	if {_cause} = "fall":
+		stop
+	play sound "item.shield.block" with volume 1 and pitch 1 at {_p}
+	set {_str} to {shieldStrength::%{_p}'s uuid%} 
+	set {_str} to {_str} - {_dmg}
+	if {_str} <= 0:
+		set {shieldStrength::%{_p}'s uuid%} to 0
+		set level of {_p} to 0
+		set level progress of {_p} to 0
+		disableShield({_p}, "disable")
+	else:
+		set {shieldStrength::%{_p}'s uuid%} to {_str}
+		set {_xp} to {_str}/{weapons::BS::SS}
+		if {_xp} = 1:
+			set level of {_p} to 0
+			set level progress of {_p} to 0.99
+		else:
+			set level of {_p} to 0
+			set level progress of {_p} to {_xp} 
+
+
+function bsBashHit(victim: living entity, attacker: player, prevLoc: location):
+	play sound "item.shield.block" with volume 1 and pitch 0.5 at {_victim}
+	updateAttacker({_attacker}, {_victim})
+	directAttack({_victim})
+	damage {_victim} by 1.5
+	# KB
+	set {_v} to vector between {_prevLoc} and location of {_victim}
+	wait 1 tick
+	teleport {_attacker} to {_attacker}
+	teleport {_victim} to {_victim}
+	if {_victim} is on ground:
+		push {_victim} upward at speed 0.75
+		wait 1 tick
+	push {_victim} {_v} at speed 2
+
+function bsBash(p: player, type: text):
+	set {_prevLoc} to location of {_p}
+	loop 25 times:
+		add 1 to {_n}
+		if {_p} isn't on ground:
+			loop all living entities in radius 1.5 around {_p}:
+				if loop-entity is not {_p}:
+					if {_tacHit::*} doesn't contain loop-entity:
+						add loop-entity to {_tacHit::*}
+						bsBashHit(loop-entity, {_p}, {_prevLoc})
+		else if {_n} < 8:
+			if {_p}.isBlocking():
+				loop all living entities in radius 1.5 around {_p}:
+					if loop-entity is not {_p}:
+						if {_tacHit::*} doesn't contain loop-entity:
+							add loop-entity to {_tacHit::*}
+							bsBashHit(loop-entity, {_p}, {_prevLoc})
+		else:
+			stop loop
+		wait 2 ticks
+	if {_tacHit::*} is set:
+		if {class-perk::%{_p}'s uuid%::BS::perk} = {perk-check::2}:
+			add potion effect of speed 2 without particles for 1.5 seconds to potion effects of {_p}
+			bsPSS({_p}, 15) # 15
+		else:
+			bsPSS({_p}, 7.5) # 7.5
+		
+on drop of shield with priority low: # ULT USE
+	if name of event-item is "%{wc}%Basher Shield":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::BS::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::BS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::BS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::BS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::BS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::BS} to now	
+			#
+			set {_shapes::outer-circle} to a circle of radius 4.5 # 4.5
+			set {_shapes::inner-circle} to a circle of radius 3 # 3
+			set {_shapes::tiny-circle} to a circle of radius 1.5 # 1.5
+
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 1)
+			# PHY ULT 
+			loop 3 times:
+				play sound "ITEM_MACE_SMASH_GROUND_HEAVY" with volume 3 and pitch 0.5 at player
+				set {_loc} to location of player
+				set {_loc2} to location of player
+				add 0.5 to y-coord of {_loc}
+				add 1 to y-coord of {_loc2}
+				draw shapes {_shapes::*} at {_loc}
+				draw shapes {_shapes::*} at {_loc2}
+				set {_y-max} to y-coord of {_loc}+1
+				set {_y-min} to y-coord of {_loc}-2
+				loop all blocks in radius 4 around {_loc}:
+					if y-coord of loop-block < {_y-max}:
+						if y-coord of loop-block > {_y-min}:
+							if loop-block is not air:
+								set {_block} to type of loop-block
+								#broadcast {_block}
+								draw 1 of block particle using {_block} at block 0.5 above loop-block with extra 0.5
+				# PHY
+				loop all living entities in radius 4.5 around player:
+					if loop-entity is not player:
+						updateAttacker(player, loop-entity)
+						directAttack(loop-entity)
+						damage loop-entity by 1.25
+						push loop-entity upward at speed 0.85
+						staminaPause(loop-entity, 1.5)
+						set {_hit} to true
+				if {_hit} is set:
+					#bsPSS(player, 7.5) 
+					delete {_hit}
+				wait 2 seconds
+
+			set {godlike-ULT-CD::%player's uuid%::BS} to now	
+			delete {godlike-ULT-USE::%player's uuid%::BS}	
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::BS}	
+			if {class::%player's uuid%} = "BS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+# WARDEN AXE
+
+on join:
+	set {sonicBeamStack::%player's uuid%} to 0
+
+
+function sonicBeamHit(attacker: player, victim: living entity):
+	if distance between {_attacker} and location of {_victim} >= 12.5:
+		set {_d} to 1
+	else if distance between {_attacker} and location of {_victim} >= 7.5:
+		set {_d} to 0.8
+	else:
+		set {_d} to 0.6
+
+	if {sonicBeamStack::%{_victim}'s uuid%} = 0:
+		set {_d} to {_d}*1
+	else if {sonicBeamStack::%{_victim}'s uuid%} = 1:
+		set {_d} to {_d}*1.5
+	else if {sonicBeamStack::%{_victim}'s uuid%} >= 2:
+		set {_d} to {_d}*2
+
+	add 1 to {sonicBeamStack::%{_victim}'s uuid%}
+	updateAttacker({_attacker}, {_victim})
+	directAttack({_victim})
+	damage {_victim} by {_d} heart
+	set {_v} to vector from {_p} to {_victim}
+	wait 1 tick
+	push {_victim} {_v} at speed 0.5
+
+	wait 8 seconds
+	if {sonicBeamStack::%{_victim}'s uuid%} > 0:
+		remove 1 from {sonicBeamStack::%{_victim}'s uuid%}
+	else:
+		set {sonicBeamStack::%{_victim}'s uuid%} to 0
+
+function sonicBeam(p: player, length: number):
+	play sound "ENTITY_WARDEN_SONIC_CHARGE" at volume 0.5 at location of {_p}
+	set {_radius} to 0.5
+	set {_shapes::circle} to a circle with radius {_radius}
+	set particle of {_shapes::*} to 10 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
+
+	set {_axis} to vector in direction of {_p}
+	rotate shapes {_shapes::*} by {_axis}
+
+	#set {_rotation} to rotation around vector(1, 0, 1) by 90 degrees
+	#rotate shapes {_shapes::*} by {_rotation}
+
+
+	loop 5 times: # 1.75 seconds
+		set {_loc} to {_p}'s location
+		add 1 to y-coord of {_loc}
+		draw shapes {_shapes::*} at {_loc}
+		add 0.25 to {_radius}
+		set radius of {_shapes::circle} to {_radius}
+		wait 7 ticks
+
+	play sound "ENTITY_WARDEN_SONIC_BOOM" at volume 0.25 at location of {_p}
+
+	set {_uuid} to {_p}'s uuid
+	set {_x} to 0
+	set {_l} to 0
+	loop {_length} times: 
+		add 1 to {_x}
+		add 0.5 to {_l}
+		set {sb::%{_uuid}%::%{_x}%} to location {_l} blocks infront of {_p}
+		set {sb::%{_uuid}%::%{_x}%} to location 1.5 blocks above {sb::%{_uuid}%::%{_x}%} 
+		set {_loc} to {sb::%{_uuid}%::%{_x}%}
+		# eff
+		add 1 to {_temp}
+		if {_temp} = 5:
+			draw 1 of sonic boom at {_loc}
+			set {_temp} to 0
+		# CHECKS HIT ENTITIES
+		set {_height} to 0
+		loop 3 times:
+			loop all living entities in radius 1.25 around {_loc}:
+				if loop-entity is not a armor stand:
+					if loop-entity is not {_p}:
+						if {_height} = 0: # tracks 1 block tall mobs 
+							set {_hit} to true
+						else if {_height} = 1:
+							if loop-entity is not a wolf: # tracks players and 2 block tall mobs 
+								set {_hit} to true
+						else if {_height} = 2:
+							if loop-entity is a warden: # tracks mobs taller than players
+								set {_hit} to true
+						if {_hit} is set:
+							set {_target} to loop-entity
+							if {_targetList::*} doesn't contain {_target}:
+								add {_target} to {_targetList::*}
+								sonicBeamHit({_p}, {_target})
+
+								if {_firstHit} isn't set: # warden update target
+									if {summon::%{_p}'s uuid%::summon} is set:
+										if {_target} isn't {summon::%{_p}'s uuid%::summon}:
+											set {_firstHit} to true
+											summonTarget({_p}, {_target})
+											# WARDEN CPSS
+											if {class-perk::%{_p}'s uuid%::WH::perk} = {perk-check::1}:
+												heal {summon::%{_p}'s uuid%::summon} by 0.5 hearts
+
+			add 1 to {_height}
+			set {_loc} to location 1 blocks below {_loc}
+
+on damage of living entity: # WARDEN CPSS
+	if attacker is a player:
+		if name of attacker's held item is "%{wc}%Warden's Heart":
+			set {_summon} to {summon::%attacker's uuid%::summon}
+			if {_summon} is set:
+				if {_summon} isn't victim:
+					if {class-perk::%attacker's uuid%::WH::perk} = {perk-check::1}:
+						heal {_summon} by 0.5 hearts
+
+on right click with netherite axe:
+	if name of event-item is "%{wc}%Warden's Heart":
+		if tacCHECK(player, {weapons::WH::TAC-COST}) is true:
+			set {_beamRange} to 40 # 40/2 = 20 blocks
+			sonicBeam(player, {_beamRange})
+
+
+on drop of netherite axe with priority low: # ULT USE
+	if name of event-item is "%{wc}%Warden's Heart":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::WH::ULT-CD}
+		if {wardenSwapLoc::%player's uuid%} is set:
+			summonSwapLoc(player)
+			delete {wardenSwapLoc::%player's uuid%}
+		else if {godlike-ULT-USE::%player's uuid%::WH} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::WH} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::WH}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::WH::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::WH} to now	
+
+			summon(player, "warden")
+			wait 1 tick
+			set {wardenSwapLoc::%player's uuid%} to true
+			loop 100 times:
+				if {summon::%player's uuid%::summon} is set:
+					loop all players:
+						remove darkness from active potion effects of loop-player
+					wait 5 ticks
+				else:
+					stop loop
+
+			if {summon::%player's uuid%::summon} is set:
+				kill {summon::%player's uuid%::summon}
+				delete {summon::%player's uuid%::*}
+
+			delete {wardenSwapLoc::%player's uuid%}
+			set {godlike-ULT-CD::%player's uuid%::WH} to now	
+			delete {godlike-ULT-USE::%player's uuid%::WH}	
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::WH}	
+			if {class::%player's uuid%} = "WH":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+command /check:	
+	permission: op	
+	trigger:
+		give player unbreakable netherite axe of unbreaking 1 named "&6Warden's Heart"

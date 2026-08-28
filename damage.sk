@@ -1,0 +1,285 @@
+
+on load:
+
+	# Dmg mutiplier 
+	#
+	# melee dmg ( 0.5 = full charge, 0.75 = crit, <0.5 = early )
+	# bow dmg ( 0.5 = no charge, 2 = medium, 4 = full charge, 5 = crit)
+	# crossbow dmg (?)
+	# trident dmg (?)
+	#
+	# ZT
+	set {weapons::ZT::AD} to 5
+	set {weapons::ZT::R-AD} to 0.5
+
+	# PGS
+	set {weapons::PGS::AD} to 4.5
+	
+	# GD
+	set {weapons::GD::AD} to 4.5
+
+	# VBA
+	set {weapons::VBA::AD} to 5
+	set {weapons::VBA::R-AD} to 0.5
+
+	set {weapons::VBA::AD-PERK} to 4
+
+	# DS
+	set {weapons::DS::AD} to 4.5
+
+	# RB/RD
+	set {weapons::RB::R-AD} to 0.8
+	set {weapons::RD::AD} to 5
+	set {weapons::RB1::R-AD} to 0.7
+	set {weapons::RD1::AD} to 4.5
+
+	# PC/PC1
+	set {weapons::PC::AD} to 5
+	set {weapons::PC1::AD} to 4
+
+	# MH
+	set {weapons::MH::AD} to 5
+
+	# RS
+	set {weapons::RS::AD} to 4.5
+
+	# MMH
+	set {weapons::MMH::AD} to 4.5
+
+	# NS/NK
+	set {weapons::NS::AD} to 4.5
+	set {weapons::NK::AD} to 5
+	set {weapons::NS::R-AD} to 0.375
+
+	# PT
+	set {weapons::PT::AD} to 5
+	set {weapons::PT::R-AD} to 0.75
+	set {weapons::PT1::AD} to 5
+
+	# HC/HK
+	set {weapons::HK::AD} to 4.5
+
+	# TB/TS
+	set {weapons::TS::AD} to 4.5
+
+	# CB
+	set {weapons::CB::AD} to 5
+	set {weapons::CB::R-AD} to 0.4
+	set {weapons::CB1::AD} to 5
+
+	# FH
+	set {weapons::FH::AD} to 4.5
+
+	# BS
+	set {weapons::BS::AD} to 4.5
+
+	# WH
+	set {weapons::WH::AD} to 5
+
+function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text, other: text) :: number: # Calcs Final DMG after addons, reductions, and nulls
+	# Damage Addons
+	if {class::%{_a}'s uuid%} is "MH":
+		if {_cause} = "attack":
+			if {_dmg} > 4:
+				set {_dmg} to 4
+	else if {class::%{_a}'s uuid%} is "VBA":
+		set {_temp} to vbaCHECK({_a}, {_v}, {_dmg}, {_other})
+	else if {class::%{_a}'s uuid%} is "MMH":
+		set {_temp} to mmhCHECK({_a}, {_v}, {_dmg})
+	else if {class::%{_a}'s uuid%} is "PF":
+		set {_temp} to pfCHECK({_a}, {_cause})
+	else if {class::%{_a}'s uuid%} is "ZT":
+		if {_cause} = "attack":
+			set {_temp} to ztCHECK({_a})
+		else if {_cause} = "projectile":
+			set {_temp} to ptPerkCHECK({_a}, {_v})		
+	else if {godlike-ULT-USE::%{_a}'s uuid%::RS} is set:
+		set {_temp} to rsCHECK({_a}, {_v}, {_cause})
+	else if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
+		set {_temp} to gdCHECK({_a}, {_v})
+	else if {class::%{_a}'s uuid%} is "FH": # attacker
+		if {_cause} = "attack":
+			if {_dmg} > 3.5:
+				set {_dmg} to 3.5
+	else if {class::%{_v}'s uuid%} is "FH": # victim
+		if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
+			if {_cause} = "projectile":
+				set {_temp} to fhULT({_a}, {_v}, {_dmg})
+	if {_temp} is set: # checks if any updates where made to damages
+		if {_temp} > 0: # if {_temp} > 0, then a damage addon was made
+			set {_dmg} to {_dmg}+{_temp}
+		else if {_temp} = 0: # if {_temp} = 0, then {_dmg} is ignored
+			set {_dmg} to {_temp}
+	# Damage Reductions
+	if {class::%{_a}'s uuid%} is "PT":
+		if {_cause} = "attack":
+			if {_dmg} > 4:
+				set {_dmg} to 4
+	if {_cause} is "lightning": # reduce ligtning dmg
+		if {class::%{_v}'s uuid%} is "ZT":
+			set {_dmg} to {_dmg}*0.4
+		else:
+			set {_dmg} to {_dmg}*0.6
+
+	if {playerDefense::%{_v}'s uuid%} is set:
+		if {playerDefense::%{_v}'s uuid%} > 0:
+			set {_temp} to (100 - {playerDefense::%{_v}'s uuid%}) * 0.01
+			set {_dmg} to {_dmg}*{_temp}
+
+	if {isShielding::%{_v}'s uuid%} is set:
+		if {_v}.isBlocking():
+			bsCHECK({_v}, {_dmg}, {_cause})
+
+	if {_cause} is "fall":
+		set {_dmg} to 0
+		
+	# Damage Fixes
+	if {godlike-ULT-USE::%{_v}'s uuid%::ZT} isn't set: 
+		showDMG({_v}, {_dmg})
+
+	# return new damage
+	dmgStats({_a}, {_v}, {_dmg}, {_cause})
+	return {_dmg}
+
+function showDMG(v: living entity, dmg: number): # Creates a visible dmg number
+	if {_dmg} >= 0.25:
+		if {_v} is not invisible:
+			set {_loc} to location of {_v}
+			set {_x} to random number between -1 and 1
+			set {_y} to random number between 1 and 1.5
+			add {_x} to x-coord of {_loc}
+			add {_y} to y-coord of {_loc}
+			spawn 1 armor stand at {_loc}
+			set {_ls} to last spawned armor stand
+			add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
+			set name of last spawned armor stand to "&7%{_dmg}%"
+			wait 1 second
+			teleport {_ls} to block 100 below {_ls}
+			wait 1 tick
+			kill {_ls}		
+
+function dmgStats(a: living entity, v: living entity, dmg: number, cause: text): # Adds the DMG dealt to (overall/class stat vars) (func only applies to unknown dmg sources)
+	if {_a} != {_v}:
+		if {_dmg} < 10:
+			if {_cause} is not "void" or "suffocation":
+				set {_class} to {class::%{_a}'s uuid%}
+				add {_dmg} to {damage::%{_a}'s uuid%}
+				add {_dmg} to {class-damage::%{_a}'s uuid%::%{_class}%}
+				if {duel::%{_v}'s uuid%::status} = "ingame":
+					add {_dmg} to {dueldamage::%{_a}'s uuid%}
+
+
+function updateAttacker(a: living entity, v: living entity):
+	if {_a} != {_v}:
+		if {_v} is a player:
+			if metadata value "attacker" of {_v} is not {_a}:
+				set metadata value "assist" of {_v} to metadata value "attacker" of {_v}
+				set metadata value "attacker" of {_v} to {_a}
+		else if {_v} is a living entity:
+			set metadata value "attacker" of {_v} to {_a}
+		#broadcast metadata value "attacker" of {_v}
+
+on skript stop:
+	loop all entities:
+		if loop-entity is a armor stand or dropped item:
+			kill loop-entity
+
+on damage of living entity:
+	if attacker is a player:
+		updateAttacker(attacker, victim)
+
+#on damage of player:
+#	if event-damagecause is projectile:
+#		set {_a} to metadata value "attacker" of event-projectile
+#		updateAttacker({_a}, victim)
+
+on damage of player:
+	if damage was caused by void:
+		cancel event
+		if {duel::%victim's uuid%::status} is set:
+			if {playerProtect::%victim's uuid%} is set:
+				teleport victim to {duel::%victim's uuid%::spawn}
+				stop
+		kill victim
+
+on shoot with priority low:
+	set {_type} to (uncolored line 1 of lore of shooter's held item)
+	set metadata value "type" of event-projectile to {_type}
+	set metadata value "attacker" of event-projectile to shooter
+
+function invulnerabilityFix(e: living entity): # tracks living entity's invulnerability time
+	set {invulnerabilityFix::%{_e}'s uuid%} to ({_e}'s invulnerability time) - 1 ticks
+	while {invulnerabilityFix::%{_e}'s uuid%} > 0 ticks:
+		wait 1 tick
+		remove 1 tick from {invulnerabilityFix::%{_e}'s uuid%}
+	delete {invulnerabilityFix::%{_e}'s uuid%}
+
+function invulnerabilityCheck(e: living entity) :: timespan:
+	if {invulnerabilityFix::%{_e}'s uuid%} is set:
+		return {invulnerabilityFix::%{_e}'s uuid%}
+	else:
+		return 0 ticks
+
+on damage of living entity with priority high: # base damage
+	set {_dmg} to "%damage%" parsed as a number
+	set {_cause} to "%event-damagecause%"
+	#broadcast {_cause}
+	if invulnerabilityCheck(victim) > 0 ticks:
+		if {_cause} = "lightning":
+			cancel event
+			stop
+	if {class::%victim's uuid%} is "BS":
+		if {isShielding::%victim's uuid%} is set:
+			if victim.isBlocking():
+				cancel event		
+	#here			
+	if {_dmg} > 0:
+		if victim is not a armor stand:
+			if event-damagecause is projectile:
+				set {_w} to metadata value "type" of event-projectile
+				if event-projectile is a arrow or trident:
+					if {weapons::%{_w}%::R-AD} is set:
+						set {_new} to {_dmg}*{weapons::%{_w}%::R-AD}
+						if {_new} < 0.5:
+							set {_new} to 0.5
+				if {_new} is set:
+					set {_attacker} to metadata value "attacker" of event-projectile
+					set damage to dmgUpdate({_attacker}, victim, {_new}, {_cause}, "none")
+			if attacker is a player:
+				damage cause is attack
+				set {_w} to (uncolored line 1 of lore of attacker's held item)
+				set {_dmgMult} to {weapons::%{_w}%::AD}
+				if {_w} is set:
+					if {class::%attacker's uuid%} is "VBA":
+						if {class-perk::%attacker's uuid%::VBA::perk} = {perk-check::1}:
+							set {_dmgMult} to {weapons::VBA::AD-PERK}
+
+				set {_new} to {_dmg}*{_dmgMult}
+				if {_new} is set:
+					if hit is critical:
+						set {_other} to "critical"
+					else:
+						set {_other} to "none"
+
+					set damage to dmgUpdate(attacker, victim, {_new}, {_cause}, {_other})
+			else if event-damagecause is not projectile: # needs to include "event-damagecause is not projectile" in order for rapid bow ult to work
+				if event-damagecause is fall:
+					if {general-perk::%victim's uuid%::perk} = 24:
+						cancel event
+						add potion effect of speed 2 without particles for 0.75 seconds to potion effects of victim
+					set {_dmg} to 0
+				set {_attacker} to metadata value "attacker" of victim
+				set damage to dmgUpdate({_attacker}, victim, {_dmg}, {_cause}, "none")
+	wait 1 tick
+	if {_w} is "RB" or "RB1":
+		set victim's invulnerability time to 10 ticks
+	#else if {_cause} is "attack":
+	#	set victim's invulnerability time to 10 ticks
+	else if {_cause} is "lightning":
+		invulnerabilityFix(victim) # ensures victim cannot get double ticked by lightning
+	else if {_cause} is not "attack" or "lightning" or "suffocation":
+		set victim's invulnerability time to 0 ticks
+	#invulnerabilityFix(victim)
+
+
+

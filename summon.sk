@@ -1,0 +1,300 @@
+
+
+on load:
+	# HWL
+	set {weapons::HWL::CD} to 15 seconds
+	# WH
+	set {WardenHeart::sonicboom} to 1.5 # dmg
+
+on disconnect:
+	kill {summon::%player's uuid%::summon}
+	delete {summon::%player's uuid%::*}
+on skript stop:
+	delete {summon::*}
+
+on join:
+	set {summon::%player's uuid%::cd} to true
+
+on tame:
+	cancel event
+
+#
+
+function summon(p: player, type: text):
+	delete {summon::%{_p}'s uuid%::cd}
+
+	set {_spawnLoc} to block 1 in front of {_p}
+	play sound "block_fire_extinguish" with volume 5 and pitch 1 at {_spawnLoc}
+	draw 25 of large_smoke at {_spawnLoc} with offset vector(0.5, 0.5, 0.5) with extra 0.1
+
+	if {_type} is "wolf":
+		spawn 1 wolf at location of {_p}
+		set {summon::%{_p}'s uuid%::time} to true
+		set {summon::%{_p}'s uuid%::type} to "wolf"
+		set {_temp} to last spawned wolf
+		set metadata value "summoner" of {_temp} to {_p}
+		set {summon::%{_p}'s uuid%::summon} to {_temp}
+		if {class-perk::%{_p}'s uuid%::HC::perk} = {perk-check::2}:
+			set metadata value "summon-damage" of {_temp} to 1.5
+			set max health of {_temp} to 3
+			set health of {_temp} to 3
+			set display name of {_temp} to "&d&o%name of {_p}%'s Wolf"
+			add potion effect of speed 1 without particles for 999 days to potion effects of {_temp}
+		else:
+			set metadata value "summon-damage" of {_temp} to 1.25
+			set {summon::%{_p}'s uuid%::summon} to {_temp}
+			set max health of {_temp} to 2
+			set health of {_temp} to 2
+			set display name of {_temp} to "&7&o%name of {_p}%'s Wolf"
+			#add potion effect of speed 1 without particles for 999 days to potion effects of {_temp}
+		play sound "entity_wolf_howl" with volume 0.5 and pitch 1 at {_spawnLoc}
+
+		wait 10 ticks
+		loop all living entities in radius 15 around {_spawnLoc}:
+			if loop-entity is not {_p} or {_temp}:
+				set target of {_temp} to loop-entity
+				stop loop
+
+	else if {_type} is "warden":
+		spawn 1 warden at location of {_p}
+		set {summon::%{_p}'s uuid%::time} to true
+		set {summon::%{_p}'s uuid%::type} to "warden"
+		set {_temp} to last spawned warden
+		set metadata value "summoner" of {_temp} to {_p}
+		set {summon::%{_p}'s uuid%::summon} to {_temp}
+		set metadata value "summon-damage" of {_temp} to 1.5
+		set max health of {_temp} to 10
+		set health of {_temp} to 10
+		set display name of {_temp} to "&3&o%name of {_p}%'s Warden"
+		#add potion effect of speed 1 without particles for 999 days to potion effects of {_temp}
+		play sound "ENTITY_WARDEN_EMERGE" with volume 1 and pitch 1 at {_spawnLoc}
+
+		wardenTargetting({_p})
+
+
+on death of living entity:
+	if attacker is a warden: # WARDEN FIND NEW TARGET, ON KILL
+		if attacker is alive:
+			if metadata value "summoner" of attacker is set:
+				set {_summoner} to metadata value "summoner" of attacker
+				wardenTargetting({_summoner})
+	if victim is a mob: # DEATH OF SUMMON
+		if metadata value "summoner" of victim is set:
+			set {_summoner} to metadata value "summoner" of victim
+			set {_type} to {summon::%{_summoner}'s uuid%::type}
+			if {_type} is "wolf":
+				delete {summon::%{_summoner}'s uuid%::*}
+				set {summon::%{_summoner}'s uuid%::cd} to now
+				itemDisenchant({_summoner}, "%{wc}%Hunter's Wolf Leash")
+				play sound "entity_wolf_death" with volume 1 and pitch 1 to {_summoner}
+			else:
+				delete {summon::%{_summoner}'s uuid%::*}
+				play sound "ENTITY_WARDEN_DEATH" with volume 1 and pitch 1 to {_summoner}
+	else if victim is a player: # DEATH OF SUMMONER
+		if {summon::%victim's uuid%::summon} is set:
+			set {_type} to {summon::%victim's uuid%::type}
+			set {_summon} to {summon::%victim's uuid%::summon}
+			if {_summon} is alive:
+				kill {_summon} # This goes to: DEATH OF SUMMON (No need to clear {summon::} vars)
+
+			wait 1 tick
+			if {_type} is "wolf":
+				set {summon::%victim's uuid%::cd} to true
+
+function summonTarget(a: player, v: living entity): # SUMMONER TARGETS
+	if {_v} isn't {_a}:
+		if {summon::%{_a}'s uuid%::summon} is set:
+			if {summon::%{_a}'s uuid%::type} = "warden":
+				set {_interval} to 5 seconds
+			else:
+				set {_interval} to 2 seconds
+			if {summon::%{_a}'s uuid%::time} is true:
+				set {_time} to {_interval}
+			else:
+				set {_time} to difference between now and {summon::%{_a}'s uuid%::time}
+			if {_time} >= {_interval}:
+				if {summon::%{_a}'s uuid%::summon} isn't {_v}: # summoner cannot attack itself
+					if {summon::%{_a}'s uuid%::type} = "warden":
+						wardenTargetting({_a}, {_v})
+					else:
+						set {_oldTarget} to target of {summon::%{_a}'s uuid%::summon}
+						set target of {summon::%{_a}'s uuid%::summon} to {_v}
+						set {summon::%{_a}'s uuid%::time} to now
+						if {_oldTarget} != {_v}:
+							set {_type} to {summon::%{_a}'s uuid%::type}
+							if {_type} is "wolf":
+								play sound "entity_wolf_angry" with volume 3 and pitch 1 to {_a}
+							send "&dYou updated your Summons target!" to {_a}
+								
+
+on damage of living entity with priority low: 
+	if attacker is a mob: # SUMMON DOES DMG
+		if metadata value "summoner" of attacker is set:
+			set {_summoner} to metadata value "summoner" of attacker
+			set {_dmg} to metadata value "summon-damage" of attacker
+			set {_cause} to "%event-damagecause%"
+			if {_cause} = "sonic boom":
+				set {_dmg} to {WardenHeart::sonicboom}
+			updateAttacker({_summoner}, victim)
+			set damage to {_dmg}
+			# WARDEN CPSS
+			if {class-perk::%{_summoner}'s uuid%::WH::perk} = {perk-check::1}:
+				heal {_summoner} by 0.5 hearts
+			else if {class-perk::%{_summoner}'s uuid%::WH::perk} = {perk-check::2}:
+				add 1 to {sonicBeamStack::%victim's uuid%}
+				wait 8 seconds
+				if {sonicBeamStack::%victim's uuid%} > 0:
+					remove 1 from {sonicBeamStack::%victim's uuid%}
+				else:
+					set {sonicBeamStack::%victim's uuid%} to 0
+	else if attacker is a player: # SUMMONER TARGETS
+		if {summon::%attacker's uuid%::summon} is set:
+			if {summon::%attacker's uuid%::summon} is victim:
+				wait 1 tick
+				set the anger level of {summon::%attacker's uuid%::summon} towards attacker to 0
+			else:
+				summonTarget(attacker, victim)
+
+
+on damage of player: # SUMMON CANNOT DMG SUMMONER
+	if attacker is a mob:
+		if metadata value "summoner" of attacker is set:
+			set {_summoner} to metadata value "summoner" of attacker
+			if victim is {_summoner}:
+				cancel event
+
+on entity target: # NORM SUMMON TARGETTING
+	if name of event-entity contains "Wolf":
+		set {_summoner} to metadata value "summoner" of event-entity
+		if {_summoner} is set:
+			if name of event-entity contains "Wolf":
+				if {class::%{_summoner}'s uuid%} != "HC": 
+					cancel event
+					kill {summon::%{_summoner}'s uuid%::summon}
+					delete {summon::%{_summoner}'s uuid%::*}
+					set {summon::%{_summoner}'s uuid%::cd} to true
+					stop
+			if target is {_summoner}:
+				cancel event
+				stop
+			if target is invisible:
+				cancel event
+				stop
+			if gamemode of target is creative or spectator:
+				cancel event
+				stop
+			
+# WARDEN SPECIFIC
+
+function wardenTargetting(p: player, v: living entity): # update targetting
+	if {summon::%{_p}'s uuid%::type} = "warden":
+		if {summon::%{_p}'s uuid%::summon} is set:
+			set {_summon} to {summon::%{_p}'s uuid%::summon}
+			#
+			if {_v} is alive:
+				set {summon::%{_p}'s uuid%::time} to now
+				loop all living entities:
+					if {_v} is loop-entity:
+						set the anger level of {_summon} towards {_v} to 150
+					else:
+						set the anger level of {_summon} towards loop-entity to 0
+
+				play sound "ENTITY_WARDEN_SNIFF" with volume 3 and pitch 1 to {_p}
+				send "&dYou updated your Summons target!" to {_p}
+					
+function wardenTargetting(p: player): # look for new target
+	if {summon::%{_p}'s uuid%::type} = "warden":
+		if {summon::%{_p}'s uuid%::summon} is set:
+			set {_summon} to {summon::%{_p}'s uuid%::summon}
+			set {_summonLoc} to location of {_summon}
+			#
+			set {_minDis} to 999
+			loop all living entities in radius 20 around {_summonLoc}:
+				if loop-entity is not {_p} or {_summon}:
+					if loop-entity is a player: 
+						set {_currDis} to distance between {_summonLoc} and loop-entity
+						set the anger level of {_summon} towards loop-entity to 100
+					else:
+						set the anger level of {_summon} towards loop-entity to 80
+					if {_currDis} < {_minDis}:
+						set {_minDis} to {_currDis}
+						set {_target} to loop-entity
+			if {_target} is set:
+				set the anger level of {_summon} towards {_target} to 150
+
+on entity starts pathfinding: # WARDEN SUMMON TARGETTING
+	if name of event-entity contains "Warden":
+		set {_summoner} to metadata value "summoner" of event-entity
+		if {_summoner} is set:
+			if {class::%{_summoner}'s uuid%} != "WH": 
+				cancel event
+				kill {summon::%{_summoner}'s uuid%::summon}
+				delete {summon::%{_summoner}'s uuid%::*}
+				stop
+			loop all living entities in radius 1.5 of event-location:
+				if loop-entity is {_summoner}:
+					clear the event-entity's anger level towards loop-entity
+					cancel event
+				if loop-entity is invisible:
+					clear the event-entity's anger level towards loop-entity
+					cancel event
+				if gamemode of loop-entity is creative or spectator:
+					clear the event-entity's anger level towards loop-entity
+					cancel event
+
+
+# General func
+
+function summonSwapLoc(p: player):
+	set {_summon} to {summon::%{_p}'s uuid%::summon}
+	if {_summon} is set:
+		if {godlike-ULT-USE::%{_p}'s uuid%::WH} is set:
+			wait 1 second
+			set {_summonLoc} to location of {_summon}
+			set {_playerLoc} to location of {_p}
+			teleport {_summon} to {_playerLoc}
+			#teleport {_p} to {_summonLoc}
+	else:
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		send "&cNo Active Summon!" to {_p}
+
+function summonTeleport(p: player):
+	set {_summon} to {summon::%{_p}'s uuid%::summon}
+	if {_summon} is set:
+		if tacCHECK({_p}, {weapons::HWL::R-COST}) is true:
+			wait 1.5 second
+			play sound "block_fire_extinguish" with volume 5 and pitch 1 at {_p}
+			draw 10 of large_smoke at {_p} with offset vector(0.5, 0.5, 0.5) with extra 0.1
+			teleport {_summon} to {_p}
+	else:
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		send "&cNo Active Summon!" to {_p}
+
+# HWL
+
+on right click with lead:
+	if name of player's held item is "%{wc}%Hunter's Wolf Leash":
+		if {summon::%player's uuid%::summon} is set:
+			play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
+			send "&cYou Already Have A Summon!" to player
+		else if {summon::%player's uuid%::cd} is set:
+			if {summon::%player's uuid%::cd} is true:
+				summon(player, "wolf")
+				enchant player's held item with unbreaking 1
+			else:
+				set {_time} to difference between now and {summon::%player's uuid%::cd}
+				if {_time} >= {weapons::HWL::CD}:
+					if ultCHECK(player, {weapons::HWL::L-COST}) is true:
+						summon(player, "wolf")
+						enchant player's held item with unbreaking 1
+				else:
+					play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
+					send "&cSummon on Cooldown!" to player
+
+
+
+on left click with lead:
+	if name of event-item is "%{wc}%Hunter's Wolf Leash":
+		summonTeleport(player)
+
+
