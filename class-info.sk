@@ -11,9 +11,9 @@ on load:
 	set {division-color::SILVER} to "&f"
 	set {division-color::GOLD} to "&6"
 	set {division-color::DIAMOND} to "&b"
-	set {division-color::ADEPT} to "&2"
-	set {division-color::MASTER} to "&5"
-	set {division-color::GRANDMASTER} to "&d"
+	set {division-color::MASTER} to "&2"
+	set {division-color::GRAND-MASTER} to "&5"
+	set {division-color::ELITE-GRANDMASTER} to "&d"
 	# Class Division ----------------------------
 	set {class-division::TRASH} to nether brick named "%{division-color::TRASH}%&lTrash" with lore "" and "&7&l&oRewards" and "  &eTrash Title" and "" and ""  
 	set {class-division::ROOKIE} to brick named "%{division-color::ROOKIE}%&lRookie" with lore "" and "&7&l&oRewards" and "  &eRookie Title" and "" and ""  
@@ -21,9 +21,9 @@ on load:
 	set {class-division::SILVER} to iron ingot named "%{division-color::SILVER}%&lSilver" with lore "" and "&7&l&oRewards" and "  &eSilver Title" and "  &dPerk Unlock" and "" and ""
 	set {class-division::GOLD} to gold ingot named "%{division-color::GOLD}%&lGold" with lore "" and "&7&l&oRewards" and "  &eGold Title" and "  &dPerk Unlock" and "" and ""
 	set {class-division::DIAMOND} to diamond named "%{division-color::DIAMOND}%&lDiamond" with lore "" and "&7&l&oRewards" and "  &eDiamond Title" and "" and ""
-	set {class-division::ADEPT} to emerald named "%{division-color::ADEPT}%&lAdept" with lore "" and "&7&l&oRewards" and "  &eAdept Title" and "" and ""  
-	set {class-division::MASTER} to amethyst shard named "%{division-color::MASTER}%&lMaster" with lore "" and "&7&l&oRewards" and "  &eMaster Title" and "" and ""
-	set {class-division::GRANDMASTER} to cherry sapling named "%{division-color::GRANDMASTER}%&lGrandmaster" with lore "" and "&7&l&oRewards" and "  &eGrandmaster Title" and "" and ""  
+	set {class-division::MASTER} to emerald named "%{division-color::MASTER}%&lMaster" with lore "" and "&7&l&oRewards" and "  &eMaster Title" and "" and ""  
+	set {class-division::GRAND-MASTER} to amethyst shard named "%{division-color::GRAND-MASTER}%&lGrandmaster" with lore "" and "&7&l&oRewards" and "  &eGrandmaster Title" and "" and ""
+	set {class-division::ELITE-GRANDMASTER} to cherry sapling named "%{division-color::ELITE-GRANDMASTER}%&lElite Grandmaster" with lore "" and "&7&l&oRewards" and "  &eElite Grandmaster Title" and "" and ""  
 
 	set {class-requirement::9} to 0
 	set {class-requirement::10} to 25
@@ -164,17 +164,17 @@ function getClassDiv(p: player, class: string, type: string) :: string:
 	set {_uuid} to uuid of {_p}
 	set {_prog} to {class-kill::%{_uuid}%::%{_class}%}
 	if {_prog} >= {class-requirement::17}:
-		set {_long} to "%{division-color::GRANDMASTER}%&lGrandmaster" 
-		set {_short} to "%{division-color::GRANDMASTER}%&lGM"
-		set {_color} to {division-color::GRANDMASTER}
+		set {_long} to "%{division-color::ELITE-GRANDMASTER}%&lElite-Grandmaster" 
+		set {_short} to "%{division-color::ELITE-GRANDMASTER}%&lEGM"
+		set {_color} to {division-color::ELITE-GRANDMASTER}
 	else if {_prog} >= {class-requirement::16}:
+		set {_long} to "%{division-color::GRAND-MASTER}%&lGrandmaster" 
+		set {_short} to "%{division-color::GRAND-MASTER}%&lGM"
+		set {_color} to {division-color::GRAND-MASTER}
+	else if {_prog} >= {class-requirement::15}:
 		set {_long} to "%{division-color::MASTER}%&lMaster" 
 		set {_short} to "%{division-color::MASTER}%&lM"
 		set {_color} to {division-color::MASTER}
-	else if {_prog} >= {class-requirement::15}:
-		set {_long} to "%{division-color::ADEPT}%&lAdept" 
-		set {_short} to "%{division-color::ADEPT}%&lA"
-		set {_color} to {division-color::ADEPT}
 	else if {_prog} >= {class-requirement::14}:
 		set {_long} to "%{division-color::DIAMOND}%&lDiamond" 
 		set {_short} to "%{division-color::DIAMOND}%&lD"
@@ -225,9 +225,9 @@ function ClassInfo(p: player, class: string):
 	set {_division::12} to {class-division::SILVER}
 	set {_division::13} to {class-division::GOLD}
 	set {_division::14} to {class-division::DIAMOND}
-	set {_division::15} to {class-division::ADEPT}
-	set {_division::16} to {class-division::MASTER}
-	set {_division::17} to {class-division::GRANDMASTER}
+	set {_division::15} to {class-division::MASTER}
+	set {_division::16} to {class-division::GRAND-MASTER}
+	set {_division::17} to {class-division::ELITE-GRANDMASTER}
 	
 	loop {_division::*}:
 		set {_index} to loop-index parsed as a integer
