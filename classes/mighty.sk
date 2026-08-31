@@ -1,0 +1,133 @@
+# MIGHTY HAMMER
+
+function mightyExplosion(p: player, radius: integer):
+	set {_r} to ceil({_radius} - 1)
+	if {_radius} > 3:
+		set {_s} to 2
+	else:
+		set {_s} to 1
+	create a fake explosion at {_p}
+	draw {_radius} of explosion at {_p} with offset vector({_s}, {_s}, {_s}) with extra 0
+	draw 10 of large_smoke at {_p} with extra 0.5
+	draw 50 of dust_color_transition using dustTransition(cyan, white, {_s}) at {_p} with offset vector({_r}, {_r}, {_r}) with extra 0.5
+
+on right click with mace:
+	if name of player's held item is "%{wc}%Mighty Hammer": 
+		if tacCHECK(player, {weapons::MH::TAC-COST}) is true:
+			mightyExplosion(player, 3) # int only
+			if {class-perk::%player's uuid%::MH::perk} = {perk-check::3}:
+				set {_pitch} to pitch of player
+				if {_pitch} > 75:
+					push player upwards at speed 0.875
+			loop all living entities in radius 3.5 around player:
+				if loop-entity is not player:
+					updateAttacker(player, loop-entity)
+					directAttack(loop-entity)
+					push loop-entity upward at speed 0.75
+					damage loop-entity by 2
+
+on drop of mace with priority low: # ULT USE
+	if name of event-item is "%{wc}%Mighty Hammer":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::MH::ULT-CD}
+		if {mighty-DASH::%player's uuid%} is set:
+			push player forward at speed 3
+			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
+			delete {mighty-DASH::%player's uuid%}
+		else if {godlike-ULT-USE::%player's uuid%::MH} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::MH} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::MH}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::MH::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::MH} to now
+			
+			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
+			# leap
+			create a fake explosion at player
+			teleport player to player
+			push player upward at speed 2.5
+			wait 10 ticks
+			set {mighty-DASH::%player's uuid%} to true
+
+			set {_shapes::circle} to a circle with radius 1
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, white, 1)
+
+			while player isn't on ground: # code: longer in the air = more dmg + push
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				draw shapes {_shapes::*} at {_loc}
+				add 1 to {_airTime}
+				wait 1 tick
+			# slam
+			delete {mighty-DASH::%player's uuid%}
+			if {godlike-ULT-CANCEL::%player's uuid%::MH} isn't set:
+				mightyExplosion(player, 5.5) # int only
+				loop all living entities in radius 5.5 around player:
+					if loop-entity is not player:
+						updateAttacker(player, loop-entity)
+						directAttack(loop-entity)
+
+						# dmg
+						set {_dis} to distance between player and loop-entity
+						set {_d} to abs({_dis} - 6) # must be 0.5 bigger than radius
+						if {_d} < 2.5:
+							set {_d} to 2.5
+						else if {_d} > 3.5:
+							set {_d} to 3.5
+						set {_d} to ({_airTime}*0.05) + {_d}
+						if {_d} > 5:
+							set {_d} to 5
+
+						set {_v} to vector between player and loop-entity
+						wait 1 tick
+						damage loop-entity by {_d}
+						teleport loop-entity to loop-entity
+						push loop-entity {_v} at speed {_d}
+			# PERK
+			if {class-perk::%player's uuid%::MH::perk} = {perk-check::2}:
+				set {_shapes::circle} to a circle of radius 5
+
+				set {_shapes::line-1} to a line in direction vector(0, 0, 1) with length 5
+				set {_shapes::line-2} to a line in direction vector(0, 0, -1) with length 5
+				set {_shapes::line-3} to a line in direction vector(1, 0, 0) with length 5
+				set {_shapes::line-4} to a line in direction vector(-1, 0, 0) with length 5
+				set {_ultDmgRadius} to 5.25
+
+				set {_loc} to player's location
+				set {_y-max} to y-coord of {_loc}+2
+				set {_y-min} to y-coord of {_loc}-2
+
+				set {_n} to 3
+				loop 13 times:
+					set {_rotation} to rotation around vector(0, 1, 0) by 20 degrees
+					rotate shapes {_shapes::*} by {_rotation}
+					draw shapes {_shapes::*} at {_loc}
+
+					add 1 to {_n}
+					if {_n} = 4:
+						delete {_n}
+						loop all living entities in radius {_ultDmgRadius} around {_loc}:
+							if loop-entity is not player:
+								if y-coord of loop-entity is between {_y-max} and {_y-min}:
+									updateAttacker(player, loop-entity)
+									set fire to loop-entity for 2 seconds
+					wait 5 tick 
+
+			set {godlike-ULT-CD::%player's uuid%::MH} to now
+			delete {godlike-ULT-CANCEL::%player's uuid%::MH}	
+			delete {godlike-ULT-USE::%player's uuid%::MH}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::MH}	
+			if {class::%player's uuid%} = "MH":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on death of player:
+	if {godlike-ULT-USE::%victim's uuid%::MH} is set:
+		set {godlike-ULT-CANCEL::%victim's uuid%::MH} to true
+		delete {mighty-DASH::%victim's uuid%}

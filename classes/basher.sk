@@ -1,0 +1,203 @@
+# BASHER SHIELD
+
+function bsPSS(p: player, stamina: integer): # 1 stamina = 300 = 30*10
+	set {_uuid} to {_p}'s uuid
+	set {_stamina} to {_stamina} * 10
+	set {_check} to {stamina::%{_uuid}%::curr} + {_stamina}
+
+	if {_check} > {stamina::%{_uuid}%::max}:
+		set {stamina::%{_uuid}%::curr} to {stamina::%{_uuid}%::max}
+	else:
+		add {_stamina} to {stamina::%{_uuid}%::curr}
+
+import:
+	io.papermc.paper.event.player.PlayerShieldDisableEvent
+
+on PlayerShieldDisableEvent:
+	cancel event
+
+function disableShield(p: player, type: text):
+	play sound "item.shield.break" with volume 1 and pitch 1 at {_p}
+	delete {isShielding::%{_p}'s uuid%} 
+	set {_slot} to index of {_p}'s held item
+	set {_p}'s held item to air
+	wait 3 tick
+	if {_type} = "temp":
+		set {_cd} to 1 seconds
+	else if {_type} = "disable":
+		set {_cd} to 3 seconds
+
+	# set item cooldown of {_p}'s held item for {_p} to {_cd}
+	set slot {_slot} of {_p}'s inventory to {class::weapon::BS}
+	set item cooldown of slot {_slot} of {_p}'s inventory for {_p} to {_cd}
+	set {shieldCooldownTracker::%{_p}'s uuid%} to now
+	set {shieldCooldown::%{_p}'s uuid%} to {_cd}
+
+	if {_type} = "disable":
+		wait {_cd}
+		set {shieldStrength::%{_p}'s uuid%}  to {weapons::BS::SS}
+		set level of {_p} to 0
+		set level progress of {_p} to 0.99
+
+
+on held item change:
+	delete {isShielding::%player's uuid%} 
+
+on right click with shield:
+	if name of event-item contains "%{wc}%Basher Shield": 
+		if {shieldCooldownTracker::%player's uuid%} is set:
+			set {_time} to difference between now and {shieldCooldownTracker::%player's uuid%}
+			if {_time} < {shieldCooldown::%player's uuid%}:
+				send "&cSHIELD ON COOLDOWN!" to player
+				cancel event
+				stop
+			else:
+				delete {shieldCooldownTracker::%player's uuid%}
+				delete {shieldCooldown::%player's uuid%}
+		# PART
+		set {_shapes::circle} to a circle with radius 1.25
+		set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 0.75)
+		# 
+		set {isShielding::%player's uuid%} to now
+		wait 6 ticks
+		while {isShielding::%player's uuid%} is set:
+			if player.isBlocking():
+				set {_mana} to {weapons::BS::TAC-COST} / 10
+				if atkCHECK(player, {_mana}) is true:
+					set {_loc} to player's location
+					add 1 to y-coord of {_loc}
+					draw shapes {_shapes::*} at {_loc}
+					wait 2 ticks
+				else: 
+					disableShield(player, "temp")
+			else: 
+				delete {isShielding::%player's uuid%} 
+
+on stop using item:
+	if name of event-item contains "%{wc}%Basher Shield":
+		delete {isShielding::%player's uuid%} 
+
+function bsCHECK(p: player, dmg: number, cause: text):
+	if {_cause} = "fall":
+		stop
+	play sound "item.shield.block" with volume 1 and pitch 1 at {_p}
+	set {_str} to {shieldStrength::%{_p}'s uuid%} 
+	set {_str} to {_str} - {_dmg}
+	if {_str} <= 0:
+		set {shieldStrength::%{_p}'s uuid%} to 0
+		set level of {_p} to 0
+		set level progress of {_p} to 0
+		disableShield({_p}, "disable")
+	else:
+		set {shieldStrength::%{_p}'s uuid%} to {_str}
+		set {_xp} to {_str}/{weapons::BS::SS}
+		if {_xp} = 1:
+			set level of {_p} to 0
+			set level progress of {_p} to 0.99
+		else:
+			set level of {_p} to 0
+			set level progress of {_p} to {_xp} 
+
+
+function bsBashHit(victim: living entity, attacker: player, prevLoc: location):
+	play sound "item.shield.block" with volume 1 and pitch 0.5 at {_victim}
+	updateAttacker({_attacker}, {_victim})
+	directAttack({_victim})
+	damage {_victim} by 1.5
+	# KB
+	set {_v} to vector between {_prevLoc} and location of {_victim}
+	wait 1 tick
+	teleport {_attacker} to {_attacker}
+	teleport {_victim} to {_victim}
+	if {_victim} is on ground:
+		push {_victim} upward at speed 0.75
+		wait 1 tick
+	push {_victim} {_v} at speed 2
+
+function bsBash(p: player, type: text):
+	set {_prevLoc} to location of {_p}
+	loop 25 times:
+		add 1 to {_n}
+		if {_p} isn't on ground:
+			loop all living entities in radius 1.5 around {_p}:
+				if loop-entity is not {_p}:
+					if {_tacHit::*} doesn't contain loop-entity:
+						add loop-entity to {_tacHit::*}
+						bsBashHit(loop-entity, {_p}, {_prevLoc})
+		else if {_n} < 8:
+			if {_p}.isBlocking():
+				loop all living entities in radius 1.5 around {_p}:
+					if loop-entity is not {_p}:
+						if {_tacHit::*} doesn't contain loop-entity:
+							add loop-entity to {_tacHit::*}
+							bsBashHit(loop-entity, {_p}, {_prevLoc})
+		else:
+			stop loop
+		wait 2 ticks
+	if {_tacHit::*} is set:
+		if {class-perk::%{_p}'s uuid%::BS::perk} = {perk-check::2}:
+			add potion effect of speed 2 without particles for 1.5 seconds to potion effects of {_p}
+			bsPSS({_p}, 15) # 15
+		else:
+			bsPSS({_p}, 7.5) # 7.5
+		
+on drop of shield with priority low: # ULT USE
+	if name of event-item is "%{wc}%Basher Shield":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::BS::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::BS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::BS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::BS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::BS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::BS} to now	
+			#
+			set {_shapes::outer-circle} to a circle of radius 4.5 # 4.5
+			set {_shapes::inner-circle} to a circle of radius 3 # 3
+			set {_shapes::tiny-circle} to a circle of radius 1.5 # 1.5
+
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 1)
+			# PHY ULT 
+			loop 3 times:
+				play sound "ITEM_MACE_SMASH_GROUND_HEAVY" with volume 3 and pitch 0.5 at player
+				set {_loc} to location of player
+				set {_loc2} to location of player
+				add 0.5 to y-coord of {_loc}
+				add 1 to y-coord of {_loc2}
+				draw shapes {_shapes::*} at {_loc}
+				draw shapes {_shapes::*} at {_loc2}
+				set {_y-max} to y-coord of {_loc}+1
+				set {_y-min} to y-coord of {_loc}-2
+				loop all blocks in radius 4 around {_loc}:
+					if y-coord of loop-block < {_y-max}:
+						if y-coord of loop-block > {_y-min}:
+							if loop-block is not air:
+								set {_block} to type of loop-block
+								#broadcast {_block}
+								draw 1 of block particle using {_block} at block 0.5 above loop-block with extra 0.5
+				# PHY
+				loop all living entities in radius 4.5 around player:
+					if loop-entity is not player:
+						updateAttacker(player, loop-entity)
+						directAttack(loop-entity)
+						damage loop-entity by 1.25
+						push loop-entity upward at speed 0.85
+						staminaPause(loop-entity, 1.5)
+						set {_hit} to true
+				if {_hit} is set:
+					#bsPSS(player, 7.5) 
+					delete {_hit}
+				wait 2 seconds
+
+			set {godlike-ULT-CD::%player's uuid%::BS} to now	
+			delete {godlike-ULT-USE::%player's uuid%::BS}	
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::BS}	
+			if {class::%player's uuid%} = "BS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player

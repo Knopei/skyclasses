@@ -1,0 +1,139 @@
+# NINJA
+
+on right click with nether star or diamond sword:
+	if name of player's held item is "%{wc}%Ninja Shurikens" or "%{wc}%Ninja Katana": 
+		if tacCHECK(player, {weapons::NS::TAC-COST}) is true:
+
+			loop 3 times:
+
+				set {_l} to location 0.5 in front of player
+				add 1.5 to y-coord of {_l}
+				set {_y} to a random number between -3 and 3 # w
+				set {_p} to a random number between -0.5 and 0.5 # h
+				add {_y} to yaw of {_l}
+				add {_p} to pitch of {_l}
+
+				shoot a arrow from {_l} with speed 2
+				if {godlike-ULT-USE::%player's uuid%::NS} is set:
+					if {class-perk::%player's uuid%::NS::perk} = {perk-check::2}:
+						set metadata value "fire" of shot projectile to true
+						ignite shot projectile
+
+				set metadata value "type" of shot projectile to "NS"
+				set metadata value "attacker" of shot projectile to player
+				play sound "entity_arrow_shoot" with volume 3 and pitch 1.5 at player
+				add shot projectile to {_sp::*}
+
+				wait 3 tick
+
+			loop 100 times:
+				loop {_sp::*}:
+					if metadata value "hit" of loop-value-2 isn't set:
+						draw 1 of electric spark particle at loop-value-2 with offset vector(0, 0, 0) with extra 0 
+						if (y-coord of loop-value-2) < -75:
+							set metadata value "hit" of loop-value-2 to true
+							kill loop-value-2
+							stop loop
+						wait 1 tick
+
+on damage of living entity:
+	if event-damagecause is a projectile:
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "NS":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+
+				if metadata value "fire" of event-projectile is true:
+					set fire to victim for 4 seconds
+
+
+on drop of nether star with priority low: # ULT USE
+	if name of event-item is "%{wc}%Ninja Shurikens":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::NS::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::NS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::NS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::NS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::NS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::NS} to now
+			add potion effect of speed 3 without particles for 10 seconds to potion effects of player
+			add potion effect of jump boost 4 without particles for 10 seconds to potion effects of player
+			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1.5 at player
+			# PHY ULT
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Ninja Shurikens": 
+				set player's held item to {class::weapon::NK}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Ninja Shurikens":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::NK}
+						stop loop
+
+			loop 40 times:
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				#rotate shapes {_shapes::*} by {_rotation}
+				#draw shapes {_shapes::*} at {_loc}
+				draw 1 of flame particle at block above player with extra 0.1
+				draw 1 of lava particle at block above player with extra 0.1
+				wait 5 tick
+
+			loop player's inventory:
+				if name of loop-value is "%{wc}%Ninja Katana":
+					set {_i} to index of loop-value
+					set slot {_i} of player's inventory to {class::weapon::NS}
+
+			set {godlike-ULT-CD::%player's uuid%::NS} to now	
+			delete {godlike-ULT-USE::%player's uuid%::NS}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::NS}	
+			if {class::%player's uuid%} = "NS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on damage of living entity:
+	if name of attacker's held item is "%{wc}%Ninja Katana": 
+		set fire to victim for 2 seconds
+		play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 0.5 at victim
+
+function nkStamina(p: player):
+	if {godlike-ULT-USE::%{_p}'s uuid%::NS} is set:
+		play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 1 at {_p}
+		set {_size} to 0.5
+
+		loop 20 times:
+			add 1 to {_n}
+			if {_p} isn't on ground:
+				loop all living entities in radius 2 around {_p}:
+					if loop-entity is not {_p}:
+						updateAttacker({_p}, loop-entity)
+						set fire to loop-entity for 4 seconds
+						play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 1 at loop-entity 
+			else if {_n} < 3:
+				loop all living entities in radius 2 around {_p}:
+					if loop-entity is not {_p}:
+						updateAttacker({_p}, loop-entity)
+						set fire to loop-entity for 4 seconds		
+						play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 1 at loop-entity 	
+			else:
+				stop loop
+
+			set {_shapes::circle} to a circle with radius {_size}
+			set particle of {_shapes::*} to 1 of flame particle
+
+			set {_loc} to {_p}'s location
+			add 1 to y-coord of {_loc}
+			draw shapes {_shapes::*} at {_loc}
+
+			if {_size} < 2:
+				add 0.5 to {_size}
+
+			wait 5 ticks

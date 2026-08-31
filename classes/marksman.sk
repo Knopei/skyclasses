@@ -1,0 +1,237 @@
+# MARKSMAN
+
+function marksmanBeam(p: player, e: living entity, v: vector, h: number):
+	set vector length of {_v} to 0.1
+	set {_loc} to location of {_p}
+	add {_h} to y-coord of {_loc}
+	loop (distance between {_loc} and {_e}) / 0.1 times:
+		draw 3 of dust_color_transition using dustTransition(cyan, orange, 0.75) at {_loc}
+		set {_loc} to {_loc} ~ {_v}
+	play sound "entity_blaze_shoot" at volume 5 at pitch 1.5 at location of {_p}
+	play sound "BLOCK_GLASS_BREAK" at volume 3 at location of {_e}
+
+	# add potion effect of slowness 1 without particles for 7 seconds to potion effects of {_e}
+
+	itemEnchant({_p}, "%{wc}%Marksman Hatchet")
+
+	send title "" with subtitle "&cmarked" to {_e} for 1 seconds with fade out 1 second
+	set metadata value "marked" of {_e} to {_p}
+	set glowing of {_e} to true
+	loop 7 times:
+		if metadata value "marked" of {_e} is {_p}:
+			wait 1 second
+		else:
+			stop loop
+	delete metadata value "marked" of {_e}
+	set glowing of {_e} to false
+
+	itemDisenchant({_p}, "%{wc}%Marksman Hatchet")
+
+
+function marksmanTarget(p: player):
+	set {_beamRange} to 30
+	loop {_beamRange} times: 
+		add 1 to {_dis}
+		set {_loc} to location {_dis} blocks infront of {_p}
+		set {_loc} to location 1 blocks above {_loc}
+		loop all living entities in radius 1.5 of {_loc}:
+			if loop-entity is not a armor stand:
+				if loop-entity isn't {_p}:
+					set {_target} to loop-entity
+					set {_v} to vector from {_p} to {_target}
+					# func
+					marksmanBeam({_p}, {_target}, {_v}, 1.25)
+					stop loop
+		if {_target} is set:
+			stop loop
+	if {_target} isn't set:
+		play sound "entity.blaze.hurt" at volume 3 and pitch 0.5 to {_p}
+		add {weapons::MMH::0-TAC-COST} to {mana::%{_p}'s uuid%::curr}
+
+on right click with stone axe:
+	if name of player's held item is "%{wc}%Marksman Hatchet": 
+		if tacCHECK(player, {weapons::MMH::TAC-COST}) is true:
+			marksmanTarget(player)
+
+
+function mmhCHECK(a: living entity, v: living entity, dmg: number) :: number:
+	if {_a} is a player:
+		if metadata value "marked" of {_v} is {_a}:
+			if name of {_a}'s held item is "%{wc}%Marksman Hatchet":
+				return ({_dmg}*0.2)
+
+function mmsULT(p: player, id: string):
+	set {_uuid} to {_p}'s uuid
+
+	set {marksman-ULT-ammoCount::%{_uuid}%} to 0
+	wait {weapons::MMH::ULT-CD}
+	wait 1 second
+	if {class-ID::%{_uuid}%} = {_id}: 
+		set {marksman-ULT-ammoCount::%{_uuid}%} to 1
+		sniperUpdateName({_p})
+
+	while {class-ID::%{_uuid}%} = {_id}:
+		set {godlike-ULT-CD::%{_uuid}%::MMH} to now
+		wait {weapons::MMH::ULT-CD}
+		if {class-ID::%{_uuid}%} = {_id}: 
+			delete {godlike-ULT-CD::%{_uuid}%::MMH}
+
+			if {marksman-ULT-ammoCount::%{_uuid}%} < 3:
+				add 1 to {marksman-ULT-ammoCount::%{_uuid}%}
+				sniperUpdateName({_p})
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+
+
+function sniperUpdateName(p: player):
+	set {_ammo} to {marksman-ULT-ammoCount::%{_p}'s uuid%}
+	if {_ammo} = 0:
+		set {_update} to "&7● ● ●"
+	else if {_ammo} = 1:
+		set {_update} to "&7● ● &e●"
+	else if {_ammo} = 2:
+		set {_update} to "&7● &e● ●"
+	else if {_ammo} = 3:
+		set {_update} to "&e● ● ●"
+	loop {_p}'s inventory:
+		if name of loop-value contains "%{wc}%Marksman Sniper":
+			set {_i} to index of loop-value
+			set name of slot {_i} of {_p}'s inventory to "%{wc}%Marksman Sniper %{_update}%"
+			stop loop
+	if {_i} isn't set:
+		wait 5 ticks
+		loop {_p}'s inventory:
+			if name of loop-value contains "%{wc}%Marksman Sniper":
+				set {_i} to index of loop-value
+				set name of slot {_i} of {_p}'s inventory to "%{wc}%Marksman Sniper %{_update}%"
+				stop loop		
+
+function sniperParticle(p: player, e: entity):
+	while metadata value "hit" of {_e} isn't set:
+		draw 3 of dust_color_transition using dustTransition(cyan, orange, 0.75) at {_e} with offset vector(0, 0, 0) with extra 0
+		if (y-coord of {_e}) < -75:
+			set metadata value "hit" of {_e} to true
+		wait 1 tick
+	kill {_e}
+
+on drop of stone axe with priority low:
+	if name of event-item is "%{wc}%Marksman Hatchet": 
+		cancel event
+		send "&cULT WEAPON IN INVENTORY!" to player
+
+on drop of spyglass with priority low:
+	if name of event-item contains "%{wc}%Marksman Sniper": 
+		cancel event
+		set {tacCheck-fix::%player's uuid%} to true # fix the drop issue, dropping triggers a left click event
+		if {sniper-CD::%player's uuid%} is set:
+			send "&cSNIPER RELOADING!" to player
+		else if {marksman-ULT-ammoCount::%player's uuid%} > 0:
+			if ultCHECK(player, {weapons::MMS::ULT-COST}) is true:
+				set {sniper-CD::%player's uuid%} to now
+				remove 1 from {marksman-ULT-ammoCount::%player's uuid%}
+
+				if {sniper-scoped::%player's uuid%} is set:
+					shoot a snowball from player at speed 4.5
+					delete {sniper-scoped::%player's uuid%} 
+				else:
+					set {_l} to location 0.5 in front of player
+					add 1.5 to y-coord of {_l}
+					set {_y} to a random number between -3 and 3 
+					set {_p} to a random number between -3 and 3
+					add {_y} to yaw of {_l}
+					add {_p} to pitch of {_l}
+					shoot a snowball from {_l} at speed 4.5
+
+				set metadata value "attacker" of shot projectile to player
+				set metadata value "type" of shot projectile to "MMS"
+
+				sniperParticle(player, shot projectile)
+				play sound "ENTITY_FIREWORK_ROCKET_BLAST" at volume 1 at pitch 0.1 at player
+				wait 5 ticks
+				if name of player's held item contains "%{wc}%Marksman Sniper": 
+					disenchant player's held item
+					sniperUpdateName(player)
+					sniperRELOAD(player)
+				else:
+					wait 5 ticks
+					sniperUpdateName(player)
+					itemDisenchant(player, "%{wc}%Marksman Sniper")
+		else:
+			send "&cSNIPER AMMO REQUIRED!" to player
+			play sound "ENTITY_ITEM_BREAK" at volume 5 at pitch 2 to player
+
+
+on held item change:	
+	if name of player's held item contains "%{wc}%Marksman Sniper": 
+		if {sniper-CD::%player's uuid%} is set:
+			sniperRELOAD(player)
+	else:
+		delete {sniper-scoped::%player's uuid%} 
+
+
+function sniperRELOAD(p: player):
+	wait 10 ticks
+	if name of {_p}'s held item contains "%{wc}%Marksman Sniper":
+		play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.5 to {_p}
+	wait 10 ticks
+	if name of {_p}'s held item contains "%{wc}%Marksman Sniper":
+		enchant {_p}'s held item with unbreaking 1
+		delete {sniper-CD::%{_p}'s uuid%}
+		play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.5 to {_p}
+
+on left click with spyglass:
+	if name of player's held item contains "%{wc}%Marksman Sniper": 
+		if {tacCheck-fix::%player's uuid%} is set: # fix the drop issue, dropping triggers a left click event
+			delete {tacCheck-fix::%player's uuid%} 
+		else:
+			if tacCHECK(player, {weapons::MMH::TAC-COST}) is true:
+				marksmanTarget(player)
+
+on right click with spyglass:
+	if name of event-item contains "%{wc}%Marksman Sniper": 
+		set {sniper-scoped::%player's uuid%} to now
+
+on stop using item:
+	if name of event-item contains "%{wc}%Marksman Sniper":
+		delete {sniper-scoped::%player's uuid%} 
+
+on damage of living entity with priority high:
+	if event-damagecause is a projectile:
+		if event-projectile is a snowball:
+			set {_attacker} to metadata value "attacker" of event-projectile
+			updateAttacker({_attacker}, victim)
+			if metadata value "type" of event-projectile is "MMS":
+				if distance between {_attacker} and location of victim >= 12.5:
+					set {_d} to 5
+				else if distance between {_attacker} and location of victim >= 7.5:
+					set {_d} to 4
+				else:
+					set {_d} to 4 # 3
+				add potion effect of slowness 2 for 3 seconds to potion effects of victim
+				play sound "BLOCK_NOTE_BLOCK_PLING" at volume 1 at pitch 1.5 to {_attacker}
+			if metadata value "marked" of victim is {_attacker}:
+				add ({weapons::MMS::ULT-COST}*10) to {mana::%{_attacker}'s uuid%::curr}
+				set {_d} to {_d}*1.5
+
+			set {_d} to projectileDmgCHECK({_attacker}, victim, {_d})
+			add {_d} to damage
+
+			if {class-perk::%{_attacker}'s uuid%::MMH::perk} = {perk-check::1}:
+				if {marksmanPerk-28::%{_attacker}'s uuid%} isn't set:
+					set {marksmanPerk-28::%{_attacker}'s uuid%} to now
+					add 1 to {marksman-ULT-ammoCount::%{_attacker}'s uuid%}
+					sniperUpdateName({_attacker})	
+					set level of {_attacker} to 0	
+					set level progress of {_attacker} to 0
+					wait 10 seconds		
+					delete {marksmanPerk-28::%{_attacker}'s uuid%}
+					if {class::%{_attacker}'s uuid%} = "MMH":
+						set level of {_attacker} to 0
+						add 0.99 to level progress of {_attacker}
+
+			dmgStats({_attacker}, victim, {_d}, "MMS")
+			showDMG(victim, {_d})
+
+on join:
+	delete {sniper-CD::%player's uuid%}
+	delete {sniper-scoped::%player's uuid%} 
+	delete metadata value "marked" of player

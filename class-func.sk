@@ -1,0 +1,258 @@
+on load:
+	# ZT
+	set {weapons::ZT::AS} to -2
+	set {weapons::ZT::TAC-COST} to 45
+	set {weapons::ZT::ULT-COST} to 60
+	set {weapons::ZT::ULT-CD} to 40 seconds # 35
+	# PGS
+	set {weapons::PGS::AS} to -2
+	set {weapons::PGS::TAC-COST} to 55
+	set {weapons::PGS::ULT-COST} to 55
+	set {weapons::PGS::ULT-CD} to 40 seconds
+	# GD
+	set {weapons::GD::AS} to -2
+	set {weapons::GD::TAC-COST} to 45
+	set {weapons::GD::ULT-COST} to 60
+	set {weapons::GD::ULT-CD} to 45 seconds
+
+	set {perk-var::GD::28} to 40 # 40 mana (perk: 28)
+	set {gd-dmgReduction} to 10 # take 10% less dmg (perk: 30)
+	# VBA
+	set {weapons::VBA::AS} to -2
+	set {weapons::VBA::TAC-COST} to 45
+	set {weapons::VBA::ULT-COST} to 50
+	set {weapons::VBA::ULT-CD} to 40 seconds
+	# DS
+	set {weapons::DS::AS} to -2
+	set {weapons::DS::TAC-COST} to 45
+	set {weapons::DS::ULT-COST} to 55
+	set {weapons::DS::ULT-CD} to 40 seconds
+	# RB
+	set {weapons::RB::AS} to -2
+	set {weapons::RB::ATK-COST} to 5
+	set {weapons::RB::TAC-COST} to 25
+	set {weapons::RB::ULT-COST} to 10
+	set {weapons::RB::ULT-CD} to 1 seconds
+
+	set {weapons::RD::AS} to -2
+	set {weapons::RD::TAC-COST} to 40
+
+	set {weapons::RB1::TAC-COST} to 40
+	set {weapons::RB1::ULT-COST} to 60
+	set {weapons::RB1::ULT-CD} to 40 seconds 
+	set {RB1-FirstHitAtkCost} to 25
+	set {weapons::RD1::AS} to -2
+	# PF/PC
+	set {weapons::PF::AS} to -2
+	set {weapons::PF::ATK-COST} to 15
+	set {weapons::PF::TAC-COST} to 35
+	set {weapons::PF::ULT-COST} to 10
+	set {weapons::PF::ULT-CD} to 1 seconds
+
+	set {weapons::PC::AS} to -2
+	set {weapons::PC::TAC-COST} to 50
+	set {weapons::PC1::AS} to 100
+	# MH
+	set {weapons::MH::AS} to -2
+	set {weapons::MH::TAC-COST} to 50
+	set {weapons::MH::ULT-COST} to 60
+	set {weapons::MH::ULT-CD} to 45 seconds
+	# RS
+	set {weapons::RS::AS} to -2
+	set {weapons::RS::0-TAC-COST} to 20 # miss cost (true value)
+	set {weapons::RS::S-TAC-COST} to 45
+	set {weapons::RS::M-TAC-COST} to 50
+	set {weapons::RS::L-TAC-COST} to 55
+	set {weapons::RS::ULT-COST} to 60
+	set {weapons::RS::ULT-CD} to 40 seconds
+	# MMH
+	set {weapons::MMH::AS} to -2
+	set {weapons::MMH::0-TAC-COST} to 200 # refund cost in 10's (20 = 20*10)
+	set {weapons::MMH::TAC-COST} to 40
+
+	set {weapons::MMS::AS} to -2
+	set {weapons::MMS::ULT-COST} to 15
+	set {weapons::MMH::ULT-CD} to 12 seconds
+	# NS
+	set {weapons::NS::AS} to -2
+	set {weapons::NK::AS} to -2
+	set {weapons::NS::TAC-COST} to 40
+	set {weapons::NS::ULT-COST} to 50
+	set {weapons::NS::ULT-CD} to 40 seconds
+	# PT
+	set {weapons::PT::AS} to -2
+	set {weapons::PT1::AS} to -2
+	set {weapons::PT::TAC-COST} to 50
+	set {weapons::PT::ULT-COST} to 60
+	set {weapons::PT::ULT-CD} to 40 seconds
+	# HC
+	set {weapons::HC::AS} to -2
+	set {weapons::HC::ATK-COST} to 15
+	set {weapons::HC::TAC-COST} to 40
+	set {weapons::HC::ULT-COST} to 10
+	set {weapons::HC::ULT-CD} to 1 seconds
+
+	set {weapons::HK::AS} to -2
+	set {weapons::HK::TAC-COST} to 40
+	set {weapons::HK::ULT-CD} to 4 seconds
+
+	set {weapons::HWL::R-COST} to 20
+	set {weapons::HWL::L-COST} to 20 
+	# TB
+	set {weapons::TB::AS} to -2
+	set {weapons::TS::AS} to -2
+	set {weapons::TB::ATK-COST} to 25
+	set {weapons::TB::TAC-COST} to 8 # must be divisible by 4
+	set {weapons::TB::ULT-COST} to 60
+	set {weapons::TB::ULT-CD} to 40 seconds
+
+	set {perk-var::TB::28} to 20 # tac = 20 mana (perk: 28)
+	# 
+	set {weapons::CB::AS} to -2
+	set {weapons::CB::TAC-COST} to 45
+	set {weapons::CB::ULT-COST} to 45
+	set {weapons::CB::ULT-CD} to 30 seconds
+
+	set {weapons::CB1::AS} to -2
+	set {weapons::CB1::ULT-CD} to 30 seconds
+	# FH
+	set {weapons::FH::AS} to -2
+	set {weapons::FH::TAC-COST} to 50
+	set {weapons::FH::ULT-COST} to 60
+	set {weapons::FH::ULT-CD} to 45 seconds
+	# BS
+	set {weapons::BS::AS} to -2
+	set {weapons::BS::TAC-COST} to 40 # must be divisible by 10
+	set {weapons::BS::ULT-COST} to 60 
+	set {weapons::BS::ULT-CD} to 40 seconds
+	set {weapons::BS::SS} to 5 # 5, shield health
+	# WH
+	set {weapons::WH::AS} to -2
+	set {weapons::WH::TAC-COST} to 45
+	set {weapons::WH::ULT-COST} to 60
+	set {weapons::WH::ULT-CD} to 45 seconds
+
+
+# COMMON RULES
+
+on join:
+	set player's level to 0
+	set level progress of player to 0
+
+on projectile hit:
+	set metadata value "hit" of event-projectile to true
+
+on disconnect:
+	clearCurrClass(player)
+
+on skript stop:
+	loop all players:
+		clearCurrClass(loop-player)
+
+function clearCurrClass(p: player):
+	set {_uuid} to {_p}'s uuid
+	# ALL
+	delete {godlike-ULT-CD::%{_uuid}%::*}
+	delete {godlike-ULT-USE::%{_uuid}%::*}
+	delete {godlike-TAC-USE::%{_uuid}%::*}
+	delete {special::%{_uuid}%::ULT-CD}
+	set {_p}'s level to 0
+	set level progress of {_p} to 0
+	# CLASSES
+	# RB
+	set {currFireRate::%{_uuid}%} to 0
+	# PGS
+	remove absorption from active potion effects of {_p}	
+	# RS
+	delete {rg::%{_uuid}%::*}
+	delete {rg-hitEntity::%{_uuid}%}
+	delete {rg-movement::%{_uuid}%}
+	delete {rg-hitLoc::%{_uuid}%}
+	delete {reaper-attack::%{_uuid}%} 
+	# PT
+	delete {tornadoMovement::%{_uuid}%}
+	delete {poseidon-attack::%{_uuid}%} # outdated
+	delete {zeus-attack::%{_uuid}%}
+	set {tridentFix::%{_uuid}%} to now
+	# PF
+	delete {piratePerk-30::%{_uuid}%} 
+	# HC
+	kill {summon::%{_uuid}%::summon}
+	delete {summon::%{_uuid}%::*}
+	set {summon::%{_uuid}%::cd} to true
+	# BS
+	delete {isShielding::%{_uuid}%}
+	# WH 
+	set {sonicBeamStack::%{_uuid}%} to 0
+
+
+
+
+function directAttack(v: living entity): 
+	# GD
+	if {godlike-ULT-USE::%{_v}'s uuid%::GD} is set:
+		set {godlike-ULT-USE::%{_v}'s uuid%::GD} to false
+
+function itemEnchant(p: player, name: string):
+	loop {_p}'s inventory:
+		if name of loop-value is {_name}:
+			set {_i} to index of loop-value
+			enchant slot {_i} of {_p}'s inventory with unbreaking 1 
+			stop loop
+
+function itemDisenchant(p: player, name: string):
+	loop {_p}'s inventory:
+		if name of loop-value is {_name}:
+			set {_i} to index of loop-value
+			disenchant slot {_i} of {_p}'s inventory 
+			stop loop
+
+function projectileDmgCHECK(a: player, v: living entity, dmg: number) :: number:
+	if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
+		return fhULT({_a}, {_v}, {_dmg})
+	
+	if {playerDefense::%{_v}'s uuid%} is set:
+		set {_temp} to (100 - {playerDefense::%{_v}'s uuid%}) * 0.01
+		set {_dmg} to {_dmg}*{_temp}	
+	return {_dmg}
+
+function arrowGive(p: player):
+	remove all arrow from inventory of {_p}
+	wait 1 tick
+	if slot {arrow-slot} of {_p}'s inventory is air:
+		set slot {arrow-slot} of {_p}'s inventory to 1 of arrow
+	else:
+		give {_p} 1 of arrow	
+
+function staminaPause(p: player, time: number):
+	set {staminaPause::%{_p}'s uuid%} to true
+	set {_time} to "%{_time}% seconds" parsed as a timespan
+	wait {_time}
+	delete {staminaPause::%{_p}'s uuid%}
+
+on join:
+	set {projectileChangeFix::%player's uuid%} to now
+
+every 1 seconds: # inf speed
+	loop all players:
+		if {top::%loop-player's uuid%} is set:
+			if {class::%loop-player's uuid%} = "GD":
+				add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+			else if {class::%loop-player's uuid%} = "TB":
+				if name of loop-player's held item is "%{wc}%Tempest Bow":
+					add potion effect of speed 3 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else if {class::%loop-player's uuid%} = "VBA":
+				
+				if loop-player's health <= 5:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else if {currWeapon::%loop-player's uuid%} = "PF":
+				if {class-perk::%loop-player's uuid%::PF::perk} = {perk-check::1}:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else:
+				add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player

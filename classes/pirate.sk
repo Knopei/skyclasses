@@ -1,0 +1,200 @@
+# PIRATE FLINTLOCK/CUTLASS
+
+on right click with iron sword:
+	if name of player's held item is "%{wc}%Pirate Cutlass": 
+		if {godlike-TAC-USE::%player's uuid%::PC} is set:
+			send "&cTAC ALREADY ACTIVATED!" to player
+		else if tacCHECK(player, {weapons::PC::TAC-COST}) is true:
+			set {godlike-TAC-USE::%player's uuid%::PC} to now
+			set {_old} to player's held item
+			set {_new} to {class::weapon::PC1}
+			set player's held item to {_new}
+			wait 5 seconds
+			delete {godlike-TAC-USE::%player's uuid%::PC}
+			loop player's inventory:
+				if name of loop-value is "%{wc}%Pirate Cutlass":
+					set {_i} to index of loop-value
+					set slot {_i} of player's inventory to {_old}
+
+on damage of living entity:
+	if name of attacker's held item is "%{wc}%Pirate Cutlass":
+		if {godlike-TAC-USE::%attacker's uuid%::PC} is set:
+			play sound "entity.player.attack.sweep" with volume 3 and pitch 1.2 at victim
+
+on drop of iron sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Pirate Cutlass":
+		cancel event
+		if {godlike-ULT-CD::%player's uuid%::PF} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::PF}
+			if {_time} < {weapons::PF::ULT-CD}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::PF::ULT-COST}) is true:
+			set {currWeapon::%player's uuid%} to "PF"
+			set {godlike-ULT-CD::%player's uuid%::PF} to now	
+			delete {flintlock-CD::%player's uuid%}
+			set {pirate-dmgBuff::%player's uuid%} to true
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Pirate Cutlass": 
+				set player's held item to {class::weapon::PF}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Pirate Cutlass":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::PF}
+						stop loop
+			# ULT CD
+			wait {weapons::PF::ULT-CD}
+			delete {godlike-ULT-CD::%player's uuid%::PF}	
+			if {class::%player's uuid%} = "PF":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function pfCHECK(a: living entity, cause: string) :: number:
+	if {_cause} = "attack":
+		if {pirate-dmgBuff::%{_a}'s uuid%} is set:
+			delete {pirate-dmgBuff::%{_a}'s uuid%}
+			return 0.5
+
+on right click with leather horse armor:
+	if name of player's held item contains "%{wc}%Pirate Flintlock": 
+		if {flintlock-CD::%player's uuid%} is set:
+			send "&cFLINTLOCK RELOADING!" to player
+		else:
+			if atkCHECK(player, {weapons::PF::ATK-COST}) is true:
+				set {flintlock-CD::%player's uuid%} to now
+
+				shoot a snowball from player at speed 3.5
+				# PERK
+				if {class-perk::%player's uuid%::PF::perk} = {perk-check::2}:
+					if {piratePerk-30::%player's uuid%} = 2:
+						set metadata value "fire" of shot projectile to true
+						ignite shot projectile
+						delete {piratePerk-30::%player's uuid%} 
+						set level of player to 0
+						set level progress of player to 0
+					else:
+						add 1 to {piratePerk-30::%player's uuid%}
+						set level of player to 0
+						add 0.495 to level progress of player
+						
+				#
+				disenchant player's held item
+				flintlockUpdateName(player, 0)
+				play sound "ENTITY_FIREWORK_ROCKET_BLAST" at volume 1 at pitch 0.8 at player
+				flintLockRELOAD(player)
+				while metadata value "hit" of shot projectile isn't set:
+					draw 1 of electric spark particle at shot projectile with offset vector(0, 0, 0) with extra 0 
+					if (y-coord of shot projectile) < -75:
+						set metadata value "hit" of shot projectile to true
+					wait 1 tick
+				kill shot projectile
+
+on held item change:	
+	if name of player's held item contains "%{wc}%Pirate Flintlock": 
+		if {flintlock-CD::%player's uuid%} is set:
+			flintLockRELOAD(player)
+
+function flintLockRELOAD(p: player):
+	wait 15 ticks
+	if name of {_p}'s held item contains "%{wc}%Pirate Flintlock":
+		play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.5 to {_p}
+	wait 1 second
+	if name of {_p}'s held item contains "%{wc}%Pirate Flintlock":
+		enchant {_p}'s held item with unbreaking 1
+		flintlockUpdateName({_p}, 1)
+		delete {flintlock-CD::%{_p}'s uuid%}
+		play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.5 to {_p}
+
+function flintlockUpdateName(p: player, ammo: integer):
+	if {_ammo} = 0:
+		set {_update} to "&7●"
+	else if {_ammo} = 1:
+		set {_update} to "&e●"
+	loop {_p}'s inventory:
+		if name of loop-value contains "%{wc}%Pirate Flintlock":
+			set {_i} to index of loop-value
+			set name of slot {_i} of {_p}'s inventory to "%{wc}%Pirate Flintlock %{_update}%"
+			stop loop
+
+on left click with leather horse armor:
+	if name of player's held item contains "%{wc}%Pirate Flintlock": 
+		if {tacCheck-fix::%player's uuid%} is set: # fix the drop issue
+			delete {tacCheck-fix::%player's uuid%} 
+		else if tacCHECK(player, {weapons::PF::TAC-COST}) is true:
+			shoot a snowball from player at speed 3
+			teleport player to player
+			push player backwards at speed 0.5
+
+			set metadata value "tac" of shot projectile to "PF"
+			play sound "ENTITY_FIREWORK_ROCKET_BLAST" at volume 1 at pitch 0.5 at player
+			while metadata value "hit" of shot projectile isn't set:
+				draw 5 of dust_color_transition using dustTransition(gray, black, 0.75) at shot projectile with offset vector(0.1, 0.1, 0.1) with extra 0 
+				if (y-coord of shot projectile) < -75:
+					set metadata value "hit" of shot projectile to true
+				wait 1 tick
+			kill shot projectile
+
+on damage of living entity with priority high:
+	if event-damagecause is a projectile:
+		if event-projectile is a snowball:
+			set {_attacker} to metadata value "attacker" of event-projectile
+			updateAttacker({_attacker}, victim)
+			if metadata value "type" of event-projectile is "PF":
+				if distance between {_attacker} and location of victim >= 12.5:
+					set {_d} to 4
+				else if distance between {_attacker} and location of victim >= 7.5:
+					set {_d} to 3
+				else:
+					set {_d} to 3 # 2.5
+			if {pirate-dmgBuff::%{_attacker}'s uuid%} is set:
+				delete {pirate-dmgBuff::%{_attacker}'s uuid%}
+				add 0.5 to {_d}
+			if metadata value "tac" of event-projectile is "PF":
+				set {_d} to {_d}-0.5
+
+			set {_d} to projectileDmgCHECK({_attacker}, victim, {_d})
+			add {_d} to damage
+			if metadata value "tac" of event-projectile is "PF":
+				set {_v} to vector between location of {_attacker} and location of victim
+				wait 1 tick
+				teleport victim to victim
+				push victim {_v} at speed 2
+
+			if metadata value "fire" of event-projectile is true:
+				set fire to victim for 4 seconds
+
+			dmgStats({_attacker}, victim, {_d}, "PF")
+			showDMG(victim, {_d})
+
+on join:
+	delete {flintlock-CD::%player's uuid%}
+	delete {pirate-dmgBuff::%player's uuid%}
+
+on drop of leather horse armor with priority low: # ULT USE
+	if name of event-item contains "%{wc}%Pirate Flintlock":
+		cancel event
+		set {tacCheck-fix::%player's uuid%} to true
+		if {godlike-ULT-CD::%player's uuid%::PF} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::PF}
+			if {_time} < {weapons::PF::ULT-CD}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::PF::ULT-COST}) is true:
+			set {currWeapon::%player's uuid%} to "PC"
+			set {godlike-ULT-CD::%player's uuid%::PF} to now	
+			delete {flintlock-CD::%player's uuid%}
+			set {pirate-dmgBuff::%player's uuid%} to true
+			wait 5 ticks
+			if name of player's held item contains "%{wc}%Pirate Flintlock": 
+				set player's held item to {class::weapon::PC}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value contains "%{wc}%Pirate Flintlock":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::PC}
+						stop loop
+			# ULT CD
+			wait {weapons::PF::ULT-CD}
+			delete {godlike-ULT-CD::%player's uuid%::PF}	
+			if {class::%player's uuid%} = "PF":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player

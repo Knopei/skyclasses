@@ -1,0 +1,189 @@
+# ZEUS TRIDENT
+
+on shoot: # TAC
+	if name of shooter's held item is "%{wc}%Zeus's Trident":
+		if difference between now and {projectileChangeFix::%shooter's uuid%} > 10 ticks:
+			if tacCHECK(shooter, {weapons::ZT::TAC-COST}) is true:
+				cancel event
+				set shooter's held item to {class::weapon::ZT}
+
+				set {projectileChangeFix::%shooter's uuid%} to now
+				shoot a trident from shooter at speed 2
+				set {_proj} to last shot projectile
+
+				set metadata value "attacker" of {_proj} to shooter
+				set metadata value "type" of {_proj} to "ZT"
+
+				play sound "item_trident_throw" at volume 3 at pitch 1 at shooter
+
+				if {class-perk::%shooter's uuid%::ZT::perk} = {perk-check::1}:
+					add potion effect of speed 2 without particles for 4 seconds to potion effects of shooter
+
+				while metadata value "hit" of {_proj} isn't set:
+					if metadata value "type" of {_proj} is "ZT":
+						draw 5 of enchanted_hit at {_proj} with offset vector(0.1, 0.1, 0.1) with extra 0 
+					if (y coord of {_proj}) < -75:
+						set metadata value "hit" of {_proj} to true
+					wait 1 tick
+				kill {_proj}
+			else:
+				cancel event
+
+
+		
+
+on projectile hit with priority low: # TAC
+	if event-projectile is a trident:
+		if metadata value "type" of event-projectile is "ZT":
+			if metadata value "hit" of event-projectile isn't set:
+				loop all entities in radius 3 around event-location:
+					if loop-entity is not shooter:
+						if loop-entity is a warden:
+							damage loop-entity by 1.5
+						updateAttacker(shooter, loop-entity)
+						directAttack(loop-entity)
+				strike lightning at the event-location
+				draw 10 of large_smoke at event-location # with extra 0
+
+		wait 1.5 second
+		kill event-projectile
+
+on drop of trident with priority low: # ULT USE
+	if name of event-item is "%{wc}%Zeus's Trident":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::ZT::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::ZT} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::ZT} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::ZT}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::ZT::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::ZT} to now
+
+			set {_shapes::outer-circle} to a circle of radius 6 # 6
+			set {_shapes::inner-circle} to a circle of radius 4 # 4
+			set {_shapes::tiny-circle} to a circle of radius 1.5 # 1.5
+
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(white, light blue, 1)
+			# ULT PREP
+			set {_loc} to location of player
+
+			loop blocks in radius 5 around {_loc}: # radius 5
+				set {_y} to y-coord of {_loc}
+				if y-coord of loop-block < {_y}+1:
+					if y-coord of loop-block > {_y}-1:
+						add location of loop-block to {_strike::*}
+			set {_s} to size of {_strike::*}
+			loop all entities in radius 5 around {_loc}: # radius 5
+				if loop-entity is not player:
+					add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
+
+			play sound "entity.elder_guardian.curse" at volume 10 at pitch 0.75 at block 10 above {_loc}
+
+			if {class-perk::%player's uuid%::ZT::perk} = {perk-check::2}:
+				set {_ticks} to 5 ticks
+			else:
+				set {_ticks} to 15 ticks
+
+			draw shapes {_shapes::tiny-circle} at {_loc}
+			wait {_ticks}
+			draw shapes {_shapes::inner-circle} at {_loc}
+			wait {_ticks}
+			draw shapes {_shapes::outer-circle} at {_loc}
+
+			# PHY ULT
+			loop 60 times:
+				set {_r} to random integer between 0 and {_s}
+				loop all entities in radius 2 around {_strike::%{_r}%}:
+					if loop-entity is not player:
+						if loop-entity is a warden:
+							damage loop-entity by 1.5
+						updateAttacker(player, loop-entity)	
+						add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity				
+				strike lightning at {_strike::%{_r}%}
+				draw 10 of large_smoke at {_strike::%{_r}%}
+				draw shapes {_shapes::outer-circle} at {_loc}
+				wait 2 tick
+			wait 1 second
+			set {godlike-ULT-CD::%player's uuid%::ZT} to now
+			delete {godlike-ULT-USE::%player's uuid%::ZT}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::ZT}
+			if {class::%player's uuid%} = "ZT":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on damage of player:
+	if "%damage cause%" is "lightning":
+		if {godlike-ULT-USE::%victim's uuid%::ZT} is set:
+			cancel event
+
+on pickup of trident:
+	cancel event
+
+on left click with priority high: # PSS
+	if name of player's held item is "%{wc}%Zeus's Trident":
+		if attack cooldown of player >= 0.75:
+			if {zeus-attack::%player's uuid%} = 3:
+				delete {zeus-attack::%player's uuid%} 
+				set level progress of player to 0
+				zeusPSS(player, 13)
+
+function ztCHECK(a: player) :: number:
+	if name of {_a}'s held item is "%{wc}%Zeus's Trident":
+		if {zeus-attack::%{_a}'s uuid%} = 3:
+			delete {zeus-attack::%{_a}'s uuid%} 
+			set level of {_a} to 0
+			set level progress of {_a} to 0	
+			zeusPSS({_a}, 13)		
+		else:
+			add 1 to {zeus-attack::%{_a}'s uuid%} 
+			set level of {_a} to 0
+			add 0.33 to level progress of {_a}
+
+function zeusPSS(p: player, length: number): #PSS
+	wait 1 tick
+	set {_uuid} to {_p}'s uuid
+
+	set {_pLoc::1} to location of {_p}
+	set {_pLoc::2} to location of {_p}
+	set {_pLoc::3} to location of {_p}
+	add 5 to yaw of {_pLoc::2}
+	add -5 to yaw of {_pLoc::3}
+
+	set {_x} to 0
+	set {_l} to 0
+
+	loop {_length} times: 
+		add 1 to {_x}
+		add 0.5 to {_l}
+
+		loop {_pLoc::*}:
+			set {_index} to loop-index
+			set {_loc} to location {_l} blocks infront of {_pLoc::%{_index}%}
+			set {_loc} to location 1.5 blocks above {_loc} 
+			draw 1 of dust using dustOption(cyan, 1) at {_loc}
+			# CHECKS HIT ENTITIES
+			set {_height} to 0
+			loop 3 times:
+				loop all living entities in radius 1 around {_loc}:
+					if loop-entity is not {_p}:
+						if {_height} = 0:
+							set {_hit} to true
+						else if {_height} = 1:
+							if loop-entity is not a wolf:
+								set {_hit} to true
+						else if {_height} = 2:
+							if loop-entity is a warden:
+								set {_hit} to true
+						if {_hit} is set:
+							updateAttacker({_p}, loop-entity)
+							damage loop-entity by 0.75
+				add 1 to {_height}
+				set {_loc} to location 1 blocks below {_loc}
+
+	play sound "entity.player.attack.sweep" at volume 3 and pitch 1.5 at location of {_p}

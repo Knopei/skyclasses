@@ -1,0 +1,119 @@
+# DEMONIC SABER
+
+function demonicBeam(p: player, e: living entity, v: vector, h: number):
+	set vector length of {_v} to 0.1
+	set {_loc} to location of {_p}
+	add {_h} to y-coord of {_loc}
+	loop (distance between {_loc} and {_e}) / 0.1 times:
+		draw 2 of dust using dustOption(red, 0.75) at {_loc}
+		make 1 of block particle using redstone block at {_loc}
+		set {_loc} to {_loc} ~ {_v}
+	updateAttacker({_p}, {_e})
+	play sound "entity_blaze_shoot" at volume 5 at location of {_p}
+	make 25 of block particle using redstone block at block 1.5 above location of {_e}
+	play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_e}
+
+
+on right click with netherite sword:
+	if name of player's held item is "%{wc}%Demonic Saber": 
+		if tacCHECK(player, {weapons::DS::TAC-COST}) is true:
+
+			if {class-perk::%player's uuid%::DS::perk} = {perk-check::1}:
+				set {_beamRange} to 7.5
+			else:
+				set {_beamRange} to 5
+
+			loop {_beamRange} times: 
+				add 1 to {_dis}
+				set {_loc} to location {_dis} blocks infront of player
+				set {_loc} to location 1 blocks above {_loc}
+				loop all living entities in radius 2.5 of {_loc}:
+					if loop-entity is not a armor stand:
+						if loop-entity isn't player:
+							set {_target} to loop-entity
+							if {_targetList::*} doesn't contain {_target}:
+								add {_target} to {_targetList::*}
+								set {_v} to vector from player to {_target}
+								# func
+								demonicBeam(player, {_target}, {_v}, 1.25)
+								directAttack({_target})
+								damage {_target} by 0.5
+								heal player by 0.5 heart
+			if {_target} isn't set:
+				play sound "entity.blaze.hurt" at volume 3 and pitch 0.5 to player
+
+
+
+
+on drop of netherite sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Demonic Saber":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::DS::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::DS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::DS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::DS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::DS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::DS} to now
+			play sound "entity_blaze_death" with volume 5 and pitch 0.5 at player
+			# TAC PART
+			set {_shapes::circle} to a circle with radius 1.25
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(red, black, 0.5)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			# PHY TAC
+			set {_n} to 39
+			loop 161 times:
+				add 1 to {_n}
+				if {_n} = 40:
+					set {_n} to 0
+					set {_max} to 0
+					loop all living entities in radius 6 around player:
+						if loop-entity is not player:
+							if loop-entity is a player:
+								set {_v} to vector from player to loop-entity
+								if {_max} < 3:
+									demonicBeam(player, loop-entity, {_v}, 1.25)
+									damage loop-entity by 0.5 hearts
+									set {_heal} to true
+									add 1 to {_max}
+							else:
+								set {_v} to vector from player to loop-entity
+								demonicBeam(player, loop-entity, {_v}, 1.25)
+								damage loop-entity by 0.5 hearts
+								set {_heal} to true
+					if {_heal} is set:
+						heal player by 0.5 hearts
+					delete {_heal}
+					delete {_v}
+					delete {_max}
+
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				
+				wait 1 tick
+			set {godlike-ULT-CD::%player's uuid%::DS} to now	
+			delete {godlike-ULT-USE::%player's uuid%::DS}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::DS}
+			if {class::%player's uuid%} = "DS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player	
+
+on damage of living entity:
+	if attacker is a player:
+		if name of attacker's held item is "%{wc}%Demonic Saber":
+			if attack cooldown of attacker >= 0.75:
+				if {godlike-ULT-USE::%attacker's uuid%::DS} is set:
+					if {class-perk::%attacker's uuid%::DS::perk} = {perk-check::2}:
+						heal attacker by 0.75 hearts
+					else:
+						heal attacker by 0.25 hearts
+				else:
+					heal attacker by 0.25 hearts

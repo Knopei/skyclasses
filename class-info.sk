@@ -7,7 +7,7 @@ on load:
 	# Division Colors
 	set {division-color::TRASH} to "&8"
 	set {division-color::ROOKIE} to "&7"
-	set {division-color::BRONZE} to "<##6E4D25>"
+	set {division-color::BRONZE} to "<#6E4D25>"
 	set {division-color::SILVER} to "&f"
 	set {division-color::GOLD} to "&6"
 	set {division-color::DIAMOND} to "&b"

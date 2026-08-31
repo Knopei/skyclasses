@@ -1,0 +1,180 @@
+# HUNTER (PSS in summon.sk)
+
+on right click with iron sword: # TAC USE
+	if name of player's held item is "%{wc}%Hunter Knife": 
+		if {hunterPoison::%player's uuid%} is set:
+			send "&cPoison Already Active!" to player
+			play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
+		else:
+			if tacCHECK(player, {weapons::HK::TAC-COST}) is true:
+				set {hunterPoison::%player's uuid%} to true
+				itemEnchant(player, "%{wc}%Hunter Knife")
+
+on damage of living entity:
+	if name of attacker's held item is "%{wc}%Hunter Knife": 
+		if {hunterPoison::%attacker's uuid%} is set:
+			if victim is not a armor stand:
+				delete {hunterPoison::%attacker's uuid%}
+				add potion effect of poison 1 for 5 seconds to potion effects of victim
+				disenchant attacker's held item
+
+				set {_shape} to a arc with radius 1, height 0, and angle 120 degrees
+				set particle of {_shape} to 1 of dust_color_transition particle using dustTransition(light green, green, 1) with offset vector(0, 0, 0) with extra 0 
+
+				set {_view} to vector from yaw attacker's yaw and pitch attacker's pitch
+
+				set {_rotation} to rotation from vector(1, 1, 1) to {_view}
+				rotate shape {_shape} by {_rotation}
+				#rotate shape {_shape} around relative y axis by -1 * {_yaw}
+				set {_loc} to location 1 block in front of attacker's eye location
+				loop 5 times:
+					draw the shape {_shape} at {_loc} ~ {_view}
+				wait 2 tick
+
+
+on drop of iron sword with priority low: # ULT USE
+	if name of event-item is "%{wc}%Hunter Knife":
+		cancel event
+		if {godlike-ULT-CD::%player's uuid%::HC} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::HC}
+			if {_time} < {weapons::HC::ULT-CD}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::HC::ULT-COST}) is true:
+			set {godlike-ULT-CD::%player's uuid%::HC} to now	
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Hunter Knife": 
+				set player's held item to {class::weapon::HC}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Hunter Knife":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::HC}
+						stop loop
+			# ULT CD
+			wait {weapons::HC::ULT-CD}
+			delete {godlike-ULT-CD::%player's uuid%::HC}	
+			if {class::%player's uuid%} = "HC":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on shoot: # ATK USE
+	if name of shooter's held item is "%{wc}%Hunter Crossbow":
+		if atkCHECK(shooter, {weapons::HC::ATK-COST}) is true:
+
+			set metadata value "attacker" of event-projectile to shooter
+			set metadata value "type" of event-projectile to "HC"
+			if {hunterPoison::%shooter's uuid%} is set:
+				delete {hunterPoison::%shooter's uuid%}
+				set {_poisonParticles} to true
+				set metadata value "tac" of event-projectile to "HC"
+
+			add event-projectile to {_sp::*}
+
+			wait 2 tick
+			loop 2 times:
+				add 1 to {_n}
+				set {_l} to shooter's location
+				add 1.5 to y-coord of {_l}
+				if {_n} = 1:
+					set {_y} to -3 # w
+				else if {_n} = 2:
+					set {_y} to 3 # w
+				add {_y} to yaw of {_l}
+				shoot a arrow from {_l} with speed 3
+				set metadata value "attacker" of shot projectile to shooter
+				set metadata value "type" of shot projectile to "HC"
+				if {_poisonParticles} is set:
+					set metadata value "tac" of shot projectile to "HC"
+
+				add shot projectile to {_sp::*}
+
+				wait 2 tick
+
+			arrowGive(shooter)
+			loop 100 times:
+				loop {_sp::*}:	
+					if metadata value "hit" of loop-value-2 isn't set:
+						draw 10 of crit at loop-value-2 with offset vector(0, 0, 0) with extra 0
+						if {_poisonParticles} is true:
+							draw 5 of dust_color_transition using dustTransition(light green, green, 1) at loop-value-2 with offset vector(0.1, 0.1, 0.1) with extra 0 
+						if (y-coord of loop-value-2) < -75:
+							set metadata value "hit" of loop-value-2 to true
+							kill loop-value-2
+							stop loop
+						wait 1 tick
+		else:
+			cancel event
+			arrowGive(shooter)
+
+
+on left click with crossbow: # TAC USE
+	if name of player's held item is "%{wc}%Hunter Crossbow": 
+		if {tacCheck-fix::%player's uuid%} is set: # fix the drop issue, dropping triggers a left click event
+			delete {tacCheck-fix::%player's uuid%} 
+		else if {hunterPoison::%player's uuid%} is set:
+			send "&cPoison Already Active!" to player
+			play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
+		else if tacCHECK(player, {weapons::HC::TAC-COST}) is true:
+			set {hunterPoison::%player's uuid%} to true
+			play sound "item.crossbow.loading_end" at volume 10 at pitch 1 to player
+
+on damage of living entity with priority high:
+	if event-damagecause is a projectile:
+		if event-projectile is a arrow:
+			set {_attacker} to metadata value "attacker" of event-projectile
+			updateAttacker({_attacker}, victim)
+			if metadata value "type" of event-projectile is "HC":
+				if distance between {_attacker} and location of victim >= 12.5:
+					set {_d} to 2.25
+				else if distance between {_attacker} and location of victim >= 7.5:
+					set {_d} to 1.75 # 1.5
+				else:
+					set {_d} to 1.75 # 1.25
+
+				if metadata value "tac" of event-projectile is "HC":
+					add potion effect of poison 1 for 5 seconds to potion effects of victim
+
+				
+				set {_d} to projectileDmgCHECK({_attacker}, victim, {_d})
+				set damage to {_d}
+
+				dmgStats({_attacker}, victim, {_d}, "PF")
+				showDMG(victim, {_d})	
+
+				summonTarget({_attacker}, victim)
+
+
+
+
+on drop of crossbow with priority low: # ULT USE
+	if name of event-item is "%{wc}%Hunter Crossbow":
+		cancel event
+		set {tacCheck-fix::%player's uuid%} to true # fix the drop issue, dropping triggers a left click event
+		if {godlike-ULT-CD::%player's uuid%::HC} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::HC}
+			if {_time} < {weapons::HK::ULT-CD}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::HC::ULT-COST}) is true:
+			set {godlike-ULT-CD::%player's uuid%::HC} to now	
+			remove all arrow from inventory of player
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Hunter Crossbow": 
+				set player's held item to {class::weapon::HK}
+				if {hunterPoison::%player's uuid%} is set:
+					itemEnchant(player, "%{wc}%Hunter Knife")
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Hunter Crossbow":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::HK}
+						if {hunterPoison::%player's uuid%} is set:
+							itemEnchant(player, "%{wc}%Hunter Knife")
+						stop loop
+			# ULT CD
+			set {special::%player's uuid%::ULT-CD} to {weapons::HK::ULT-CD}
+			wait {weapons::HK::ULT-CD}
+			delete {godlike-ULT-CD::%player's uuid%::HC}	
+			delete {special::%player's uuid%::ULT-CD} 
+			if {class::%player's uuid%} = "HC":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player

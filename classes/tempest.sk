@@ -1,0 +1,229 @@
+# TEMPEST BOW
+
+on right click with bow: # sets a var to when bow starts charging
+	if name of player's held item is "%{wc}%Tempest Bow":
+		set {bowCharge::%player's uuid%} to now
+
+on shoot: 
+	if name of shooter's held item is "%{wc}%Tempest Bow":
+		if "%event-projectile%" is "arrow":
+			cancel event
+		if difference between now and {projectileChangeFix::%shooter's uuid%} > 10 ticks:
+			if {class-perk::%shooter's uuid%::TB::perk} = {perk-check::1}:
+				set {_mana} to {perk-var::TB::28}
+			else:
+				set {_mana} to {weapons::TB::ATK-COST}
+			if atkCHECK(shooter, {_mana}) is true:
+
+				set {projectileChangeFix::%shooter's uuid%} to now
+				set {_time} to difference between now and {bowCharge::%shooter's uuid%}
+				if {_time} < 0.5 seconds:
+					set {_speed} to 0.75
+					set {_dmg} to 1
+				else if {_time} < 0.75 seconds:
+					set {_speed} to 1
+					set {_dmg} to 1.5
+				else if {_time} < 1 seconds:
+					set {_speed} to 1.5
+					set {_dmg} to 2
+				else if {_time} < 1.5 seconds:
+					set {_speed} to 2
+					set {_dmg} to 3
+				else:
+					set {_speed} to 4
+					set {_dmg} to 3.5
+
+				shoot wind charge from shooter at speed {_speed}
+				delete {bowCharge::%shooter's uuid%}
+
+				set metadata value "attacker" of shot projectile to shooter
+				set metadata value "type" of shot projectile to "TB"
+				set metadata value "charge" of shot projectile to {_dmg}
+				while metadata value "hit" of shot projectile isn't set:
+					if metadata value "type" of shot projectile is "TB":
+						draw 1 of electric spark particle at shot projectile with offset vector(0, 0, 0) with extra 0 
+					if (y coord of shot projectile) < -75:
+						set metadata value "hit" of shot projectile to true
+					wait 1 tick
+				kill shot projectile
+			else:
+				cancel event
+		else:
+			cancel event
+
+on damage of living entity with priority high:
+	set {_cause} to "%event-damagecause%"
+	if {_cause} = "projectile":
+		if event-projectile is a fireball:
+			set {_attacker} to metadata value "attacker" of event-projectile
+			updateAttacker({_attacker}, victim)
+			if metadata value "type" of event-projectile is "TB":
+				set {_d} to metadata value "charge" of event-projectile
+
+			set {_d} to projectileDmgCHECK({_attacker}, victim, {_d})
+			add {_d} to damage
+
+			dmgStats({_attacker}, victim, {_d}, "TB")
+			showDMG(victim, {_d})
+
+on join:
+	set {tempestTimerPSS::%player's uuid%} to now
+
+function tempestPSS(p: player): # PSS
+	set {_uuid} to {_p}'s uuid
+	if {tempestPSS::%{_uuid}%} is set:
+		set level of {_p} to 0
+		set level progress of {_p} to 0
+		remove levitation from active potion effects of {_p}
+		delete {tempestPSS::%{_uuid}%}
+	else:
+		if difference between now and {tempestTimerPSS::%{_uuid}%} > 5 ticks:
+			set {tempestPSS::%{_uuid}%} to true
+			set {tempestTimerPSS::%{_uuid}%} to now
+			add potion effect of slow falling 1 without particles for 5 minutes to potion effects of {_p}
+			set level of {_p} to 0
+			add 0.99 to level progress of {_p}
+			if {_p} is not on ground:
+				add potion effect of levitation 1 without particles for 10 ticks to potion effects of {_p}
+
+			while {tempestPSS::%{_uuid}%} is set:
+				if {class::%{_uuid}%} = "TB": 
+					set {_mana} to {weapons::TB::TAC-COST} / 4
+					if atkCHECK({_p}, {_mana}) is true:
+						set {_loc} to location of {_p}
+						draw 3 of dust_color_transition using dustTransition(white, light gray, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+						add 0.5 to y coord of {_loc}
+						draw 3 of dust_color_transition using dustTransition(white, light gray, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+						wait 5 ticks
+					else:
+						delete {tempestPSS::%{_uuid}%}
+				else:
+					delete {tempestPSS::%{_uuid}%}
+			set level of {_p} to 0
+			set level progress of {_p} to 0
+			remove slow falling from active potion effects of {_p}
+
+on left click with bow: # TAC USE
+	if name of player's held item is "%{wc}%Tempest Bow": 
+		if {tacCheck-fix::%player's uuid%} is set: # fix the drop issue, dropping triggers a left click event
+			delete {tacCheck-fix::%player's uuid%} 
+		else:
+			tempestPSS(player)
+
+on right click with iron hoe: # TAC USE
+	if name of player's held item is "%{wc}%Tempest Scythe": 
+		tempestPSS(player)
+
+
+on drop of iron hoe with priority low:
+	if name of event-item is "%{wc}%Tempest Scythe": 
+		cancel event
+		send "&cULT WEAPON IN INVENTORY!" to player
+
+on drop of bow with priority low: # ULT USE
+	if name of event-item is "%{wc}%Tempest Bow":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::TB::ULT-CD}
+		set {tacCheck-fix::%player's uuid%} to true # fix the drop issue, dropping triggers a left click event
+		if {godlike-ULT-USE::%player's uuid%::TB} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::TB} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::TB}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::TB::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::TB} to now
+
+			tornado(player)
+
+			set {godlike-ULT-CD::%player's uuid%::TB} to now
+			delete {godlike-ULT-USE::%player's uuid%::TB}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::TB}
+			if {class::%player's uuid%} = "TB":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function tornadoPHY(loc: location, ploc: location, a: player):
+	add 3 to y coord of {_loc}
+	loop all living entities in radius 5.5 around {_loc}:
+		if loop-entity is not armor stand:
+			set {_v} to vector between {_ploc} and {_loc}
+			if loop-entity is {_a}:
+				if {tornadoMovement::%{_a}'s uuid%} isn't set:
+					push loop-entity {_v} at speed 1.25
+					set {tornadoMovement::%{_a}'s uuid%} to true
+					play sound "entity.breeze.wind_burst" with volume 5 and pitch 0.75 at loop-entity
+			else:
+				updateAttacker({_a}, loop-entity)
+				directAttack(loop-entity)
+				push loop-entity {_v} at speed 1.25
+				damage loop-entity by 1.5 hearts
+
+				play sound "entity.breeze.wind_burst" with volume 5 and pitch 1.25 at loop-entity
+
+
+
+function tornado(p: player):
+	set {_ploc} to location of {_p} 
+	set {_loc} to location of {_p} 
+
+	#spawn 1 armor stand at {_ploc}
+	#set {_ls} to last spawned armor stand
+	#add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
+	#set name of last spawned armor stand to "&7"
+
+	play sound "entity.allay.ambient_without_item" with volume 10 and pitch 1 at {_ploc}
+
+	set {_yaw::1} to 0
+	set {_yaw::2} to 90
+	set {_yaw::3} to 180
+	set {_yaw::4} to 270
+	set {_radius::1} to 5
+	set {_radius::2} to 4
+	set {_radius::3} to 3
+	set {_radius::4} to 2
+
+	if {class-perk::%{_p}'s uuid%::TB::perk} = {perk-check::2}:
+		set {_times} to 40 # ( 20 blocks travel )
+	else:
+		set {_times} to 30 # ( 15 blocks travel ) 
+	loop {_times} times: # * 0.5 (nado ticks every 5 times)
+		
+		# causes tornado to move
+		set {_n} to 0.5
+		set {_loc} to location {_n} blocks horizontally in front of {_loc} 
+		#teleport {_ls} to {_loc}
+
+		set {_center} to {_loc}
+		loop {_radius::*}:
+			set {_radius} to loop-index parsed as an integer
+			loop 4 times:
+				add 1 to {_count}
+				set {_shape} to a arc with radius {_radius}, height 0, and angle 10 degrees
+				set offset vector of {_shape} to vector(0, 0, 0)
+
+				set particle of {_shape} to 1 of dust_color_transition particle using dustTransition(white, light gray, 1.5) with offset vector(0, 0, 0) with extra 0 
+				rotate shapes {_shape} around vector(0, 1, 0) by {_yaw::%{_count}%} degrees
+				draw shapes {_shape} at {_center}
+			delete {_shape}
+			delete {_count}
+			add 3 to y coord of {_center} # height distance between particles
+
+		loop {_yaw::*}: # causes the particles to spin based on yaw
+			add 1 to {_count}
+			add 9 to {_yaw::%{_count}%}
+		delete {_count}
+
+		# Physical effects of tornado
+		add 1 to {_tornadoPHY}
+		if {_tornadoPHY} = 10:
+			tornadoPHY({_loc}, {_ploc}, {_p})
+			delete {_tornadoPHY}
+
+		wait 1 tick
+	delete {tornadoMovement::%{_p}'s uuid%}
+	kill {_ls}

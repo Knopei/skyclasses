@@ -1,0 +1,127 @@
+# POSEIDONS TRIDENT
+
+on right click with trident: # TRIDENT DROP
+	if {class::%player's uuid%} = "PT":
+		if {class-perk::%player's uuid%::PT::perk} = {perk-check::2}: 
+			if metadata value "tac" of player is set:
+				set {_loc} to location of metadata value "tac" of player
+				set {_proj} to metadata value "tac" of player
+				delete metadata value "tac" of player
+
+				set metadata value "hit" of {_proj} to true
+				kill {_proj}
+
+				set pitch of {_loc} to 90
+
+				shoot a trident from {_loc} at speed 1.5
+
+				set metadata value "attacker" of shot projectile to player
+				set metadata value "type" of shot projectile to "PT"
+
+on shoot: # TAC
+	if name of shooter's held item is "%{wc}%Poseidon's Trident":
+		if difference between now and {projectileChangeFix::%shooter's uuid%} > 10 ticks:
+			if tacCHECK(shooter, {weapons::PT::TAC-COST}) is true:
+				cancel event
+				set shooter's held item to {class::weapon::PT}
+			
+				set {projectileChangeFix::%shooter's uuid%} to now
+				shoot a trident from shooter at speed 4
+				set {_proj} to last shot projectile
+
+				set metadata value "tac" of shooter to {_proj}
+				set metadata value "attacker" of {_proj} to shooter
+				set metadata value "type" of {_proj} to "PT"
+
+				play sound "item_trident_throw" at volume 3 at pitch 1 at shooter
+
+				if {class-perk::%shooter's uuid%::PT::perk} = {perk-check::2}:
+					add potion effect of speed 2 without particles for 4 seconds to potion effects of shooter
+
+				while metadata value "hit" of {_proj} isn't set:
+					if metadata value "type" of {_proj} is "PT":
+						draw 5 of bubble at {_proj} with offset vector(0.1, 0.1, 0.1) with extra 0 
+					if (y coord of {_proj}) < -75:
+						set metadata value "hit" of {_proj} to true
+					wait 1 tick
+				kill {_proj}
+				delete metadata value "tac" of shooter
+			else:
+				cancel event
+
+on damage of living entity:
+	if event-damagecause is a projectile:
+		if event-projectile is a trident:
+			if metadata value "type" of event-projectile is "PT":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+
+function ptPerkCHECK(a: player, v: living entity) :: number:
+	if {class-perk::%{_a}'s uuid%::PT::perk} = {perk-check::1}: 
+		updateAttacker({_a}, {_v})
+		set {_h} to health of {_v}
+		set {_h} to {_h}*0.25
+		if {_h} < 1.5:
+			set {_h} to 1.5
+		damage {_v} by {_h} 
+		heal {_a} by {_h} 
+		dmgStats({_a}, {_v}, {_h}, "PT")
+		return 0
+
+
+on projectile hit with priority low: # TAC
+	if event-projectile is a trident:
+		if metadata value "type" of event-projectile is "PT":
+			if metadata value "hit" of event-projectile isn't set:
+				set {_p} to metadata value "attacker" of event-projectile
+				set {_loc} to event-location
+				set yaw of {_loc} to yaw of {_p}
+				set pitch of {_loc} to pitch of {_p}
+
+				teleport {_p} to {_loc}
+		wait 1.5 second
+		kill event-projectile
+
+on drop of trident with priority low: # ULT USE
+	if name of event-item is "%{wc}%Poseidon's Trident":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::PT::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::PT} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::PT} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::PT}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::PT::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::PT} to now
+
+			set {weatherChange} to 8
+			play sound "entity.elder_guardian.curse" at volume 10 at pitch 1.25 at block 10 above location of player
+
+			set {_shapes::circle} to a circle with radius 1.25
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, lime, 0.75)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+
+			loop 140 times:
+				add 1 to {_n}
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				if {_n} = 10:
+					delete {_n}
+					removeBadEffects(player, "victim")
+					add potion effect of speed 3 without particles for 1 seconds to potion effects of player
+					add potion effect of regeneration 2 without particles for 1 seconds to potion effects of player
+				wait 1 tick
+
+			set {godlike-ULT-CD::%player's uuid%::PT} to now
+			delete {godlike-ULT-USE::%player's uuid%::PT}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::PT}
+			if {class::%player's uuid%} = "PT":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player

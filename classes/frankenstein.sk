@@ -1,0 +1,99 @@
+# FRANKENSTEIN HAMMER
+
+on right click with mace: # TAC
+	if name of player's held item is "%{wc}%Frankenstein Hammer": 
+		if tacCHECK(player, {weapons::FH::TAC-COST}) is true:
+			push player upwards at speed 0.85
+			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
+
+			wait 5 ticks
+			while player isn't on ground:
+				set {_loc} to location of player
+				draw 3 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+				add 0.5 to y coord of {_loc}
+				draw 3 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+				wait 1 tick
+
+			set {_loc} to location of player
+			play sound "entity.warden.attack_impact" with volume 3 and pitch 0.5 at {_loc}
+			loop all living entities in radius 2.5 around {_loc}:
+				if loop-entity is not player:
+					updateAttacker(player, loop-entity)
+					directAttack(loop-entity)
+					damage loop-entity by 0.5
+					add potion effect of slowness 1 without particles for 2 seconds to potion effects of loop-entity
+
+				set {_shapes::circle} to a circle with radius 2.5
+				set particle of {_shapes::circle} to 2 of dust_color_transition particle using dustTransition(light gray, blue, 1)
+				draw shape {_shapes::circle} at {_loc}
+
+
+on drop of mace with priority low: # ULT USE
+	if name of event-item is "%{wc}%Frankenstein Hammer":
+		cancel event
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::FH::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::FH} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::FH} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::FH}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::FH::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::FH} to now	
+			# ULT PART
+			if {class-perk::%player's uuid%::FH::perk} = {perk-check::2}:
+				add potion effect of absorption 3 without particles for 5 seconds to potion effects of player
+			else:
+				add potion effect of absorption 1 without particles for 5 seconds to potion effects of player
+			play sound "entity.warden.emerge" with volume 1 and pitch 1.5 at player
+			set {_shapes::triangle} to a triangle with radius 1.5
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			# PHY TAC
+			while (absorption amount of player) > 0:
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				wait 2 tick
+
+			set {godlike-ULT-CD::%player's uuid%::FH} to now	
+			delete {godlike-ULT-USE::%player's uuid%::FH}	
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::FH}	
+			if {class::%player's uuid%} = "FH":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function fhULT(a: living entity, p: player, dmg: number) :: number: # {_p} is frankenstein
+	set {_v} to vector from {_p} to {_a}
+	set vector length of {_v} to 0.1
+	set {_loc} to location of {_p}
+	add 1.25 to y-coord of {_loc}
+	loop (distance between {_loc} and {_a}) / 0.1 times:
+		draw 1 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0, 0, 0) with extra 0
+		set {_loc} to {_loc} ~ {_v}
+	play sound "entity.warden.hurt" at volume 5 and pitch 0.75 at location of {_p}
+	play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_a}
+	updateAttacker({_p}, {_a})
+	set {_dmg} to {_dmg} / 2
+	damage {_a} by {_dmg}
+	return 0
+
+on damage of player:
+	if (absorption amount of victim) > 0:
+		if {class::%victim's uuid%} = "FH":
+			set {_loc} to location of victim
+			set {_x} to random number between -1 and 1
+			set {_y} to random number between 1 and 1.5
+			add {_x} to x-coord of {_loc}
+			add {_y} to y-coord of {_loc}
+			spawn 1 armor stand at {_loc}
+			set {_ls} to last spawned armor stand
+			add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
+			set name of last spawned armor stand to "&3✧&b&oSHIELDED&3✧"
+			wait 1 second
+			kill {_ls}
