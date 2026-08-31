@@ -37,7 +37,6 @@ on load:
 	# Class Display -----------------------------
 	wait 1 tick
 		# Special Case
-	set {class-display::CB1} to diamond sword named "&eClass: %{class-color::CB}%&l%{class-name::CB}%" with lore "" and "&e&lPASSIVE" and "&9Mana Breach" and "&8&oWhen below half max mana, damage you" and "&8&odo will steal a portion of mana from the" and "&8&oenemy and transfer it to you." and "" and "&e&lTACTICAL" and "&6Cyber Glitch &7[RIGHT] &9🧪%{weapons::CB::TAC-COST}%" and "&8&oPhase through doors and solid terrain." and "" and "&e&lULTIMATE" and "&aMalicious Dart &7[DROP] &9🧪%{weapons::CB::ULT-COST}% &f⌚%{weapons::CB1::ULT-CD}%" and "&8&oShoot a dart that briefly disables" and "&8&ostamina usage." and ""
 
 	set {class-display::RB1} to bow named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&6&lATTACK &7[HOLD+RIGHT] &9🧪%{weapons::RB::ATK-COST}%" and "&8&oThe longer you hold, the more rapid the" and "&8&ofire rate." and "" and "&e&lPASSIVE" and "&6Rapid Bow" and "&8&oYour bow is always active." and "" and "&e&lTACTICAL" and "&eEnergize &7[LEFT] &9🧪%{weapons::RB1::TAC-COST}%" and "&8&oCharge your bow to the maximum fire rate." and "" and "&e&lULTIMATE" and "&cMachine Gun &7[DROP] &9🧪%{weapons::RB1::ULT-COST}% &f⌚%{weapons::RB1::ULT-CD}%" and "&8&oPlow anything in your way." and ""
 	set {class-display::RD1} to stone sword named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&e&lPASSIVE" and "&6Rapid Bow" and "&8&oYour bow is always active." and "" and "&e&lTACTICAL" and "&bSprint II &7[RIGHT] &9🧪%{weapons::RD::TAC-COST}%" and "&8&oBriefly gain great speed that declines." and "" 
@@ -139,8 +138,8 @@ on load:
 	set {class-perk::TB::%{perk-check::2}%} to red dye named "&dPerk: &lCategory 5" with lore "" and "&5&lPASSIVE" and "&8&oIncreases the distance &4Tornado &8&otravels." and ""
 	set {class-perk::TB::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon" 
 	# CB
-	set {class-perk::CB::%{perk-check::1}%} to orange dye named "&dPerk: &lSystem Overload" with lore "" and "&5&lPASSIVE" and "&aMalicious Dart &8&obriefly slows enemies." and ""
-	set {class-perk::CB::%{perk-check::2}%} to cyan dye named "&dPerk: &lAbility Swap" with lore "" and "&5&lPASSIVE" and "&8&oThe cooldown of your &7Ultimate &8&ois decreased +" and "&aMalicious Dart &8&oand &6Cyber Glitch &8&oswap places." and ""
+	set {class-perk::CB::%{perk-check::1}%} to orange dye named "&dPerk: &lStamina Lockout" with lore "" and "&5&lPASSIVE" and "&aMalicious Dart &8&odisables stamina longer." and ""
+	set {class-perk::CB::%{perk-check::2}%} to cyan dye named "&dPerk: &lOverclock" with lore "" and "&5&lPASSIVE" and "&8&oThe cooldown of your &7Ultimate &8&ois reduced." and ""
 	set {class-perk::CB::%{perk-check::3}%} to gray dye named "&dPerk: &lComing Soon"  
 	# FH
 	set {class-perk::FH::%{perk-check::1}%} to orange dye named "&dPerk: &lThe Biggest Boy" with lore "" and "&5&lPASSIVE" and "&8&oGain +1 max heatlh." and ""

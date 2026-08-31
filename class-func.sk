@@ -1,4 +1,5 @@
 on load:
+	wait 1 tick
 	# ZT
 	set {weapons::ZT::AS} to -2
 	set {weapons::ZT::TAC-COST} to 45
@@ -107,14 +108,13 @@ on load:
 	set {weapons::TB::ULT-CD} to 40 seconds
 
 	set {perk-var::TB::28} to 20 # tac = 20 mana (perk: 28)
-	# 
+	# CB
 	set {weapons::CB::AS} to -2
 	set {weapons::CB::TAC-COST} to 45
 	set {weapons::CB::ULT-COST} to 45
-	set {weapons::CB::ULT-CD} to 30 seconds
+	set {weapons::CB::ULT-CD} to 15 seconds
 
-	set {weapons::CB1::AS} to -2
-	set {weapons::CB1::ULT-CD} to 30 seconds
+	set {perk-var::CB::%{perk-check::2}%} to 10 seconds # ult cooldown (perk: 2)
 	# FH
 	set {weapons::FH::AS} to -2
 	set {weapons::FH::TAC-COST} to 50

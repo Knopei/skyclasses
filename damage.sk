@@ -64,8 +64,7 @@ on load:
 
 	# CB
 	set {weapons::CB::AD} to 5
-	set {weapons::CB::R-AD} to 0.4
-	set {weapons::CB1::AD} to 5
+	set {weapons::CB::R-AD} to 0.5
 
 	# FH
 	set {weapons::FH::AD} to 4.5

@@ -122,9 +122,7 @@ function cbPhase(p: player, type: text):
 
 on right click with diamond sword: # TAC
 	if name of player's held item contains "%{wc}%Cyberpunk Blade":
-		if {class-perk::%player's uuid%::CB::perk} = {perk-check::2}:
-			cbPhase(player, "tac") # MANA CHECK IN FUNCTION
-		else if tacCHECK(player, {weapons::CB::TAC-COST}) is true:
+		if tacCHECK(player, {weapons::CB::TAC-COST}) is true:
 			cbDart(player)
 
 on damage of living entity:
@@ -135,9 +133,10 @@ on damage of living entity:
 				set {_attacker} to metadata value "attacker" of event-projectile
 				updateAttacker({_attacker}, victim)
 				cbPSS({_attacker}, victim, 5)
-				staminaPause(victim, 2)
 				if {class-perk::%{_attacker}'s uuid%::CB::perk} = {perk-check::1}:
-					add potion effect of slowness 1 for 2 seconds to potion effects of victim
+					staminaPause(victim, 3)
+				else:
+					staminaPause(victim, 2)
 	else if {_cause} = "attack":
 		if name of attacker's held item contains "%{wc}%Cyberpunk Blade":
 			cbPSS(attacker, victim, 5)
@@ -145,7 +144,7 @@ on damage of living entity:
 function cbCalcCooldownULT(p: player) :: timespan:
 	set {_uuid} to {_p}'s uuid
 	if {class-perk::%{_uuid}%::CB::perk} = {perk-check::2}:
-		set {_ultCooldown} to {weapons::CB1::ULT-CD}
+		set {_ultCooldown} to {perk-var::CB::%{perk-check::2}%}
 	else:
 		set {_ultCooldown} to {weapons::CB::ULT-CD}
 	
@@ -206,15 +205,7 @@ function cbUpdateName(p: player):
 on drop of diamond sword with priority low:
 	if name of event-item contains "%{wc}%Cyberpunk Blade": 
 		cancel event
-		if {class-perk::%player's uuid%::CB::perk} = {perk-check::2}:
-			if {cb-ULT-count::%player's uuid%} > 0:
-				if ultCHECK(player, {weapons::CB::ULT-COST}) is true:
-					cbDart(player)
-					remove 1 from {cb-ULT-count::%player's uuid%}
-			else:
-				send "&cULT NOT READY!" to player
-		else:
-			cbPhase(player, "ult") # MANA CHECK IN FUNCTION
+		cbPhase(player, "ult") # MANA CHECK IN FUNCTION
 		
 		wait 5 ticks
 		if name of player's held item contains "%{wc}%Cyberpunk Blade": 

@@ -16,7 +16,6 @@ options:
 	PT1: unbreakable trident of riptide 2 named "&6Poseidon's Trident"
 
 	CB: unbreakable diamond sword of unbreaking 1 named "&6Cyberpunk Blade &7● ●" 
-	CB1: unbreakable diamond sword of unbreaking 1 named "&6Cyberpunk Blade &7● ●" 
 
 	RB: unbreakable bow of infinity 1 named "&6Rapid Bow" 
 	RD: unbreakable stone sword named "&6Rapid Dagger" 
@@ -77,7 +76,6 @@ on load:
 	set {class::weapon::TS} to {@TS}
 	#
 	set {class::weapon::CB} to {@CB}
-	set {class::weapon::CB1} to {@CB1}
 	set {class::weapon::FH} to {@FH}
 	set {class::weapon::BS} to {@BS}
 	set {class::weapon::WH} to {@WH}
@@ -102,8 +100,6 @@ on load:
 			set {_lore::*} to lore of {class-display::HC}
 		else if {_class} = "PT1":
 			set {_lore::*} to lore of {class-display::PT}
-		else if {_class} = "CB1":
-			set {_lore::*} to lore of {class-display::CB1}
 		else:
 			set {_lore::*} to lore of {class-display::%{_class}%}
 		set {_lore::$} to "&8%{_class}%" in uppercase # sets the first lore slot ot name abver. ex. VBA

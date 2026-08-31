@@ -282,14 +282,11 @@ function classSelect(p: player, class: text):
 	# PHY items
 	set {_weapon} to {class::weapon::%{_class}%}
 	
-	if {_class} = "HC":
+	if {_class} = "HC": # below for special weapons
 		if {class-perk::%{_uuid}%::HC::perk} = {perk-check::1}:
 			set {_weapon} to {class::weapon::HC1}
 	else if {_class} = "TB":
 		set {_weapon} to {class::weapon::TS}
-	else if {_class} = "CB":
-		if {class-perk::%{_uuid}%::CB::perk} = {perk-check::2}:
-			set {_weapon} to {class::weapon::CB1}
 	else if {_class} = "RB":
 		if {class-perk::%{_uuid}%::RB::perk} = {perk-check::3}:
 			set {_weapon} to {class::weapon::RD1}
