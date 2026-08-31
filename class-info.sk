@@ -23,7 +23,7 @@ on load:
 	set {class-division::DIAMOND} to diamond named "%{division-color::DIAMOND}%&lDiamond" with lore "" and "&7&l&oRewards" and "  &eDiamond Title" and "" and ""
 	set {class-division::MASTER} to emerald named "%{division-color::MASTER}%&lMaster" with lore "" and "&7&l&oRewards" and "  &eMaster Title" and "" and ""  
 	set {class-division::GRAND-MASTER} to amethyst shard named "%{division-color::GRAND-MASTER}%&lGrandmaster" with lore "" and "&7&l&oRewards" and "  &eGrandmaster Title" and "" and ""
-	set {class-division::PREDATOR} to wither skull named "%{division-color::PREDATOR}%&lPredator" with lore "" and "&7&l&oRewards" and "  &ePredator Title" and "" and ""  
+	set {class-division::PREDATOR} to wither skeleton skull named "%{division-color::PREDATOR}%&lPredator" with lore "" and "&7&l&oRewards" and "  &ePredator Title" and "" and ""  
 
 	set {class-requirement::9} to 0
 	set {class-requirement::10} to 25
