@@ -4,7 +4,7 @@ on load:
 	# HWL
 	set {weapons::HWL::CD} to 15 seconds
 	# WH
-	set {WardenHeart::sonicboom} to 1.5 # dmg
+	set {WardenHeart::sonicboom} to 1 # dmg
 
 on disconnect:
 	kill {summon::%player's uuid%::summon}
@@ -62,11 +62,12 @@ function summon(p: player, type: text):
 		set {_temp} to last spawned warden
 		set metadata value "summoner" of {_temp} to {_p}
 		set {summon::%{_p}'s uuid%::summon} to {_temp}
-		set metadata value "summon-damage" of {_temp} to 1.5
+		set metadata value "summon-damage" of {_temp} to 1
 		set max health of {_temp} to 10
 		set health of {_temp} to 10
 		set display name of {_temp} to "&3&o%name of {_p}%'s Warden"
-		#add potion effect of speed 1 without particles for 999 days to potion effects of {_temp}
+		if {class-perk::%{_p}'s uuid%::WH::perk} = {perk-check::1}:
+			add potion effect of speed 2 without particles for 999 days to potion effects of {_temp}
 		play sound "ENTITY_WARDEN_EMERGE" with volume 1 and pitch 1 at {_spawnLoc}
 
 		wardenTargetting({_p})
@@ -133,20 +134,17 @@ on damage of living entity with priority low:
 			set {_summoner} to metadata value "summoner" of attacker
 			set {_dmg} to metadata value "summon-damage" of attacker
 			set {_cause} to "%event-damagecause%"
-			if {_cause} = "sonic boom":
+			if {_cause} = "sonic boom": # WARDEN
 				set {_dmg} to {WardenHeart::sonicboom}
+				if {sonicBeamMark::%victim's uuid%} is not set:
+					set {sonicBeamMark::%victim's uuid%} to now
+					sonicBeamMarkEffect(victim)
+				else:
+					set {sonicBeamMark::%victim's uuid%} to now 
+
 			updateAttacker({_summoner}, victim)
 			set damage to {_dmg}
-			# WARDEN CPSS
-			if {class-perk::%{_summoner}'s uuid%::WH::perk} = {perk-check::1}:
-				heal {_summoner} by 0.5 hearts
-			else if {class-perk::%{_summoner}'s uuid%::WH::perk} = {perk-check::2}:
-				add 1 to {sonicBeamStack::%victim's uuid%}
-				wait 8 seconds
-				if {sonicBeamStack::%victim's uuid%} > 0:
-					remove 1 from {sonicBeamStack::%victim's uuid%}
-				else:
-					set {sonicBeamStack::%victim's uuid%} to 0
+
 	else if attacker is a player: # SUMMONER TARGETS
 		if {summon::%attacker's uuid%::summon} is set:
 			if {summon::%attacker's uuid%::summon} is victim:

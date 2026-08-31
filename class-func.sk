@@ -4,7 +4,7 @@ on load:
 	set {weapons::ZT::AS} to -2
 	set {weapons::ZT::TAC-COST} to 45
 	set {weapons::ZT::ULT-COST} to 60
-	set {weapons::ZT::ULT-CD} to 40 seconds # 35
+	set {weapons::ZT::ULT-CD} to 40 seconds 
 	# PGS
 	set {weapons::PGS::AS} to -2
 	set {weapons::PGS::TAC-COST} to 55
@@ -183,7 +183,7 @@ function clearCurrClass(p: player):
 	# BS
 	delete {isShielding::%{_uuid}%}
 	# WH 
-	set {sonicBeamStack::%{_uuid}%} to 0
+	delete {sonicBeamMark::%{_uuid}%} 
 
 
 

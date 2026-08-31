@@ -92,7 +92,7 @@ on death of player: #-----------------------------------------------------------
 	delete {tempestPSS::%victim's uuid%}
 
 	# WH
-	set {sonicBeamStack::%victim's uuid%} to 0
+	delete {sonicBeamStack::%victim's uuid%}
 	loop all mobs: # reset warden anger
 		if loop-mob is a warden:
 			clear the loop-mob's anger level towards victim

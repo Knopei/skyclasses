@@ -1,61 +1,82 @@
 # WARDEN AXE
 
 on join:
-	set {sonicBeamStack::%player's uuid%} to 0
+	delete {sonicBeamMark::%player's uuid%} 
 
 
-function sonicBeamHit(attacker: player, victim: living entity):
+function sonicBeamHit(attacker: player, victim: living entity, pos: string):
 	if distance between {_attacker} and location of {_victim} >= 12.5:
-		set {_d} to 1
+		set {_kb} to 1.5
+		if {_pos} = "center":
+			set {_d} to 3
+		else if {_pos} = "outer":
+			set {_d} to 1
 	else if distance between {_attacker} and location of {_victim} >= 7.5:
-		set {_d} to 0.8
+		set {_kb} to 0.75
+		if {_pos} = "center":
+			set {_d} to 2
+		else if {_pos} = "outer":
+			set {_d} to 0.8
 	else:
-		set {_d} to 0.6
+		set {_kb} to 0.5
+		if {_pos} = "center":
+			set {_d} to 1
+		else if {_pos} = "outer":
+			set {_d} to 0.6
 
-	if {sonicBeamStack::%{_victim}'s uuid%} = 0:
+	if {sonicBeamMark::%{_victim}'s uuid%} is not set:
+		set {sonicBeamMark::%{_victim}'s uuid%} to now
 		set {_d} to {_d}*1
-	else if {sonicBeamStack::%{_victim}'s uuid%} = 1:
+	else:
+		delete {sonicBeamMark::%{_victim}'s uuid%} 
 		set {_d} to {_d}*1.5
-	else if {sonicBeamStack::%{_victim}'s uuid%} >= 2:
-		set {_d} to {_d}*2
 
-	add 1 to {sonicBeamStack::%{_victim}'s uuid%}
 	updateAttacker({_attacker}, {_victim})
 	directAttack({_victim})
+	sonicBeamMarkEffect({_victim})
 	damage {_victim} by {_d} heart
-	set {_v} to vector from {_p} to {_victim}
+	set {_v} to vector from {_attacker} to {_victim}
 	wait 1 tick
-	push {_victim} {_v} at speed 0.5
+	push {_victim} {_v} at speed {_kb}
 
-	wait 8 seconds
-	if {sonicBeamStack::%{_victim}'s uuid%} > 0:
-		remove 1 from {sonicBeamStack::%{_victim}'s uuid%}
-	else:
-		set {sonicBeamStack::%{_victim}'s uuid%} to 0
+function sonicBeamMarkEffect(victim: living entity):
+	set {_shapes::circle} to a circle with radius 0.5
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, black, 0.75)
+	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+	while {sonicBeamMark::%{_victim}'s uuid%} is set:
+		set {_time} to difference between now and {sonicBeamMark::%{_victim}'s uuid%}
+		if {_time} >= 7.5 seconds:
+			delete {sonicBeamMark::%{_victim}'s uuid%} 
+		# Mark Effect
+		set {_loc} to {_victim}'s location
+		add 1.5 to y-coord of {_loc}
+		if {_victim} is not invisible:
+			draw shapes {_shapes::circle} at {_loc}
+		rotate shapes {_shapes::*} by {_rotation}
+		wait 1 tick
+
+
 
 function sonicBeam(p: player, length: number):
 	play sound "ENTITY_WARDEN_SONIC_CHARGE" at volume 0.5 at location of {_p}
 	set {_radius} to 0.5
 	set {_shapes::circle} to a circle with radius {_radius}
-	set particle of {_shapes::*} to 10 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
-
-	set {_axis} to vector in direction of {_p}
-	rotate shapes {_shapes::*} by {_axis}
-
-	#set {_rotation} to rotation around vector(1, 0, 1) by 90 degrees
-	#rotate shapes {_shapes::*} by {_rotation}
-
+	set particle of {_shapes::*} to 10 of dust_color_transition particle using dustTransition(cyan, black, 0.75)
 
 	loop 5 times: # 1.75 seconds
-		set {_loc} to {_p}'s location
-		add 1 to y-coord of {_loc}
-		draw shapes {_shapes::*} at {_loc}
+		set {_view} to vector from yaw {_p}'s yaw and pitch {_p}'s pitch
+		set {_yaw} to yaw of {_view}
+		set {_rotation} to rotation from vector(0, 1, 0) to {_view}
+		draw the shapes {_shapes::*} at {_p}'s eye location ~ {_view}:
+			rotate shape drawn shape by {_rotation}
+			rotate shape drawn shape around relative y axis by -1 * {_yaw}
+
 		add 0.25 to {_radius}
 		set radius of {_shapes::circle} to {_radius}
 		wait 7 ticks
 
 	play sound "ENTITY_WARDEN_SONIC_BOOM" at volume 0.25 at location of {_p}
-
+	
 	set {_uuid} to {_p}'s uuid
 	set {_x} to 0
 	set {_l} to 0
@@ -66,41 +87,52 @@ function sonicBeam(p: player, length: number):
 		set {sb::%{_uuid}%::%{_x}%} to location 1.5 blocks above {sb::%{_uuid}%::%{_x}%} 
 		set {_loc} to {sb::%{_uuid}%::%{_x}%}
 		# eff
+		draw 5 of dust using dustOption(black, 1) at {_loc}
 		add 1 to {_temp}
 		if {_temp} = 5:
 			draw 1 of sonic boom at {_loc}
 			set {_temp} to 0
-		# CHECKS HIT ENTITIES
-		set {_height} to 0
-		loop 3 times:
-			loop all living entities in radius 1.25 around {_loc}:
-				if loop-entity is not a armor stand:
-					if loop-entity is not {_p}:
-						if {_height} = 0: # tracks 1 block tall mobs 
-							set {_hit} to true
-						else if {_height} = 1:
-							if loop-entity is not a wolf: # tracks players and 2 block tall mobs 
-								set {_hit} to true
-						else if {_height} = 2:
-							if loop-entity is a warden: # tracks mobs taller than players
-								set {_hit} to true
-						if {_hit} is set:
-							set {_target} to loop-entity
-							if {_targetList::*} doesn't contain {_target}:
-								add {_target} to {_targetList::*}
-								sonicBeamHit({_p}, {_target})
 
-								if {_firstHit} isn't set: # warden update target
-									if {summon::%{_p}'s uuid%::summon} is set:
-										if {_target} isn't {summon::%{_p}'s uuid%::summon}:
-											set {_firstHit} to true
-											summonTarget({_p}, {_target})
-											# WARDEN CPSS
-											if {class-perk::%{_p}'s uuid%::WH::perk} = {perk-check::1}:
-												heal {summon::%{_p}'s uuid%::summon} by 0.5 hearts
+	# phy beams
+	set {_r} to 0.75
+	loop 2 times:
+		loop {sb::%{_uuid}%::*}:
+			set {_loc} to loop-value-2
+			# CHECKS HIT ENTITIES
+			set {_height} to 0
+			loop 3 times:
+				loop all living entities in radius {_r} around {_loc}:
+					if loop-entity is not a armor stand:
+						if loop-entity is not {_p}:
+							if {_height} = 0: # tracks 1 block tall mobs 
+								set {_hit} to true
+							else if {_height} = 1:
+								if loop-entity is not a wolf: # tracks players and 2 block tall mobs 
+									set {_hit} to true
+							else if {_height} = 2:
+								if loop-entity is a warden: # tracks mobs taller than players
+									set {_hit} to true
+							if {_hit} is set:
+								set {_target} to loop-entity
+								if {_targetList::*} doesn't contain {_target}:
+									add {_target} to {_targetList::*}
+									if {_r} = 0.75:
+										sonicBeamHit({_p}, {_target}, "center")
+									else:
+										sonicBeamHit({_p}, {_target}, "outer")
 
-			add 1 to {_height}
-			set {_loc} to location 1 blocks below {_loc}
+									if {_firstHit} isn't set: # warden update target
+										if {summon::%{_p}'s uuid%::summon} is set:
+											if {_target} isn't {summon::%{_p}'s uuid%::summon}:
+												set {_firstHit} to true
+												summonTarget({_p}, {_target})
+												# WARDEN CPSS
+												if {class-perk::%{_p}'s uuid%::WH::perk} = {perk-check::1}:
+													heal {summon::%{_p}'s uuid%::summon} by 0.5 hearts
+
+				add 1 to {_height}
+				set {_loc} to location 1 blocks below {_loc}
+		set {_r} to 1.25
 
 on damage of living entity: # WARDEN CPSS
 	if attacker is a player:
@@ -125,10 +157,7 @@ on drop of netherite axe with priority low: # ULT USE
 			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
 		else:
 			set {_ultCooldown} to {weapons::WH::ULT-CD}
-		if {wardenSwapLoc::%player's uuid%} is set:
-			summonSwapLoc(player)
-			delete {wardenSwapLoc::%player's uuid%}
-		else if {godlike-ULT-USE::%player's uuid%::WH} is set:
+		if {godlike-ULT-USE::%player's uuid%::WH} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
 		else if {godlike-ULT-CD::%player's uuid%::WH} is set:
 			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::WH}
@@ -137,10 +166,42 @@ on drop of netherite axe with priority low: # ULT USE
 		else if ultCHECK(player, {weapons::WH::ULT-COST}) is true:
 			set {godlike-ULT-USE::%player's uuid%::WH} to now	
 
+			set {_shapes::outer-circle} to a circle of radius 4.5
+			set {_shapes::inner-circle} to a circle of radius 2 
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, black, 1)
+
 			summon(player, "warden")
-			wait 1 tick
-			set {wardenSwapLoc::%player's uuid%} to true
-			loop 100 times:
+
+			set {_summon} to {summon::%player's uuid%::summon}
+			set {_loc} to location of {_summon}
+			add 1 to y-coord of {_loc}
+			draw shapes {_shapes::inner-circle} at {_loc}
+			wait 20 ticks
+			draw shapes {_shapes::outer-circle} at {_loc}
+
+			loop all living entities in radius 4.5 around {_summon}:
+				if loop-entity is not player or {_summon}:
+					updateAttacker(player, loop-entity)
+					directAttack(loop-entity)
+
+					set {_v} to vector between player and loop-entity
+					set {_d} to 0.75
+
+					if {class-perk::%player's uuid%::WH::perk} = {perk-check::2}:
+						set {_d} to 1.5
+						if {sonicBeamMark::%loop-entity's uuid%} is not set:
+							set {sonicBeamMark::%loop-entity's uuid%} to now
+							sonicBeamMarkEffect(loop-entity)
+						else:
+							set {sonicBeamMark::%loop-entity's uuid%} to now 
+
+					damage loop-entity by {_d}
+					wait 1 tick
+					teleport loop-entity to loop-entity
+					push loop-entity upward at speed 0.5
+					push loop-entity {_v} at speed 1.5
+
+			loop 96 times: # -4 from pre-
 				if {summon::%player's uuid%::summon} is set:
 					loop all players:
 						remove darkness from active potion effects of loop-player
@@ -152,7 +213,6 @@ on drop of netherite axe with priority low: # ULT USE
 				kill {summon::%player's uuid%::summon}
 				delete {summon::%player's uuid%::*}
 
-			delete {wardenSwapLoc::%player's uuid%}
 			set {godlike-ULT-CD::%player's uuid%::WH} to now	
 			delete {godlike-ULT-USE::%player's uuid%::WH}	
 			# ULT CD
