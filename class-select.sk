@@ -288,8 +288,7 @@ function classSelect(p: player, class: text):
 	else if {_class} = "TB":
 		set {_weapon} to {class::weapon::TS}
 	else if {_class} = "RB":
-		if {class-perk::%{_uuid}%::RB::perk} = {perk-check::3}:
-			set {_weapon} to {class::weapon::RD1}
+		set {_weapon} to {class::weapon::RD}
 	
 	give {_p} {_weapon}
 	classHeals({_p})
@@ -315,14 +314,6 @@ function classSelect(p: player, class: text):
 			set {stamina::%{_uuid}%::max} to 1200
 	else if {_class} = "CB":
 		cbULT({_p}, {_id})
-	else if {_class} = "RB":
-		if {class-perk::%{_uuid}%::RB::perk} = {perk-check::3}:
-			give {_p} {class::weapon::RB1}
-			set {currFireRate::%{_uuid}%} to -1 # bow fire rate
-			if {general-perk::%{_uuid}%::perk} = 22:
-				set {special::%{_uuid}%::ULT-CD} to {weapons::RB1::ULT-CD} - {gp-ultCD}
-			else:
-				set {special::%{_uuid}%::ULT-CD} to {weapons::RB1::ULT-CD}
 	else if {_class} = "BS":
 		set {shieldStrength::%{_uuid}%} to {weapons::BS::SS}
 		set level progress of {_p} to 0.99
@@ -332,16 +323,16 @@ function classSelect(p: player, class: text):
 	if {special::%{_uuid}%::ULT-CD} is set:
 		set {_wait} to {special::%{_uuid}%::ULT-CD}
 	else:
-		if {_wait} isn't set:
+		if {_wait} isn't set: # {_wait} gets set here
 			if {_class} = "CB":
 				set {_wait} to cbCalcCooldownULT({_p})
 			else:
-				set {_wait} to {weapons::%{_class}%::ULT-CD}
+				set {_wait} to {weapons::%{_class}%::ULT-CD} 
 
 		if {general-perk::%{_uuid}%::perk} = 22:
 			if {_wait} > 20 seconds:
 				set {_wait} to {_wait} - {gp-ultCD}
-				set {special::%{_uuid}%::ULT-CD} to {_wait}
+				set {special::%{_uuid}%::ULT-CD} to {_wait} # special::, CD gets set here and replaces {_wait}
 
 	set {godlike-ULT-CD::%{_uuid}%::%{_class}%} to now
 	wait {_wait}

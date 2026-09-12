@@ -1,53 +1,31 @@
 # RAPID BOW
 
-on join:
-	set {rbAllowedToShoot::%player's uuid%} to true 
-	set {currFireRate::%player's uuid%} to 0 # represents the current fire rate 0 = none, 10 = max (doesn't rep. time between shots)
-
-every 10 ticks:
-	loop all players:
-		if {currFireRate::%loop-player's uuid%} > 1:
-			remove 2 from {currFireRate::%loop-player's uuid%}
-		else if {currFireRate::%loop-player's uuid%} > 0:
-			remove 1 from {currFireRate::%loop-player's uuid%}
-
-		else if {class-perk::%loop-player's uuid%::RB::perk} = {perk-check::3}: 
-			if {currFireRate::%loop-player's uuid%} > -1:
-				remove 1 from {currFireRate::%loop-player's uuid%}
-
-function rbTimeBetweenShots(p: player, currFireRate: integer): 
-	set {rbAllowedToShoot::%{_p}'s uuid%} to false
-	if {_currFireRate} < 4: # calcs time between shots when currFireRate < 4
-		set {_time} to abs({_currFireRate} - 17) 
-	else:
-		set {_time} to abs({_currFireRate} - 10) 
-	wait ("%{_time}% ticks" parsed as a timespan)
-	set {rbAllowedToShoot::%{_p}'s uuid%} to true
 
 on right click with stone sword: # TAC USE
 	if name of player's held item is "%{wc}%Rapid Dagger": 
-		if tacCHECK(player, {weapons::RD::TAC-COST}) is true:
+		if tacCHECK(player, {weapons::RB::TAC-COST}) is true:
 			play sound "entity_generic_drink" with volume 1 and pitch 1 at player
-			if {class-perk::%player's uuid%::RB::perk} = {perk-check::1}:
-				add potion effect of speed 3 for 4 seconds to potion effects of player
-			else:
-				add potion effect of speed 3 for 1 seconds to potion effects of player
-				wait 1 seconds
-				add potion effect of speed 2 for 2 seconds to potion effects of player
+			add potion effect of speed 3 for 1.5 seconds to potion effects of player
+			wait 1 seconds
+			add potion effect of speed 2 for 1.5 seconds to potion effects of player
 
 on drop of stone sword with priority low: # ULT USE
 	if name of event-item is "%{wc}%Rapid Dagger":
 		cancel event
-		if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
-			send "&cULT WEAPON IN INVENTORY!" to player
-			stop
-		if {godlike-ULT-CD::%player's uuid%::RB} is set:
+		if {general-perk::%player's uuid%::perk} = 22:
+			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
+		else:
+			set {_ultCooldown} to {weapons::RB::ULT-CD}
+		if {godlike-ULT-USE::%player's uuid%::WH} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::RB} is set:
 			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RB}
 			if {_time} < {weapons::RB::ULT-CD}:
 				send "&cULT NOT READY!" to player
-		else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:
-			set {godlike-ULT-CD::%player's uuid%::RB} to now	
-			add potion effect of speed 2 without particles for 3 seconds to potion effects of player
+		else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:	
+			set {godlike-ULT-USE::%player's uuid%::RB} to now
+
+			# PRE
 			wait 5 ticks
 			if name of player's held item is "%{wc}%Rapid Dagger": 
 				set player's held item to {class::weapon::RB}
@@ -58,164 +36,66 @@ on drop of stone sword with priority low: # ULT USE
 						set {_i} to index of loop-value
 						set slot {_i} of player's inventory to {class::weapon::RB}
 						stop loop
+			# PHY ULT
+			set {_speed} to 0.5
+			loop 50 times:
+				if name of player's held item is "%{wc}%Rapid Bow": 
+					if {_speed} < 1.5:
+						add 0.1 to {_speed}
+						shoot a arrow from player at speed {_speed}
+					else:
+						if {_speed} < 3:
+							add 0.1 to {_speed}
+						set {_l} to location 0.5 in front of player
+						add 1.5 to y-coord of {_l}
+						set {_y} to a random number between -4 and 4 
+						set {_pitch} to a random number between -4 and 4
+						add {_y} to yaw of {_l}
+						add {_pitch} to pitch of {_l}
+						shoot a arrow from {_l} at speed {_speed}
+					#
+					set metadata value "attacker" of shot projectile to player
+					set metadata value "type" of shot projectile to "RB1"
+					play sound "entity_arrow_shoot" with volume 3 and pitch 1 at player
+					if {class-perk::%player's uuid%::RB::perk} = {perk-check::2}:
+						if {_count} >= 40:
+							set metadata value "fire" of shot projectile to true
+							ignite shot projectile
+						else: 
+							add 1 to {_count}
+						
+				wait 2 tick
+			# POST
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Rapid Bow": 
+				set player's held item to {class::weapon::RD}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Rapid Bow":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::RD}
+						stop loop
+
+			set {godlike-ULT-CD::%player's uuid%::CB} to now	
+			delete {godlike-ULT-USE::%player's uuid%::CB}	
 			# ULT CD
-			wait {weapons::RB::ULT-CD}
+			wait {_ultCooldown}
 			delete {godlike-ULT-CD::%player's uuid%::RB}	
 			if {class::%player's uuid%} = "RB":
 				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
-
-on right click with bow: # ATK USE
-	if name of player's held item is "%{wc}%Rapid Bow": 
-		if {godlike-ULT-USE::%player's uuid%::RB} is set: # perk 3
-			stop
-
-		set {_currFireRate} to {currFireRate::%player's uuid%}
-		set {_rbATS} to {rbAllowedToShoot::%player's uuid%}
-		if {_currFireRate} < 8:
-			add 1 to {currFireRate::%player's uuid%}
-		if {_rbATS} is true:
-			if {class-perk::%player's uuid%::RB::perk} = {perk-check::2}:
-				set {_atkCost} to {weapons::RB::ATK-COST} - 1
-			else:
-				set {_atkCost} to {weapons::RB::ATK-COST}
-			if {_currFireRate} < 0:
-				set {_atkCost} to {RB1-FirstHitAtkCost}
-			if atkCHECK(player, {_atkCost}) is true:
-				if {_currFireRate} < 0: # applies only for perk 3
-					shoot a arrow from player at speed 2.5
-				else if {_currFireRate} < 6:
-					shoot a arrow from player at speed 2.5
-				else:
-					set {_l} to location 0.5 in front of player
-					#add 1.5 to y-coord of {_l}
-					#set {_y} to a random number between -2.5 and 2.5 
-					#set {_p} to a random number between -2.5 and 2.5
-					#add {_y} to yaw of {_l}
-					#add {_p} to pitch of {_l}
-
-					add 1.5 to y-coord of {_l}
-					set {_d} to vector in direction of player
-
-					shoot arrow from {_l} at speed 2.5 {_d}
-
-
-					set metadata value "attacker" of shot projectile to player
-
-					if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
-						set metadata value "type" of shot projectile to "RB1"
-					else:
-						set metadata value "type" of shot projectile to "RB"
-
-				play sound "entity_arrow_shoot" with volume 3 and pitch 1 at player
-				rbTimeBetweenShots(player, {_currFireRate})
-				while metadata value "hit" of shot projectile isn't set:
-					draw 1 of electric spark particle at shot projectile with offset vector(0, 0, 0) with extra 0 
-					if (y-coord of shot projectile) < -75:
-						set metadata value "hit" of shot projectile to true
-					wait 1 tick
-				kill shot projectile
-			else:
-				set {currFireRate::%player's uuid%} to 0
-
-
-on left click with bow: # TAC USE
-	if name of player's held item is "%{wc}%Rapid Bow": 
-		if {godlike-ULT-USE::%player's uuid%::RB} is set:
-			stop
-		else if {tacCheck-fix::%player's uuid%} is set: # fix the drop issue, dropping triggers a left click event
-			delete {tacCheck-fix::%player's uuid%} 
-		else if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
-			if tacCHECK(player, {weapons::RB1::TAC-COST}) is true:
-				set {currFireRate::%player's uuid%} to 10
-				play sound "entity_generic_drink" with volume 1 and pitch 1 at player
-		else if tacCHECK(player, {weapons::RB::TAC-COST}) is true:
-			set {currFireRate::%player's uuid%} to 10
-			play sound "entity_generic_drink" with volume 1 and pitch 1 at player
-
-on drop of bow with priority low: # ULT USE
-	if name of event-item is "%{wc}%Rapid Bow":
-		cancel event
-		set {tacCheck-fix::%player's uuid%} to true # fix the drop issue, dropping triggers a left click event
-		if {class-perk::%player's uuid%::RB::perk} = {perk-check::3}:
-			rbMachineGun(player)
-		else:
-			if {godlike-ULT-CD::%player's uuid%::RB} is set:
-				set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RB}
-				if {_time} < {weapons::RB::ULT-CD}:
-					send "&cULT NOT READY!" to player
-			else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:
-				set {godlike-ULT-CD::%player's uuid%::RB} to now	
-				add potion effect of speed 2 without particles for 3 seconds to potion effects of player
-				wait 5 ticks
-				if name of player's held item is "%{wc}%Rapid Bow": 
-					set player's held item to {class::weapon::RD}
-				else:
-					wait 5 ticks
-					loop player's inventory:
-						if name of loop-value is "%{wc}%Rapid Bow":
-							set {_i} to index of loop-value
-							set slot {_i} of player's inventory to {class::weapon::RD}
-							stop loop
-				# ULT CD
-				wait {weapons::RB::ULT-CD}
-				delete {godlike-ULT-CD::%player's uuid%::RB}	
-				if {class::%player's uuid%} = "RB":
-					play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
-
-
-function rbMachineGun(p: player): # perk 3
-	set {_uuid} to {_p}'s uuid
-	if {general-perk::%{_uuid}%::perk} = 22:
-		set {_ultCooldown} to {special::%{_uuid}%::ULT-CD}
-	else:
-		set {_ultCooldown} to {weapons::RB1::ULT-CD}
-	if {godlike-ULT-USE::%{_uuid}%::RB} is set:
-		send "&cULT ALREADY ACTIVATED!" to {_p}
-	else if {godlike-ULT-CD::%{_uuid}%::RB} is set:
-		set {_time} to difference between now and {godlike-ULT-CD::%{_uuid}%::RB}
-		if {_time} < {_ultCooldown}:
-			send "&cULT NOT READY!" to {_p}
-	else if ultCHECK({_p}, {weapons::RB1::ULT-COST}) is true:
-		set {godlike-ULT-CD::%{_uuid}%::RB} to now
-
-		set {_speed} to 0.5
-		loop 50 times:
-			if name of {_p}'s held item is "%{wc}%Rapid Bow": 
-				if {_speed} < 1.5:
-					add 0.1 to {_speed}
-					shoot a arrow from {_p} at speed {_speed}
-				else:
-					if {_speed} < 3:
-						add 0.1 to {_speed}
-					set {_l} to location 0.5 in front of {_p}
-					add 1.5 to y-coord of {_l}
-					set {_y} to a random number between -4 and 4 
-					set {_pitch} to a random number between -4 and 4
-					add {_y} to yaw of {_l}
-					add {_pitch} to pitch of {_l}
-					shoot a arrow from {_l} at speed {_speed}
-				#
-				set metadata value "attacker" of shot projectile to {_p}
-				set metadata value "type" of shot projectile to "RB1"
-				play sound "entity_arrow_shoot" with volume 3 and pitch 1 at {_p}
-
-			wait 2 tick
-
-		set {godlike-ULT-CD::%{_uuid}%::RB} to now	
-		delete {godlike-ULT-USE::%{_uuid}%::RB}
-		# ULT CD
-		wait {_ultCooldown}
-		delete {godlike-ULT-CD::%{_uuid}%::RB}	
-		if {class::%{_uuid}%} = "RB":
-			play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 
 on damage of living entity:
 	if event-damagecause is a projectile:
 		if event-projectile is a arrow:
-			if metadata value "type" of event-projectile is "RB" or "RB1":
+			if metadata value "type" of event-projectile is "RB":
 				set {_attacker} to metadata value "attacker" of event-projectile
 				updateAttacker({_attacker}, victim)
-
-on held item change:	
-	set {currFireRate::%player's uuid%} to 0
+				directAttack(victim)
+				if metadata value "fire" of event-projectile is true:
+					set fire to victim for 4 seconds
+				if {class-perk::%{_attacker}'s uuid%::RB::perk} = {perk-check::1}:
+					add potion effect of speed 3 without particles for 1 seconds to potion effects of {_attacker}
+				else:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of {_attacker}

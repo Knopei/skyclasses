@@ -19,8 +19,6 @@ options:
 
 	RB: unbreakable bow of infinity 1 named "&6Rapid Bow" 
 	RD: unbreakable stone sword named "&6Rapid Dagger" 
-	RB1: unbreakable bow of infinity 1 named "&6Rapid Bow" 
-	RD1: unbreakable stone sword named "&6Rapid Dagger" 
 
 	PF: unbreakable leather horse armor of unbreaking 1 named "&6Pirate Flintlock &e●" 
 	PC: unbreakable iron sword named "&6Pirate Cutlass" 
@@ -54,8 +52,6 @@ on load:
 	set {class::weapon::DS} to {@DS}
 	set {class::weapon::RB} to {@RB}
 	set {class::weapon::RD} to {@RD}
-	set {class::weapon::RB1} to {@RB1}
-	set {class::weapon::RD1} to {@RD1}
 	set {class::weapon::PF} to {@PF}
 	set {class::weapon::PC} to {@PC}
 	set {class::weapon::PC1} to {@PC1}

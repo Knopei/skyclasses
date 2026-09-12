@@ -28,10 +28,8 @@ on load:
 	set {weapons::DS::AD} to 4.5
 
 	# RB/RD
-	set {weapons::RB::R-AD} to 0.8
+	set {weapons::RB::R-AD} to 0.7
 	set {weapons::RD::AD} to 5
-	set {weapons::RB1::R-AD} to 0.7
-	set {weapons::RD1::AD} to 4.5
 
 	# PC/PC1
 	set {weapons::PC::AD} to 5
@@ -270,7 +268,7 @@ on damage of living entity with priority high: # base damage
 				set {_attacker} to metadata value "attacker" of victim
 				set damage to dmgUpdate({_attacker}, victim, {_dmg}, {_cause}, "none")
 	wait 1 tick
-	if {_w} is "RB" or "RB1":
+	if {_w} is "RB":
 		set victim's invulnerability time to 10 ticks
 	#else if {_cause} is "attack":
 	#	set victim's invulnerability time to 10 ticks

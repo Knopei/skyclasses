@@ -126,22 +126,11 @@ function sonicBeam(p: player, length: number):
 											if {_target} isn't {summon::%{_p}'s uuid%::summon}:
 												set {_firstHit} to true
 												summonTarget({_p}, {_target})
-												# WARDEN CPSS
-												if {class-perk::%{_p}'s uuid%::WH::perk} = {perk-check::1}:
-													heal {summon::%{_p}'s uuid%::summon} by 0.5 hearts
+												
 
 				add 1 to {_height}
 				set {_loc} to location 1 blocks below {_loc}
 		set {_r} to 1.25
-
-on damage of living entity: # WARDEN CPSS
-	if attacker is a player:
-		if name of attacker's held item is "%{wc}%Warden's Heart":
-			set {_summon} to {summon::%attacker's uuid%::summon}
-			if {_summon} is set:
-				if {_summon} isn't victim:
-					if {class-perk::%attacker's uuid%::WH::perk} = {perk-check::1}:
-						heal {_summon} by 0.5 hearts
 
 on right click with netherite axe:
 	if name of event-item is "%{wc}%Warden's Heart":

@@ -1,5 +1,4 @@
 on load:
-	wait 1 tick
 	# ZT
 	set {weapons::ZT::AS} to -2
 	set {weapons::ZT::TAC-COST} to 45
@@ -30,19 +29,11 @@ on load:
 	set {weapons::DS::ULT-CD} to 40 seconds
 	# RB
 	set {weapons::RB::AS} to -2
-	set {weapons::RB::ATK-COST} to 5
-	set {weapons::RB::TAC-COST} to 25
-	set {weapons::RB::ULT-COST} to 10
-	set {weapons::RB::ULT-CD} to 1 seconds
+	set {weapons::RB::TAC-COST} to 50
+	set {weapons::RB::ULT-COST} to 60
+	set {weapons::RB::ULT-CD} to 40 seconds
 
 	set {weapons::RD::AS} to -2
-	set {weapons::RD::TAC-COST} to 40
-
-	set {weapons::RB1::TAC-COST} to 40
-	set {weapons::RB1::ULT-COST} to 60
-	set {weapons::RB1::ULT-CD} to 40 seconds 
-	set {RB1-FirstHitAtkCost} to 25
-	set {weapons::RD1::AS} to -2
 	# PF/PC
 	set {weapons::PF::AS} to -2
 	set {weapons::PF::ATK-COST} to 15
@@ -159,8 +150,6 @@ function clearCurrClass(p: player):
 	set {_p}'s level to 0
 	set level progress of {_p} to 0
 	# CLASSES
-	# RB
-	set {currFireRate::%{_uuid}%} to 0
 	# PGS
 	remove absorption from active potion effects of {_p}	
 	# RS
