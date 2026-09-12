@@ -16,11 +16,12 @@ on drop of stone sword with priority low: # ULT USE
 			set {_ultCooldown} to {special::%player's uuid%::ULT-CD}
 		else:
 			set {_ultCooldown} to {weapons::RB::ULT-CD}
+		broadcast {_ultCooldown}
 		if {godlike-ULT-USE::%player's uuid%::WH} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
 		else if {godlike-ULT-CD::%player's uuid%::RB} is set:
 			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RB}
-			if {_time} < {weapons::RB::ULT-CD}:
+			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:	
 			set {godlike-ULT-USE::%player's uuid%::RB} to now
@@ -55,7 +56,7 @@ on drop of stone sword with priority low: # ULT USE
 						shoot a arrow from {_l} at speed {_speed}
 					#
 					set metadata value "attacker" of shot projectile to player
-					set metadata value "type" of shot projectile to "RB1"
+					set metadata value "type" of shot projectile to "RB"
 					play sound "entity_arrow_shoot" with volume 3 and pitch 1 at player
 					if {class-perk::%player's uuid%::RB::perk} = {perk-check::2}:
 						if {_count} >= 40:
@@ -77,8 +78,8 @@ on drop of stone sword with priority low: # ULT USE
 						set slot {_i} of player's inventory to {class::weapon::RD}
 						stop loop
 
-			set {godlike-ULT-CD::%player's uuid%::CB} to now	
-			delete {godlike-ULT-USE::%player's uuid%::CB}	
+			set {godlike-ULT-CD::%player's uuid%::RB} to now	
+			delete {godlike-ULT-USE::%player's uuid%::RB}	
 			# ULT CD
 			wait {_ultCooldown}
 			delete {godlike-ULT-CD::%player's uuid%::RB}	
