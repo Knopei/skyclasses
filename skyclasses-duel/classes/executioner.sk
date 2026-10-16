@@ -1,0 +1,457 @@
+# ============================================
+# EXECUTIONER (EA) — Executioner Axe
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Passive "Executioner's Mark": any damage you deal (melee/tac-buffed melee/
+#   ult/nade) that drops an enemy to <= 3 hearts (<= 4 at Perk 1) gives them
+#   a repeating 1-second Slowness 2 (particles hidden), refreshed every second,
+#   until they heal back above 3 full hearts or die. Cross-source — checked
+#   from every damage entry point that can hit that threshold: the melee/ult
+#   branch in 08-damage.sk's dmgUpdate(), and the grenade loop in
+#   07-consumables.sk (which bypasses dmgUpdate entirely). The actual
+#   threshold/clear check runs off real, current health on a global 1-second
+#   ticker (eaWatchTick, below) rather than off a predicted post-hit health —
+#   predicting it at hit time was unreliable once armor/crit/other damage
+#   modifiers (applied by the server after dmgUpdate() returns) are factored
+#   in, which is why the passive used to misfire at the wrong health levels.
+# Perk 1 (level 2) "Wider Mark": raises the passive's trigger threshold from
+#   <= 3 hearts to <= 4 hearts. The removal condition (heal above 3 full
+#   hearts) stays fixed regardless of level.
+# Ultimate visuals (Death's Toll): a 3D axe from the "executioner" resource pack (ea_pack.zip) rides over the player's head
+#   while charging — it swings up, then grows and reddens at each charge level and glows red at full charge. A landed hit
+#   slams it forward in the direction the player is looking; if the ult times out it tips back and fades away. Built from an
+#   item_display entity (see eaUltFx below). /eatest plays only this visual; /eafx tunes it. {ea-useAxeFx} (in "on load")
+#   switches back to the old particle semicircles.
+# Perk 2 (level 3) "Execution": Death's Toll's damage becomes a percent of
+#   the target's max health per charge level (25/50/75%), floored at the
+#   flat 2.5/5/7.5 tiers so it never does less than the un-perked version.
+# ============================================
+
+import:
+	org.bukkit.entity.EntityType
+	org.bukkit.entity.Display$Billboard as DisplayBillboard
+	org.bukkit.Color as BukkitColor
+	org.joml.Vector3f
+	org.joml.Quaternionf
+	org.bukkit.util.Transformation
+
+on load:
+	set {ea-useAxeFx} to true # true = the texture-pack axe above the player's head during the ult charge; false = the old particle semicircles + handle line
+	set {ea-fx::scale::1} to 1.1 # size of the axe (in blocks tall) at each charge level
+	set {ea-fx::scale::2} to 1.8
+	set {ea-fx::scale::3} to 2.6
+	set {ea-fx::raise-ticks} to 8 # how long the "raise / grow" animation takes at each level change
+	set {ea-fx::yaw-offset} to 270 # calibrated in-game: 270 makes the curved side of the blade face where the player looks. (/eafx yaw <n> still overrides it live) turns the axe so the CURVED side of the blade points where the player looks (uses the game's raw yaw). If it is off by a quarter/half turn, /eafx yaw <0|90|180|270> tries values live
+	set {ea-fx::swing} to -1 # which way the axe swings: it tips back for the wind-up and falls FORWARD (the way the blade points) on the finish. If it ever falls the wrong way, /eafx swing 1 flips it
+	set {ea-fx::lift} to 0.15 # extra gap between the top of the player's head and the bottom of the axe handle
+	loop all entities: # a reload kills the ult loops, so sweep any axe display they left behind
+		set {_x} to loop-entity
+		if {_x}.getScoreboardTags().contains("ea_fx"):
+			{_x}.remove()
+
+on right click with netherite axe: # TACTICAL — Cleaving Rush
+	if name of player's held item is "%{wc}%Executioner Axe":
+		if tacCHECK(player, {weapons::EA::TAC-COST}) is true:
+			push player horizontally forward at speed 0.6 # a shorter dash than the shared stamina dash (03-resources.sk), which double-pushes at 0.5 + 0.5
+			play sound "entity_player_attack_sweep" with volume 1 and pitch 0.8 at player
+			draw 15 of crit particle at player with extra 0.3
+			set {ea-tacBuff::%player's uuid%} to true
+			loop 10 times: # 1 second (10 x 2 ticks) — the buff's own expiry window. A landed melee hit consumes it instantly in 08-damage.sk's dmgUpdate(), which this loop notices via the flag being gone and stops on
+				if {ea-tacBuff::%player's uuid%} isn't set:
+					stop loop
+				set {_markerLow} to location of player
+				add 0.5 to y-coord of {_markerLow}
+				set {_markerHigh} to location of player
+				add 1 to y-coord of {_markerHigh}
+				draw 1 of smoke at {_markerLow} with extra 0 # two stacked white smoke puffs following the player while the buff is active (replaces the old black dust markers)
+				draw 1 of smoke at {_markerHigh} with extra 0
+				set {_axeLoc} to location 0.6 in front of player # the inline "at (location ... in front of player)" form used here before silently failed to draw anything — every other particle line in this codebase pre-computes its location into a variable first, so this does too
+				add 1 to y-coord of {_axeLoc} # roughly hand height
+				draw 8 of dust_color_transition particle using dustTransition(red, dark red, 0.6) at {_axeLoc} with offset vector(0.15, 0.15, 0.15) with extra 0.04 # red dust on the axe to show the buff is active — more particles with a small spread/offset so it reads clearly instead of a single faint pinprick
+				wait 2 tick
+			delete {ea-tacBuff::%player's uuid%} # no-op if a hit already consumed it inside the loop above
+
+on drop of netherite axe with priority low: # ULTIMATE — Death's Toll
+	if name of event-item is "%{wc}%Executioner Axe":
+		cancel event
+		if classLevel(player, "EA") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::EA::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::EA} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::EA} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::EA}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::EA::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::EA} to now
+			set {ea-chargeLevel::%player's uuid%} to 1 # level 1 is reached instantly (0 seconds) — hitting right away locks in the minimum tier
+			play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at player
+			loop 120 times: # 3 seconds to reach full charge (1.5s per level) + 3 more seconds of grace to land the hit = 6 seconds total
+				if {godlike-ULT-USE::%player's uuid%::EA} isn't set: # consumed by a landed hit — see 08-damage.sk's dmgUpdate() EA branch
+					stop loop
+				add 1 to {_tick}
+				if {_tick} = 30: # 1.5 seconds — level 2
+					set {ea-chargeLevel::%player's uuid%} to 2
+				else if {_tick} = 60: # 3 seconds — level 3, full charge, turns red
+					set {ea-chargeLevel::%player's uuid%} to 3
+					play sound "entity.wither.death" with volume 0.4 and pitch 2 at player
+				set {_level} to {ea-chargeLevel::%player's uuid%}
+
+				# 20%% damage reduction for the whole charge + grace window. Shares {playerDefense} with Reinforced Dash (06-perks-general.sk), which uses the same variable for its own (stronger, 40%%) reduction — so this only sets ours when nothing stronger is already active, and Reinforced Dash's higher value naturally wins while its own dash is in progress; the moment Reinforced Dash's loop ends and deletes {playerDefense}, this notices on the very next tick and restores our 20%% for as long as the ult is still charging/in grace
+				if {playerDefense::%player's uuid%} isn't set:
+					set {playerDefense::%player's uuid%} to 20
+				else if {playerDefense::%player's uuid%} < 20:
+					set {playerDefense::%player's uuid%} to 20
+
+				# self-slow alongside the damage reduction above — Slowness 2 while still charging (level < 3) only; no slow during the 3-second grace period. Refreshed every tick for a short duration so it expires quickly on its own the moment the loop stops (hit landed or timed out) rather than lingering
+				if {_level} < 3:
+					add potion effect of slowness 2 without particles for 3 ticks to potion effects of player
+
+				if {ea-useAxeFx} is true: # texture-pack visual (shared with /eatest) — see eaUltFx below
+					eaUltFx(player, {_level})
+				else: # the original particle visual
+					# charging animation — the shape library's "arc" rotation never landed right, so this plots the semicircles by hand instead, the same way the arrow-rotation bug earlier in this project got fixed: compute the actual points with trigonometry rather than trust a black-box rotation. Each semicircle's flat (diameter) edge runs vertically through the anchor, parallel to the handle line, and the curve bulges outward in whichever horizontal direction the player is currently facing
+					set {_yaw} to yaw of player
+					set {_bladeAnchor} to location of player
+					add 4 to y-coord of {_bladeAnchor} # near the top of the 4.5-block handle line
+					set {_full} to false
+					if {_level} >= 3: # Skript can't assign a comparison straight to a variable ("set {_x} to (a >= b)" doesn't parse) — this is the if/else equivalent
+						set {_full} to true
+					eaDrawSemicircle({_bladeAnchor}, 0.75, {_yaw}, {_full}) # radii scaled down ~25% from the original 1/2/3
+					if {_level} >= 2:
+						eaDrawSemicircle({_bladeAnchor}, 1.5, {_yaw}, {_full})
+					if {_level} >= 3:
+						eaDrawSemicircle({_bladeAnchor}, 2.25, {_yaw}, true)
+
+					set {_handle} to a line in direction vector(0, 1, 0) with length 4.5
+					set particle of {_handle} to 1 of dust_color_transition particle using dustTransition(black, dark gray, 1)
+					draw shape {_handle} at location of player
+
+
+				wait 1 tick
+			delete {_tick}
+			set {_fxHit} to true # the loop ended because a hit landed (flag consumed) rather than timing out
+			if {godlike-ULT-USE::%player's uuid%::EA} is set:
+				set {_fxHit} to false
+			if {ea-useAxeFx} is true:
+				eaUltFxEnd(player, {_fxHit})
+			if {playerDefense::%player's uuid%} = 20: # only clear OUR OWN reduction — if something stronger (e.g. Reinforced Dash) is currently active instead, leave it alone; it cleans up after itself
+				delete {playerDefense::%player's uuid%}
+			if {godlike-ULT-USE::%player's uuid%::EA} is set: # timed out with no hit landed — clean up without dealing damage
+				play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at player # same sound as activation, replayed to represent the axe lowering back down with nothing hit
+				delete {godlike-ULT-USE::%player's uuid%::EA}
+				delete {ea-chargeLevel::%player's uuid%}
+			set {godlike-ULT-CD::%player's uuid%::EA} to now
+			delete {godlike-ULT-CANCEL::%player's uuid%::EA}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::EA}
+			if {class::%player's uuid%} = "EA":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function eaRedstoneEffect(v: living entity): # redstone block-break particle + sound shared by the TAC's buffed hit and the ULT's finishing hit (both in 08-damage.sk's dmgUpdate())
+	set {_eaHitLoc} to location of {_v}
+	if {_v} is a cave spider: # Crawlers — shorter mob, particles sit lower
+		add 0.5 to y-coord of {_eaHitLoc}
+	else: # players and anything taller (zombies/Marauder, the Iron Golem) — roughly chest height
+		add 1.3 to y-coord of {_eaHitLoc}
+	make 25 of block particle using redstone block at {_eaHitLoc} with offset vector(0.3, 0.3, 0.3)
+	play sound "block.stone.break" with volume 1.8 and pitch 1.2 at {_eaHitLoc} # slightly louder than before
+
+function eaDrawSemicircle(center: location, radius: number, yaw: number, red: boolean): # one tick's worth of dust points along a semicircle whose FLAT (diameter) edge runs vertically through "center" (parallel to the handle line), with the curve bulging out horizontally in the direction "yaw" currently faces — hand-plotted point by point instead of relying on the shape library's "arc" rotation
+	set {_fwdX} to 0 - sin({_yaw}) # forward direction the player is facing; sin()/cos() are in degrees in this codebase, matching yaw's own units
+	set {_fwdZ} to cos({_yaw})
+	set {_steps} to 12
+	set {_i} to 0
+	loop {_steps} times:
+		set {_phi} to (({_i}/({_steps}-1))*180)-90 # sweeps -90 to 90 degrees — the vertical ends (phi = -90/90) sit directly above/below center with zero forward bulge, the middle (phi = 0, "the equator") bulges a full radius forward
+		set {_offUp} to {_radius}*sin({_phi})
+		set {_offForward} to {_radius}*cos({_phi})
+		set {_loc} to {_center}
+		set {_dx} to {_fwdX}*{_offForward}
+		set {_dz} to {_fwdZ}*{_offForward}
+		add {_dx} to x-coord of {_loc}
+		add {_offUp} to y-coord of {_loc}
+		add {_dz} to z-coord of {_loc}
+		if {_red} is true:
+			draw 1 of dust_color_transition particle using dustTransition(red, dark red, 1) at {_loc} with extra 0
+		else:
+			draw 1 of dust_color_transition particle using dustTransition(gray, light gray, 1) at {_loc} with extra 0
+		add 1 to {_i}
+
+# ---- PASSIVE: Executioner's Mark ----
+# eaMarkCheck() is called directly from 08-damage.sk's dmgUpdate() (melee/ult
+# hits) and 07-consumables.sk's grenade loop (nade hits) at the instant a hit
+# lands. It's deliberately lightweight (just a metadata stamp + a list add —
+# both instantaneous, no waits) because dmgUpdate() needs to return
+# synchronously to the damage event; it does NOT itself evaluate health. The
+# global eaWatchTick trigger below does the actual threshold/clear evaluation
+# once a second, off the entity's real current health.
+
+function eaMarkCheck(a: player, v: living entity):
+	set {_threshold} to 3 # hearts
+	if classLevel({_a}, "EA") >= 2: # Perk 1 (Wider Mark)
+		set {_threshold} to 4
+	set metadata value "eaThreshold" of {_v} to {_threshold} # always refreshed to the most recent attacker's perk level
+	if metadata value "eaWatching" of {_v} isn't set:
+		set metadata value "eaWatching" of {_v} to true
+		add {_v} to {eaWatch::*}
+
+every 1 second:
+	loop {eaWatch::*}:
+		set {_v} to loop-value
+		if (health of {_v}) <= 0: # dead/removed — stop watching
+			remove loop-value from {eaWatch::*}
+			delete metadata value "eaWatching" of {_v}
+			delete metadata value "eaThreshold" of {_v}
+		else if (health of {_v}) > 3: # healed back above 3 full hearts — clears regardless of which threshold marked them (health of X is already in hearts in this environment, 1 heart = 1 heart, not 2)
+			remove loop-value from {eaWatch::*}
+			delete metadata value "eaWatching" of {_v}
+			delete metadata value "eaThreshold" of {_v}
+		else:
+			set {_threshold} to metadata value "eaThreshold" of {_v}
+			if {_threshold} isn't set:
+				set {_threshold} to 3
+			if (health of {_v}) <= {_threshold}: # 1 heart = 1 heart here, not 2 — no *2
+				add potion effect of slowness 2 without particles for 1 seconds to potion effects of {_v} # re-applied every second for as long as the entity stays watched, so the slow never lapses
+
+on death of living entity: # stops watching immediately rather than waiting for the next 1-second tick to poll a dead/removed entity
+	if metadata value "eaWatching" of victim is set:
+		remove victim from {eaWatch::*}
+		delete metadata value "eaWatching" of victim
+		delete metadata value "eaThreshold" of victim
+
+
+# ============================================
+# ULT CHARGE VISUAL (texture pack) — used by the real ultimate AND by /eatest
+# A flat axe sprite (an item_display wearing the "executioner:ult_axe_<level>" item model from ea_pack) rides on the
+# player's head (it is a PASSENGER of the player, so it moves with them with zero lag) and is turned every tick so its
+# blade points where the player is looking. It starts small and tilted at hip height, then SWINGS UP to vertical
+# while growing as it moves up through the charge levels: level 1 = steel, 2 = bigger and red-tinted, 3 = biggest, bright
+# red, glowing (outline glow + pulsing animated texture). On a landed hit it slams forward; on a timeout it lowers away.
+# Everything is a plain Display entity, so it only needs the pack for the skins — scale/position/animation are server-side.
+# ============================================
+
+function eaFxItem(level: number) :: itemtype: # a netherite axe wearing the level's custom item model
+	set {_i} to netherite axe
+	add nbt compound of "{""minecraft:item_model"":""executioner:ult_axe_%{_level}%""}" to nbt of {_i}
+	return {_i}
+
+function eaFxTransform(d: entity, ty: number, scale: number, roll: number, ticks: number): # sets where/how big/how tilted the sprite is; the client animates there over {ticks} ticks
+	{_d}.setInterpolationDelay(0)
+	{_d}.setInterpolationDuration({_ticks})
+	set {_s} to {_scale} + 0.0
+	set {_y} to {_ty} + 0.0
+	set {_rad} to ((({_roll} * {ea-fx::swing}) * 3.14159265) / 180) + 0.0 # degrees -> radians (roll = tilt of the axe from upright, positive tips it forward/right)
+	set {_q} to new Quaternionf()
+	{_q}.rotateZ({_rad})
+	set {_t} to new Transformation(new Vector3f(0.0, {_y}, 0.0), {_q}, new Vector3f({_s}, {_s}, {_s}), new Quaternionf())
+	{_d}.setTransformation({_t})
+
+function eaUltFx(p: player, level: number): # call once per tick while charging; spawns the axe, follows the player, and animates level changes
+	set {_d} to metadata value "eaFxDisplay" of {_p}
+	set {_spawn} to false
+	if {_d} is not set:
+		set {_spawn} to true
+	else if {_d} is not alive:
+		set {_spawn} to true
+	set {_pos} to location of {_p}
+	add 1.9 to y-coord of {_pos} # (only used to place the particles below)
+	set {_ploc} to {_p}.getLocation()
+	set {_rawYaw} to {_ploc}.getYaw() # the game's own yaw (0 = facing south), not Skript's normalised one
+	set {_faceYaw} to ({_rawYaw} + {ea-fx::yaw-offset}) + 0.0
+	if {_spawn} is true:
+		set {_d} to {_pos}.getWorld().spawnEntity({_pos}, EntityType.ITEM_DISPLAY)
+		set metadata value "eaFxDisplay" of {_p} to {_d}
+		set metadata value "eaFxLevel" of {_p} to 0
+		{_d}.addScoreboardTag("ea_fx")
+		{_d}.setPersistent(false)
+		{_d}.setBillboard(DisplayBillboard.FIXED) # not a billboard any more: it keeps the direction we give it
+		{_d}.setRotation({_faceYaw}, 0.0)
+		set {_ok} to {_p}.addPassenger({_d}) # rides the player's head — no teleporting, so no follow lag
+		if {_ok} is false: # (mounting refused for some reason — fall back to teleporting it along every tick)
+			set metadata value "eaFxTeleport" of {_p} to true
+		set {_it} to eaFxItem(1)
+		{_d}.setItemStack({_it}.getRandom())
+		eaFxTransform({_d}, -0.5, 0.4, 75, 0) # starts small, tipped back, low over the head
+		play sound "item.armor.equip_netherite" with volume 1 and pitch 0.7 at {_p}
+		stop # the first tick only places it; the next tick animates it up
+	if metadata value "eaFxTeleport" of {_p} is set: # fallback follow (only if mounting failed)
+		set {_tp} to {_pos}
+		set yaw of {_tp} to {_faceYaw}
+		{_d}.teleport({_tp})
+	else:
+		{_d}.setRotation({_faceYaw}, 0.0) # turn with the player
+	set {_lv} to metadata value "eaFxLevel" of {_p}
+	set {_scale} to {ea-fx::scale::%{_level}%}
+	set {_ty} to ({_scale} * 0.5) + {ea-fx::lift} # sprite centre this far above the riding point (top of the head) => its bottom edge sits just over the head
+	if {_lv} != {_level}:
+		set metadata value "eaFxLevel" of {_p} to {_level}
+		set {_it} to eaFxItem({_level})
+		{_d}.setItemStack({_it}.getRandom())
+		eaFxTransform({_d}, {_ty}, {_scale}, 0, {ea-fx::raise-ticks})
+		set {_c} to {_pos}
+		add ({_scale} * 0.5) to y-coord of {_c}
+		if {_level} = 2:
+			play sound "block.anvil.land" with volume 0.6 and pitch 0.6 at {_p}
+			draw 20 of dust_color_transition particle using dustTransition(red, dark red, 1.4) at {_c} with offset vector(0.6, 0.6, 0.6) with extra 0
+		if {_level} >= 3:
+			{_d}.setGlowing(true)
+			{_d}.setGlowColorOverride(BukkitColor.fromRGB(255, 30, 30))
+			play sound "block.beacon.power_select" with volume 0.8 and pitch 0.5 at {_p}
+			draw 35 of flame at {_c} with offset vector(0.8, 0.8, 0.8) with extra 0.05
+			draw 25 of dust_color_transition particle using dustTransition(red, orange, 1.6) at {_c} with offset vector(0.8, 0.8, 0.8) with extra 0
+	if {_level} >= 2: # ambient embers so the charge reads even from far away
+		set {_c2} to {_pos}
+		add ({_scale} * 0.5) to y-coord of {_c2}
+		draw 2 of dust_color_transition particle using dustTransition(red, dark red, 1) at {_c2} with offset vector(0.4, 0.5, 0.4) with extra 0
+		if {_level} >= 3:
+			draw 3 of dust_color_transition particle using dustTransition(red, orange, 1.2) at {_c2} with offset vector(0.6, 0.8, 0.6) with extra 0
+			draw 1 of lava at {_c2} with offset vector(0.5, 0.6, 0.5) with extra 0
+
+function eaUltFxEnd(p: player, hit: boolean): # hit = the axe slams forward; otherwise it just lowers away. Removes the display either way.
+	set {_d} to metadata value "eaFxDisplay" of {_p}
+	set {_lv} to metadata value "eaFxLevel" of {_p}
+	delete metadata value "eaFxDisplay" of {_p}
+	delete metadata value "eaFxLevel" of {_p}
+	delete metadata value "eaFxTeleport" of {_p}
+	if {_lv} is not set:
+		set {_lv} to 1
+	if {_lv} < 1:
+		set {_lv} to 1
+	if {_d} is set:
+		if {_d} is alive:
+			set {_scale} to {ea-fx::scale::%{_lv}%}
+			if {_hit} is true:
+				eaFxTransform({_d}, 0.2, {_scale}, -80, 4) # chops down and forward
+				wait 4 ticks
+				if {_d} is alive:
+					set {_at} to {_d}.getLocation()
+					draw 25 of crit at {_at} with offset vector(0.6, 0.4, 0.6) with extra 0.3
+			else:
+				eaFxTransform({_d}, -0.5, 0.4, 75, 8) # tips back and shrinks away
+				wait 8 ticks
+			if {_d} is alive:
+				{_d}.remove()
+
+function eaUltFxKill(p: player): # instant cleanup (player left / died / test aborted)
+	set {_d} to metadata value "eaFxDisplay" of {_p}
+	delete metadata value "eaFxDisplay" of {_p}
+	delete metadata value "eaFxLevel" of {_p}
+	delete metadata value "eaFxTeleport" of {_p}
+	if {_d} is set:
+		if {_d} is alive:
+			{_d}.remove()
+
+on quit:
+	eaUltFxKill(player)
+
+on death of player:
+	eaUltFxKill(victim)
+
+# ---- TEST COMMAND: only the ult's visuals, no cost, no cooldown, no damage, no slow ----
+# /eatest        plays the charge (level 1 -> 2 at 1.5s -> 3 at 3s), holds full charge, then slams on a "hit" 1.5s later
+# /eatest miss   same charge but lets it time out like an ult that never landed a hit (6 seconds total)
+# /eatest old    the original particle visual (semicircles + handle line) for comparison
+command /eatest [<text>]:
+	permission: op
+	description: Plays only the Executioner ultimate's visual effects (no cost, cooldown or damage)
+	trigger:
+		if {ea-test::%player's uuid%} is set:
+			send "&cThe test is already running."
+			stop
+		if {godlike-ULT-USE::%player's uuid%::EA} is set:
+			send "&cYour real ultimate is active — wait for it to finish."
+			stop
+		set {ea-test::%player's uuid%} to true
+		set {_mode} to arg-1
+		set {_old} to false
+		set {_miss} to false
+		set {_max} to 100 # 1.5 seconds at full charge, then the slam
+		if {_mode} is "miss":
+			set {_miss} to true
+			set {_max} to 120
+		if {_mode} is "old":
+			set {_old} to true
+		send "&7Running the Executioner ult visuals (&f%{_mode}%&7)..."
+		play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at player
+		set {_level} to 1
+		set {_tick} to 0
+		set {_yaw} to yaw of player
+		while {_tick} < {_max}:
+			if player is not online:
+				stop loop
+			add 1 to {_tick}
+			if {_tick} = 30:
+				set {_level} to 2
+			else if {_tick} = 60:
+				set {_level} to 3
+				play sound "entity.wither.death" with volume 0.4 and pitch 2 at player
+			if {_old} is true:
+				set {_yaw} to yaw of player
+				set {_bladeAnchor} to location of player
+				add 4 to y-coord of {_bladeAnchor}
+				set {_full} to false
+				if {_level} >= 3:
+					set {_full} to true
+				eaDrawSemicircle({_bladeAnchor}, 0.75, {_yaw}, {_full})
+				if {_level} >= 2:
+					eaDrawSemicircle({_bladeAnchor}, 1.5, {_yaw}, {_full})
+				if {_level} >= 3:
+					eaDrawSemicircle({_bladeAnchor}, 2.25, {_yaw}, true)
+				set {_handle} to a line in direction vector(0, 1, 0) with length 4.5
+				set particle of {_handle} to 1 of dust_color_transition particle using dustTransition(black, dark gray, 1)
+				draw shape {_handle} at location of player
+			else:
+				eaUltFx(player, {_level})
+			wait 1 tick
+		if {_miss} is true:
+			play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at player # same lowering sound as a real timeout
+			eaUltFxEnd(player, false)
+		else:
+			if {_old} is true:
+				eaUltFxKill(player)
+			else:
+				eaUltFxEnd(player, true)
+			set {_hitLoc} to location 3 in front of player # the landed-hit effect, played on a spot in front of you (same particles and sound as eaRedstoneEffect)
+			add 1.3 to y-coord of {_hitLoc}
+			make 25 of block particle using redstone block at {_hitLoc} with offset vector(0.3, 0.3, 0.3)
+			play sound "block.stone.break" with volume 1.8 and pitch 1.2 at {_hitLoc}
+		delete {ea-test::%player's uuid%}
+		send "&7Done."
+
+# ---- LIVE TUNING for the axe visual (takes effect the next time the visual starts, e.g. the next /eatest) ----
+# /eafx                 shows the current numbers
+# /eafx yaw 0           which way the blade points (try 0, 90, 180, -90 until it points where you look)
+# /eafx swing -1        which way the axe tips/falls (-1 = falls toward where you look, 1 = the other way)
+# /eafx lift 0.3        gap between the top of the head and the handle (can be negative)
+# /eafx scale1 1.1      axe size at charge level 1 (also scale2, scale3)
+# (to keep a value, copy it into the "on load" block at the top of this file)
+command /eafx [<text>] [<number>]:
+	permission: op
+	description: Tunes the Executioner ult axe visual live
+	trigger:
+		set {_k} to arg-1
+		if {_k} is not set:
+			send "&7yaw &f%{ea-fx::yaw-offset}% &8| &7swing &f%{ea-fx::swing}% &8| &7lift &f%{ea-fx::lift}% &8| &7scales &f%{ea-fx::scale::1}%&7/&f%{ea-fx::scale::2}%&7/&f%{ea-fx::scale::3}%"
+			stop
+		if arg-2 is not set:
+			send "&cGive a number, e.g. &f/eafx yaw 0"
+			stop
+		if {_k} is "yaw":
+			set {ea-fx::yaw-offset} to arg-2
+		else if {_k} is "swing":
+			set {ea-fx::swing} to arg-2
+		else if {_k} is "lift":
+			set {ea-fx::lift} to arg-2
+		else if {_k} is "scale1":
+			set {ea-fx::scale::1} to arg-2
+		else if {_k} is "scale2":
+			set {ea-fx::scale::2} to arg-2
+		else if {_k} is "scale3":
+			set {ea-fx::scale::3} to arg-2
+		else:
+			send "&cUnknown setting. Use yaw, swing, lift, scale1, scale2 or scale3."
+			stop
+		send "&aSet &f%{_k}% &ato &f%arg-2%&a. Run &f/eatest &ato see it."

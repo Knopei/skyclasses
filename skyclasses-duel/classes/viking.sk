@@ -1,0 +1,119 @@
+# ============================================
+# VIKING (VBA) — Viking Battle Axe
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Perk 1 (level 2) "Joyful to Furious": refines the health-scaling damage
+#   formula in vbaCHECK() below into more dramatic tiers.
+# Perk 2 (level 3) "Victim Chase": while the ultimate is active, the tactical's
+#   on-hit speed is empowered from speed 2 to speed 3 (the ultimate's own
+#   speed buff is now a flat speed 2 regardless of this perk).
+# ============================================
+
+on right click with iron axe: # TACTICAL
+	if name of player's held item is "%{wc}%Viking Battle Axe":
+		if tacCHECK(player, {weapons::VBA::TAC-COST}) is true:
+			shoot a arrow from player at speed 2.5
+			set metadata value "type" of shot projectile to "VBA"
+			set metadata value "attacker" of shot projectile to player
+			set metadata value "balanceSource" of shot projectile to "TAC" # 19-balance-stats.sk
+			play sound "entity_arrow_shoot" with volume 3 and pitch 1 at player
+			while metadata value "hit" of shot projectile isn't set:
+				draw 5 of dust_color_transition using dustTransition(orange, red, 0.5) at shot projectile with offset vector(0, 0, 0) with extra 0
+				if (y-coord of shot projectile) < -75:
+					set metadata value "hit" of shot projectile to true
+				wait 1 tick
+			kill shot projectile
+
+on damage of living entity: # tactical arrow hit effect
+	if event-damagecause is a projectile:
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "VBA":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+				if classLevel({_attacker}, "VBA") >= 3: # Perk 2 (Victim Chase) — empowers the tactical's on-hit speed while the ultimate is active, instead of boosting the ultimate's own speed buff directly
+					if {godlike-ULT-USE::%{_attacker}'s uuid%::VBA} is set:
+						add potion effect of speed 3 for 3 seconds to potion effects of {_attacker}
+					else:
+						add potion effect of speed 2 for 3 seconds to potion effects of {_attacker}
+				else:
+					add potion effect of speed 2 for 3 seconds to potion effects of {_attacker}
+				add potion effect of slowness 1 for 3 seconds to potion effects of victim
+				make 25 of block particle using redstone block at block 1.5 above location of victim
+				play sound "BLOCK_STONE_BREAK" at volume 5 at location of victim
+
+on damage of living entity: # ultimate hit sound cue
+	if event-damagecause is attack:
+		if name of attacker's held item is "%{wc}%Viking Battle Axe":
+			if {godlike-ULT-USE::%attacker's uuid%::VBA} is set:
+				play sound "ENTITY_ENDER_DRAGON_HURT" with volume 1 and pitch 1 at victim
+
+on drop of iron axe with priority low: # ULTIMATE
+	if name of event-item is "%{wc}%Viking Battle Axe":
+		cancel event
+		if classLevel(player, "VBA") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::VBA::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::VBA} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::VBA} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::VBA}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::VBA::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::VBA} to now # kept set from the moment of activation — blocks re-triggering below and is what 09-death-match.sk's generic death-cancel check keys off of
+			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1 at player
+			wait 20 ticks # 1s telegraph after the sound, before the speed buff and health-scaling damage bonus actually apply — gives the opponent a moment to react
+			if {godlike-ULT-CANCEL::%player's uuid%::VBA} isn't set: # died during the telegraph window (09-death-match.sk)
+				set {godlike-ULT-READY::%player's uuid%::VBA} to true # read by vbaCHECK() below instead of ULT-USE, so the damage bonus only kicks in once the telegraph has actually finished
+				add potion effect of speed 2 without particles for 10 seconds to potion effects of player # flat now — Perk 2 (Victim Chase) instead empowers the tactical's on-hit speed to 3 while this window is active (see "on damage of living entity" above)
+			# VISUAL
+			set {_shapes::circle} to a circle with radius 1.25
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(orange, red, 0.5)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			loop 200 times:
+				if {godlike-ULT-CANCEL::%player's uuid%::VBA} is set:
+					stop loop
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				draw 1 of angry villager at block above player with offset vector(0.5, 0.5, 0.5) with extra 0.1
+				wait 1 tick
+			set {godlike-ULT-CD::%player's uuid%::VBA} to now
+			delete {godlike-ULT-USE::%player's uuid%::VBA}
+			delete {godlike-ULT-READY::%player's uuid%::VBA}
+			delete {godlike-ULT-CANCEL::%player's uuid%::VBA}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::VBA}
+			if {class::%player's uuid%} = "VBA":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function vbaCHECK(a: living entity, v: living entity, dmg: number, crit: text) :: number:
+	if {_a} is a player:
+		if name of {_a}'s held item is "%{wc}%Viking Battle Axe":
+			if classLevel({_a}, "VBA") >= 2: # Perk 1: refined health-scaling tiers
+				if {godlike-ULT-READY::%{_a}'s uuid%::VBA} is set: # ULT-USE alone isn't enough anymore — this only flips true once the ultimate's 0.5s telegraph has finished (see the "on drop of iron axe" ultimate above)
+					set {_factor} to 0.75
+				else if {_a}'s health <= 3:
+					set {_factor} to 0.75
+				else if {_a}'s health <= 5:
+					set {_factor} to 0.5
+				else if {_a}'s health <= 7:
+					set {_factor} to 0.25
+				if {_factor} is set:
+					set {_return} to {_dmg}*{_factor}
+					if {_crit} = "critical":
+						remove {_factor} from {_return}
+			else: # base scaling, before Perk 1
+				if {godlike-ULT-READY::%{_a}'s uuid%::VBA} is set:
+					set {_factor} to 0.4
+				else if {_a}'s health <= 3:
+					set {_return} to 0.5
+				else if {_a}'s health <= 5:
+					set {_return} to 0.25
+				if {_factor} is set:
+					set {_return} to {_dmg}*{_factor}
+					if {_crit} = "critical":
+						remove 0.75 from {_return}
+			return {_return}

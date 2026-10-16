@@ -1,0 +1,154 @@
+# ============================================
+# MIGHTY (MH) — Mighty Hammer
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Passive "Hammer Down" is flavor text only (Mighty also wields a mace, same
+#   as Frankenstein's — see 02-class-data.sk's class-display::MH).
+# Perk 1 (level 2) "Grenade Protection": take less damage from grenades —
+#   handled in 07-consumables.sk's grenadeExplosion() damage loop, not in this
+#   file. Used to be Mighty's baseline (level 0) passive; "More Explosions!"
+#   (faster grenade recharge) used to be the level 2 perk and has been removed.
+# Perk 2 (level 3) "Fire Pit": adds a fire ring on ultimate landing.
+# Tactical damage is 20% of the target's max health, capped at 4.
+# "Bouncy Explode" (tactical pushes you upward when looking down) was cut per
+# design decision — the original 3-perk kit is trimmed to 2 slots.
+# ============================================
+
+function mightyExplosion(p: player, radius: integer):
+	set {_r} to ceil({_radius} - 1)
+	if {_radius} > 3:
+		set {_s} to 2
+	else:
+		set {_s} to 1
+	create a fake explosion at {_p}
+	draw {_radius} of explosion at {_p} with offset vector({_s}, {_s}, {_s}) with extra 0
+	draw 10 of large_smoke at {_p} with extra 0.5
+	draw 50 of dust_color_transition using dustTransition(cyan, white, {_s}) at {_p} with offset vector({_r}, {_r}, {_r}) with extra 0.5
+
+on right click with mace: # TACTICAL
+	if name of player's held item is "%{wc}%Mighty Hammer":
+		if tacCHECK(player, {weapons::MH::TAC-COST}) is true:
+			mightyExplosion(player, 3)
+			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
+			loop all living entities in radius 3.5 around player:
+				if loop-entity is not player:
+					if metadata value "levelTag" of loop-entity isn't set: # FIX: the level-tag armor stand riding the player (04-leveling.sk) sits at the player's own location, so it's always inside this radius — without this check it gets hit/pushed/teleported right along with real targets
+						updateAttacker(player, loop-entity)
+						directAttack(loop-entity)
+						push loop-entity upward at speed 0.75
+						set {_tacDmg} to (max health of loop-entity) * 0.2 # 20% of the target's max health, capped at 4, floored at 1.8
+						if {_tacDmg} > 4:
+							set {_tacDmg} to 4
+						else if {_tacDmg} < 1.8:
+							set {_tacDmg} to 1.8
+						damage loop-entity by {_tacDmg}
+			delete {balance-abilitySource::%player's uuid%}
+
+on drop of mace with priority low: # ULTIMATE
+	if name of event-item is "%{wc}%Mighty Hammer":
+		cancel event
+		if {mighty-DASH::%player's uuid%} is set: # mid-air follow-up dash, doesn't need level gating (part of an already-active ultimate)
+			push player forward at speed 3
+			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
+			delete {mighty-DASH::%player's uuid%}
+			stop
+		if classLevel(player, "MH") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::MH::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::MH} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::MH} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::MH}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::MH::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::MH} to now
+			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
+			# leap
+			create a fake explosion at player
+			set velocity of player to vector(0, 0, 0)
+			push player upward at speed 2.5
+			wait 10 ticks
+			set {mighty-DASH::%player's uuid%} to true
+
+			set {_shapes::circle} to a circle with radius 1
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, white, 1)
+
+			while player isn't on ground: # longer air time = more slam damage + push
+				if {godlike-ULT-CANCEL::%player's uuid%::MH} is set: # dying mid-leap freezes the player with flight enabled, so they'd never naturally register as "on ground" to end this loop otherwise
+					stop loop
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				draw shapes {_shapes::*} at {_loc}
+				add 1 to {_airTime}
+				wait 1 tick
+			# slam
+			delete {mighty-DASH::%player's uuid%}
+			if {godlike-ULT-CANCEL::%player's uuid%::MH} isn't set:
+				mightyExplosion(player, 5.5)
+				loop all living entities in radius 5.5 around player:
+					if loop-entity is not player:
+						if metadata value "levelTag" of loop-entity isn't set: # FIX: excludes the level-tag armor stand itself (04-leveling.sk) from being hit directly as its own loop-entity — but it rides whichever PLAYER it's tagged to as a passenger, so a victim player caught in this loop still needed the teleport-to-self below replaced (see the comment on that line) or their own armor stand would get knocked off them the same way the caster's used to
+							updateAttacker(player, loop-entity)
+							directAttack(loop-entity)
+							set {_dis} to distance between player and loop-entity
+							set {_d} to abs({_dis} - 6)
+							if {_d} < 2.5:
+								set {_d} to 2.5
+							else if {_d} > 3.5:
+								set {_d} to 3.5
+							set {_d} to ({_airTime}*0.05) + {_d}
+							if {_d} > 5:
+								set {_d} to 5
+							set {_v} to vector between player and loop-entity
+							wait 1 tick
+							set {balance-abilitySource::%player's uuid%} to "ULT" # 19-balance-stats.sk
+							damage loop-entity by {_d}
+							delete {balance-abilitySource::%player's uuid%}
+							set velocity of loop-entity to vector(0, 0, 0) # was "teleport loop-entity to loop-entity" — self-teleporting a PLAYER victim here would dismount their own level-tag armor stand exactly like it used to for the caster, since the levelTag exclusion above only protects the armor stand entity itself, not whichever player it happens to be riding
+							push loop-entity {_v} at speed {_d}
+			# PERK 2 — Fire Pit
+			if classLevel(player, "MH") >= 3:
+				set {_shapes::circle} to a circle of radius 5
+				set {_shapes::line-1} to a line in direction vector(0, 0, 1) with length 5
+				set {_shapes::line-2} to a line in direction vector(0, 0, -1) with length 5
+				set {_shapes::line-3} to a line in direction vector(1, 0, 0) with length 5
+				set {_shapes::line-4} to a line in direction vector(-1, 0, 0) with length 5
+				set {_ultDmgRadius} to 5.25
+
+				set {_loc} to player's location
+				set {_y-max} to y-coord of {_loc}+2
+				set {_y-min} to y-coord of {_loc}-2
+
+				set {_n} to 3
+				loop 13 times:
+					set {_rotation} to rotation around vector(0, 1, 0) by 20 degrees
+					rotate shapes {_shapes::*} by {_rotation}
+					draw shapes {_shapes::*} at {_loc}
+
+					add 1 to {_n}
+					if {_n} = 4:
+						delete {_n}
+						loop all living entities in radius {_ultDmgRadius} around {_loc}:
+							if loop-entity is not player:
+								if metadata value "levelTag" of loop-entity isn't set: # FIX: same level-tag exclusion as the two loops above
+									if y-coord of loop-entity is between {_y-max} and {_y-min}:
+										updateAttacker(player, loop-entity)
+										if loop-entity is a player:
+											setFireSource(loop-entity, "ULT", 2) # 19-balance-stats.sk — bounded to the exact 2-second burn below, read by dmgUpdate() when the fire-tick damage lands
+										set fire to loop-entity for 2 seconds
+					wait 5 tick
+
+			set {godlike-ULT-CD::%player's uuid%::MH} to now
+			delete {godlike-ULT-CANCEL::%player's uuid%::MH}
+			delete {godlike-ULT-USE::%player's uuid%::MH}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::MH}
+			if {class::%player's uuid%} = "MH":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on death of player: # cancels the slam if Mighty dies mid-air during their ultimate
+	if {godlike-ULT-USE::%victim's uuid%::MH} is set:
+		set {godlike-ULT-CANCEL::%victim's uuid%::MH} to true
+		delete {mighty-DASH::%victim's uuid%}

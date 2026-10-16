@@ -1,0 +1,326 @@
+# ============================================
+# CYBERPUNK (CB) — Cyberpunk Blade
+# Tactical: always available (Malicious Dart — a damaging utility dart that
+#   disables stamina usage). Ultimate: unlocks at class level 1 (Cyber
+#   Glitch — a short phase-dash through doors/terrain, on a 2-charge system
+#   instead of a normal single-use cooldown; see cbULT() below).
+# Passive: Mana Breach — while below half max mana, damage you deal steals
+#   some of the target's mana.
+# Perk 1 (level 2) "Stamina Lockout": Malicious Dart's stamina-disable lasts
+#   longer.
+# Perk 2 (level 3) "Overclock": ultimate charges recharge faster.
+#
+# NOTE on the ultimate's charge system: cbULT() is a background loop started
+# once from 05-class-menu.sk's classSelect() the moment a player equips CB,
+# and it self-terminates the instant {class-ID::%uuid%} no longer matches the
+# life it was started for (death, respawn, or switching away from CB) — the
+# same class-ID mechanism classSelect() already uses for its own bookkeeping.
+# It ticks up to a max of 2 stored charges, one every {weapons::CB::ULT-CD}
+# (or the shorter Overclock value at level 3), independently of whether the
+# player is actually using them. Each activation of Cyber Glitch spends one
+# charge AND still costs mana via ultCHECK() — the charge system limits how
+# often it can be used even with full mana banked.
+# ============================================
+
+function cbPSS(a: player, v: living entity, mana: integer): # Mana Breach — passive mana steal while below half mana
+	set {_uuid} to {_a}'s uuid
+	set {_check} to {mana::%{_uuid}%::max} / 2
+	if {mana::%{_uuid}%::curr} <= {_check}:
+		set {_mana} to {_mana} * 10 # internal units — actionBar()/03-resources.sk store mana at x10
+		add {_mana} to {mana::%{_uuid}%::curr}
+		remove {_mana} from {mana::%{_v}'s uuid%::curr}
+
+function cbDart(p: player): # Malicious Dart (TAC)
+	shoot a arrow from {_p} at speed 2.5
+	set metadata value "type" of shot projectile to "CB"
+	set metadata value "attacker" of shot projectile to {_p}
+	set metadata value "balanceSource" of shot projectile to "TAC" # 19-balance-stats.sk
+	play sound "entity_arrow_shoot" with volume 3 and pitch 1.5 at {_p}
+	while metadata value "hit" of shot projectile isn't set:
+		draw 5 of dust_color_transition using dustTransition(cyan, light green, 0.5) at shot projectile with offset vector(0, 0, 0) with extra 0
+		if (y-coord of shot projectile) < -75:
+			set metadata value "hit" of shot projectile to true
+		wait 1 tick
+	kill shot projectile
+
+function cbPhaseableBlocks(loc: location, type: string) :: boolean: # "type" is kept for call-site compatibility but no longer used — see below
+	# REWRITTEN — the old version only recognized a fixed list of "known
+	# passable" block types (air, fern, short grass, torch, water), so a slab
+	# always counted as fully solid even at its empty half, which is exactly
+	# why phasing upward through a gap containing a slab never worked. This
+	# version checks Bukkit's own collision box for the block instead: a zero-
+	# height box means it's fully passable (air, grass, torches, etc.), and for
+	# a partial block like a slab, the box only covers its actual solid half —
+	# so a point sitting above a bottom slab (or below a top slab) correctly
+	# reads as open, while a point inside the solid half correctly reads as
+	# blocked.
+	set {_block} to block at {_loc}
+	set {_box} to {_block}.getBoundingBox()
+	set {_minY} to {_box}.getMinY()
+	set {_maxY} to {_box}.getMaxY()
+	set {_testY} to y-coord of {_loc}
+	if {_minY} = {_maxY}: # zero-height box — fully passable
+		return true
+	else if {_testY} >= {_maxY}: # this exact point sits at/above the box's solid top surface
+		return true
+	else if {_testY} < {_minY}: # sits below the box's solid bottom surface
+		return true
+	else:
+		return false # inside the block's actual solid range
+
+function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see cbCalcCooldownULT() for the charge/mana gating this relies on
+	# REWRITTEN AGAIN — every previous version scanned forward in 0.5-block
+	# steps by hand, and one of them had a real bug feeding it bad locations:
+	# "set {_feet} to {_head}" then modifying {_feet}'s y coordinate ALSO
+	# silently modified {_head}, because Skript locations/vectors alias on a
+	# plain assignment rather than copying — so both "clearance" checks ended
+	# up testing the exact same point instead of two different heights.
+	#
+	# This version stops hand-rolling the raycast entirely and calls Bukkit's
+	# own World#rayTraceBlocks() directly (skript-reflect lets us call Java
+	# methods with plain dot syntax — already used elsewhere in this codebase,
+	# e.g. 01-utils.sk's {_boss}.getTarget()). That's the same mechanism
+	# WorldEdit's own /thru uses internally, it needs no permission node (we
+	# never touch WorldEdit itself, so this works identically for non-op
+	# players), and it removes any chance of a hand-written vector/trig
+	# mistake being the culprit. From the exact block it hits, we keep
+	# stepping forward along the same direction (recomputed fresh each step,
+	# never reusing/rescaling a shared vector object) until we find a point,
+	# and a point ~1.2 blocks below it (their feet, once standing), that are
+	# both open — a real gap to stand in — and teleport their feet there.
+	if {_type} = "ult":
+		if {cb-ULT-count::%{_p}'s uuid%} <= 0:
+			send "&cULT NOT READY!" to {_p}
+			stop
+
+	set {_lowestPhase} to -1000 # effectively "no floor" outside the arena
+	if {_p} is in world "arena_1":
+		set {_lowestPhase} to -50 # lowest point allowed to phase to
+
+	set {_eyeLoc} to eye location of {_p}
+	set {_world} to world of {_p}
+	set {_ex} to x-coord of {_eyeLoc}
+	set {_ey} to y-coord of {_eyeLoc}
+	set {_ez} to z-coord of {_eyeLoc}
+
+	# Both the "~" location+vector operator AND raw Java Vector/Location objects
+	# from skript-reflect (rayTraceBlocks()/getDirection()/toLocation()) turned
+	# out to be the "a text can not be parsed as a location" bug — something
+	# along that chain wasn't being recognized as Skript's own location/vector
+	# type and was silently getting string-ized instead of actually combined.
+	# This version drops BOTH: every destination is now built by hand from
+	# plain numbers (addition/multiplication) and Skript's own location(x, y, z,
+	# world) constructor — the exact same constructor already used successfully
+	# elsewhere in this codebase (12-major-boss.sk). Nothing here depends on "~"
+	# or on a raw object being treated as a native type.
+	set {_rawDir} to {_eyeLoc}.getDirection() # raw Java Vector — used ONLY as a source of plain numbers via .getX()/.getY()/.getZ(), and as a raw argument to another raw Java call (rayTraceBlocks); never assigned into a native location/vector variable
+	set {_dx} to {_rawDir}.getX()
+	set {_dy} to {_rawDir}.getY()
+	set {_dz} to {_rawDir}.getZ()
+
+	# Looking perfectly straight up (or down) makes both {_dx} and {_dz} exactly
+	# (or almost exactly) 0 — a perfectly axis-aligned ray. That's the reported
+	# "works at 80 degrees but not 90" split: a lot of block/voxel ray-trace
+	# implementations (this almost certainly includes Bukkit's) special-case or
+	# mishandle a ray with a zero component on an axis, since their step math
+	# effectively divides by each direction component. Nudging it a hair off
+	# axis-alignment and renormalizing avoids that edge case entirely, with zero
+	# noticeable effect on aim (a tiny fraction of a degree). Both {_rawDir}
+	# (fed straight into rayTraceBlocks) and the plain {_dx}/{_dy}/{_dz} numbers
+	# (used for step 2's own math) are kept in sync by re-reading them off the
+	# same nudged-and-renormalized vector object afterward.
+	if abs({_dx}) < 0.0001: # "near enough to zero" rather than an exact equality check — floating-point trig can land on a tiny non-zero value (like 6e-17) instead of a clean 0 at exactly 90 degrees, which an exact "= 0" check would miss entirely
+		{_rawDir}.setX(0.0001)
+	if abs({_dz}) < 0.0001:
+		{_rawDir}.setZ(0.0001)
+	{_rawDir}.normalize()
+	set {_dx} to {_rawDir}.getX()
+	set {_dy} to {_rawDir}.getY()
+	set {_dz} to {_rawDir}.getZ()
+
+	# --- step 1: find the first solid block within 5 blocks along the sightline,
+	# via Bukkit's own ray trace ---
+	set {_result} to {_world}.rayTraceBlocks({_eyeLoc}, {_rawDir}, 5.0)
+	if {_result} is not set:
+		send action bar "&cTarget too far!" to {_p}
+		stop
+	set {_hitBlock} to {_result}.getHitBlock()
+	if {_hitBlock} is not set:
+		send action bar "&cTarget too far!" to {_p}
+		stop
+	set {_hitPos} to {_result}.getHitPosition()
+	set {_wallLoc} to location({_hitPos}.getX(), {_hitPos}.getY(), {_hitPos}.getZ(), {_world}) # native Skript location, built purely from raw numbers
+	set {_wallDis} to distance between {_eyeLoc} and {_wallLoc}
+
+	# --- step 2: keep following the SAME sightline past the wall until both the
+	# sightline point and a point ~1.2 blocks below it (their feet, once standing)
+	# are open — a real spot to stand in, not just a gap at eye level ---
+	set {_dis} to {_wallDis}
+	loop 10 times: # scan up to 5 more blocks past the wall, in 0.5-block steps
+		add 0.5 to {_dis}
+		set {_hx} to {_ex} + ({_dx} * {_dis}) # eye position + (unit direction * distance) — plain scalar math, no vector object involved at all
+		set {_hy} to {_ey} + ({_dy} * {_dis})
+		set {_hz} to {_ez} + ({_dz} * {_dis})
+		set {_head} to location({_hx}, {_hy}, {_hz}, {_world})
+		set {_feetY} to {_hy} - 1.2
+		set {_feet} to location({_hx}, {_feetY}, {_hz}, {_world}) # same x/z as {_head}, only y differs — built fresh from numbers, not derived from {_head} itself, so there's no aliasing risk
+		if {_feetY} >= {_lowestPhase}:
+			if cbPhaseableBlocks({_head}, "is") is true:
+				if cbPhaseableBlocks({_feet}, "is") is true:
+					# Snap down to the ACTUAL supporting surface at this point, not just the
+					# block's integer floor. Flooring blindly was itself a bug for slabs: for
+					# a bottom slab (solid from y to y+0.5, open from y+0.5 to y+1), a feet
+					# test point like y+0.7 correctly passes the "open" check above, but
+					# floor(y+0.7) = y drops it right back down INTO the slab's solid half —
+					# which is exactly "gets stuck on the slab and pushed down." Instead, look
+					# at the feet block's own collision box first: if it has a solid part
+					# below our point (a slab, or any other partial block), its top surface
+					# IS the floor (e.g. y+0.5) — stand there. Only if this block has no solid
+					# part at all (fully open, like plain air) do we fall back to checking the
+					# block directly below for a supporting surface (a full block's top, or
+					# another slab's top). If neither has anything solid, there's no ground
+					# here to snap to anyway, so a plain floor is a harmless fallback.
+					set {_feetBlock} to block at {_feet}
+					set {_feetBox} to {_feetBlock}.getBoundingBox()
+					set {_feetBoxMin} to {_feetBox}.getMinY()
+					set {_feetBoxMax} to {_feetBox}.getMaxY()
+					if {_feetBoxMin} is not {_feetBoxMax}: # this block itself has solid geometry (e.g. a slab) below our point
+						set {_snapY} to {_feetBoxMax} # stand on top of it exactly — y+0.5 for a bottom slab, etc.
+					else:
+						set {_belowLoc} to location({_hx}, {_feetY} - 0.01, {_hz}, {_world})
+						set {_belowBlock} to block at {_belowLoc}
+						set {_belowBox} to {_belowBlock}.getBoundingBox()
+						set {_belowBoxMin} to {_belowBox}.getMinY()
+						set {_belowBoxMax} to {_belowBox}.getMaxY()
+						if {_belowBoxMin} is not {_belowBoxMax}: # a solid surface directly below (a full block, another slab, etc.)
+							set {_snapY} to {_belowBoxMax}
+						else:
+							set {_snapY} to floor({_feetY}) # nothing solid immediately here or below — no real ground to snap to, so just fall normally from a clean whole number
+					set {_loc} to location({_hx}, {_snapY}, {_hz}, {_world})
+					set yaw of {_loc} to yaw of {_p} # keep the player's own look direction — location(...) built with no yaw/pitch defaults to facing north, which would otherwise snap them to face north on every phase
+					set pitch of {_loc} to pitch of {_p}
+					stop loop
+
+	if {_loc} isn't set:
+		send action bar "&cTarget too far!" to {_p}
+		stop
+
+	# --- step 3: mana/charge gating (unchanged), then teleport ---
+	if {_type} = "ult":
+		if {cb-ULT-count::%{_p}'s uuid%} > 0:
+			if ultCHECK({_p}, {weapons::CB::ULT-COST}) is true: # MANA CHECK — 19-balance-stats.sk's recordAbilityCast() fires from inside here
+				set {_manaPass} to true
+				remove 1 from {cb-ULT-count::%{_p}'s uuid%}
+	else if {_type} = "tac":
+		if tacCHECK({_p}, {weapons::CB::TAC-COST}) is true: # MANA CHECK
+			set {_manaPass} to true
+
+	if {_manaPass} is set:
+		# TELEPORT FIRST, THEN PARTICLES — this is the actual reason the player
+		# never seemed to move: cbUltParticle() isn't instant, it loops 5 times
+		# with its own "wait 10 ticks" each pass (2.5 real seconds), and a
+		# Skript function call blocks the caller until it fully returns —
+		# including its own waits. With the particle call ahead of the
+		# teleport, the teleport was firing a full 2.5 seconds after the
+		# particles had already finished drawing the "path," which reads as
+		# "it never actually teleports me." Moving the teleport first makes it
+		# instant, and the particle trail now plays AFTER, from the old spot to
+		# the new one, purely as a visual trace of the phase that already
+		# happened.
+		set {_oldLoc} to {_p}'s location
+		# The level/class nametag (04-leveling.sk) rides the player as a passenger
+		# ("make {_tag} ride {_p}"), and basher.sk has an existing note that
+		# teleporting a player with a mounted passenger has caused movement
+		# problems before (that's why basher.sk resets velocity instead of
+		# self-teleporting for its own dash). Rather than leave that to chance
+		# here, explicitly kill the tag before teleporting and rebuild it fresh
+		# at the destination afterward — updateNametag() already does exactly
+		# that (spawns a new tag at the player's CURRENT location and re-mounts
+		# it), so calling it after the teleport both proves the passenger isn't
+		# silently blocking the move and fixes the tag floating at the old spot.
+		killLevelTag({_p}) # 04-leveling.sk
+		teleport {_p} to {_loc} # this should be a teleport, this is not used to set player velocity to 0
+		updateNametag({_p}) # 04-leveling.sk — respawns the tag at the player's new (post-teleport) location
+		add potion effect of speed 2 without particles for 2 seconds to potion effects of {_p}
+		cbUltParticle({_oldLoc}, {_loc})
+
+on right click with diamond sword: # TAC
+	if name of player's held item contains "%{wc}%Cyberpunk Blade":
+		if tacCHECK(player, {weapons::CB::TAC-COST}) is true:
+			cbDart(player)
+
+on damage of living entity: # Malicious Dart hit effect — the damage itself (weapons::CB::R-AD) is applied generically by 08-damage.sk's arrow pipeline
+	set {_cause} to "%event-damagecause%"
+	if {_cause} = "projectile":
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "CB":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+				cbPSS({_attacker}, victim, 5)
+				add potion effect of speed 2 without particles for 2 seconds to potion effects of {_attacker} # TAC now rewards the shooter with a speed burst instead of slowing the target
+				if classLevel({_attacker}, "CB") >= 2: # Perk 1 (Stamina Lockout)
+					staminaPause(victim, 3)
+				else:
+					staminaPause(victim, 2)
+	else if {_cause} = "attack":
+		if name of attacker's held item contains "%{wc}%Cyberpunk Blade":
+			cbPSS(attacker, victim, 5)
+
+function cbCalcCooldownULT(p: player) :: timespan: # per-charge recharge time
+	if classLevel({_p}, "CB") >= 3: # Perk 2 (Overclock)
+		return {perk-var::CB::overclock}
+	else:
+		return {weapons::CB::ULT-CD}
+
+function cbULT(p: player, id: string): # background charge-recharge loop — see file header note
+	set {_uuid} to {_p}'s uuid
+
+	if {cb-ULT-count::%{_uuid}%} isn't set: # only true the very first time this player ever plays CB — a later life that already banked 1 or 2 charges keeps them instead of resetting to 0 (classSelect() no longer deletes this on respawn)
+		set {cb-ULT-count::%{_uuid}%} to 0
+
+	while {class-ID::%{_uuid}%} = {_id}:
+		if {cb-ULT-count::%{_uuid}%} >= 2:
+			wait 1 second # already at max charges — nothing to recharge, just idle-check rather than spinning a full cooldown timer for no reason
+		else:
+			set {godlike-ULT-CD::%{_uuid}%::CB} to now # kept in sync purely so 03-resources.sk's actionBar() ULT%% readout reflects the next charge's recharge progress
+			set {_ultCooldown} to cbCalcCooldownULT({_p})
+			wait {_ultCooldown}
+
+			if {class-ID::%{_uuid}%} = {_id}:
+				delete {godlike-ULT-CD::%{_uuid}%::CB}
+
+				if {cb-ULT-count::%{_uuid}%} < 2:
+					add 1 to {cb-ULT-count::%{_uuid}%}
+					play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+
+# cbUpdateName() removed — charge count now only shows in the action bar
+# (03-resources.sk), so the held weapon's display name never changes and
+# always just reads its base name ("Cyberpunk Blade").
+
+on drop of diamond sword with priority low: # ULTIMATE (Cyber Glitch)
+	if name of event-item contains "%{wc}%Cyberpunk Blade":
+		cancel event
+		cbPhase(player, "ult") # MANA + CHARGE CHECK IN FUNCTION
+
+function cbUltParticle(oldLoc: location, newLoc: location):
+	set {_v} to vector from {_oldLoc} to {_newLoc}
+	set vector length of {_v} to 0.1
+	set {_loc} to {_oldLoc}
+	play sound "entity.goat.long_jump" with volume 10 and pitch 1.25 at {_newLoc}
+	loop 5 times:
+		loop (distance between {_loc} and {_newLoc}) / 0.1 times:
+			set {_temp} to {_loc}
+			draw 1 of dust_color_transition using dustTransition(cyan, light green, 0.75) at {_temp} with offset vector(0, 0, 0) with extra 0
+			add 0.5 to y coord of {_temp}
+			draw 1 of dust_color_transition using dustTransition(cyan, light green, 0.75) at {_temp} with offset vector(0, 0, 0) with extra 0
+			add 0.5 to y coord of {_temp}
+			draw 1 of dust_color_transition using dustTransition(cyan, light green, 0.75) at {_temp} with offset vector(0, 0, 0) with extra 0
+			set {_loc} to {_loc} ~ {_v}
+		set {_loc} to location of {_oldLoc}
+		wait 10 ticks
+
+on damage of player with priority low: # suffocation mitigate — phasing into a wall shouldn't be able to suffocate the player
+	if {class::%victim's uuid%} = "CB":
+		set {_cause} to "%event-damagecause%"
+		if {_cause} = "suffocation":
+			cancel event

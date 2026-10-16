@@ -1,0 +1,148 @@
+# ============================================
+# NINJA (NS) — Ninja Shurikens / Ninja Katana
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Baseline passive "Improved Stamina": increased max stamina — set
+#   unconditionally in 05-class-menu.sk's class-swap stat setup, not in this file.
+# Perk 1 (level 2) "Stamina Master": stamina dashes launch further — gated in
+#   03-resources.sk's sneak-toggle dash handler, not in this file.
+# Perk 2 (level 3) "Fiery Shurikens": ignites shurikens during the ultimate.
+# ============================================
+
+on right click with nether star or diamond sword: # TACTICAL
+	if name of player's held item is "%{wc}%Ninja Shurikens" or "%{wc}%Ninja Katana":
+		if tacCHECK(player, {weapons::NS::TAC-COST}) is true:
+			loop 3 times:
+				set {_l} to location 0.5 in front of player # only used to compute the jittered aim direction below now — spawning the arrow FROM this location (instead of from the player) was the actual cause of the north-facing visual bug: the client can't render a fresh projectile's rotation correctly unless it's spawned from a living entity
+				add 1.5 to y-coord of {_l}
+				set {_y} to a random number between -3 and 3
+				set {_p} to a random number between -0.5 and 0.5
+				add {_y} to yaw of {_l}
+				add {_p} to pitch of {_l}
+
+				shoot a arrow from player with speed 1.75 # shooting from the player (not a custom location) is what renders correctly in every direction
+				set {_xz} to cos(pitch of {_l}) # converts {_l}'s (already-correct) jittered yaw/pitch into a real velocity vector by hand — "vector of {_l}" silently evaluated to a zero vector instead, which is why the last attempt made arrows drop dead on the spot
+				set {_dx} to 0 - ({_xz} * sin(yaw of {_l}) * 1.75) # a leading "-" directly before an expression isn't parsed here — "0 - (...)" negates it instead
+				set {_dy} to 0 - (sin(pitch of {_l}) * 1.75)
+				set {_dz} to {_xz} * cos(yaw of {_l}) * 1.75
+				set velocity of shot projectile to vector({_dx}, {_dy}, {_dz}) # vector()'s parser here only accepts plain values for x/y/z, not inline math — hence computing each component into its own variable first
+				if {godlike-ULT-USE::%player's uuid%::NS} is set:
+					if classLevel(player, "NS") >= 3: # Perk 2 (Fiery Shurikens)
+						set metadata value "fire" of shot projectile to true
+						ignite shot projectile
+
+				set metadata value "type" of shot projectile to "NS"
+				set metadata value "attacker" of shot projectile to player
+				set metadata value "balanceSource" of shot projectile to "TAC" # 19-balance-stats.sk
+				play sound "entity_arrow_shoot" with volume 3 and pitch 1.5 at player
+				trackProjectileTrail(shot projectile) # 01-utils.sk — registers the trail immediately without pausing this loop, so the next shuriken isn't held up waiting on this one's particles
+
+				wait 3 tick
+
+on damage of living entity: # ignites the victim if hit by a fire-charged shuriken
+	if event-damagecause is a projectile:
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "NS":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+				if metadata value "fire" of event-projectile is true:
+					setFireSource(victim, "TAC", 4) # 19-balance-stats.sk — Fiery Shurikens: the ignite comes from the TAC projectile itself
+					set fire to victim for 4 seconds
+
+on drop of nether star with priority low: # ULTIMATE
+	if name of event-item is "%{wc}%Ninja Shurikens":
+		cancel event
+		if classLevel(player, "NS") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::NS::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::NS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::NS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::NS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::NS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::NS} to now
+			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1.5 at player
+			wait 20 ticks # 1s telegraph after the sound, before the speed/jump buffs and katana swap actually apply — gives the opponent a moment to react
+			if {godlike-ULT-CANCEL::%player's uuid%::NS} isn't set: # died during the telegraph window (09-death-match.sk) — skip straight to cleanup below rather than granting buffs/swapping weapons on a dead player
+				add potion effect of speed 3 without particles for 10 seconds to potion effects of player
+				add potion effect of jump boost 4 without particles for 10 seconds to potion effects of player
+				wait 5 ticks
+				if name of player's held item is "%{wc}%Ninja Shurikens":
+					set player's held item to {class::weapon::NK}
+				else:
+					wait 5 ticks
+					loop player's inventory:
+						if name of loop-value is "%{wc}%Ninja Shurikens":
+							set {_i} to index of loop-value
+							set slot {_i} of player's inventory to {class::weapon::NK}
+							stop loop
+
+			loop 40 times:
+				if {godlike-ULT-CANCEL::%player's uuid%::NS} is set:
+					stop loop
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				draw 1 of flame particle at block above player with extra 0.1
+				draw 1 of lava particle at block above player with extra 0.1
+				wait 5 tick
+
+			loop player's inventory:
+				if name of loop-value is "%{wc}%Ninja Katana":
+					set {_i} to index of loop-value
+					set slot {_i} of player's inventory to {class::weapon::NS}
+
+			set {godlike-ULT-CD::%player's uuid%::NS} to now
+			delete {godlike-ULT-USE::%player's uuid%::NS}
+			delete {godlike-ULT-CANCEL::%player's uuid%::NS}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::NS}
+			if {class::%player's uuid%} = "NS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on damage of living entity: # Ninja Katana form always ignites on hit
+	if name of attacker's held item is "%{wc}%Ninja Katana":
+		if victim is a player:
+			setFireSource(victim, "ULT", 2) # 19-balance-stats.sk — Katana form only exists during the ultimate
+		set fire to victim for 2 seconds
+		play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 0.5 at victim
+
+function nkStamina(p: player): # stamina-dash follow-up while the ultimate (katana form) is active
+	if {godlike-ULT-USE::%{_p}'s uuid%::NS} is set:
+		play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 1 at {_p}
+		set {_size} to 0.5
+
+		loop 20 times:
+			add 1 to {_n}
+			if {_p} isn't on ground:
+				loop all living entities in radius 2 around {_p}:
+					if loop-entity is not {_p}:
+						updateAttacker({_p}, loop-entity)
+						if loop-entity is a player:
+							setFireSource(loop-entity, "ULT", 4) # 19-balance-stats.sk — this dash only exists while the ultimate (katana form) is active
+						set fire to loop-entity for 4 seconds
+						play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 1 at loop-entity
+			else if {_n} < 3:
+				loop all living entities in radius 2 around {_p}:
+					if loop-entity is not {_p}:
+						updateAttacker({_p}, loop-entity)
+						if loop-entity is a player:
+							setFireSource(loop-entity, "ULT", 4) # 19-balance-stats.sk
+						set fire to loop-entity for 4 seconds
+						play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 1 at loop-entity
+			else:
+				stop loop
+
+			set {_shapes::circle} to a circle with radius {_size}
+			set particle of {_shapes::*} to 1 of flame particle
+
+			set {_loc} to {_p}'s location
+			add 1 to y-coord of {_loc}
+			draw shapes {_shapes::*} at {_loc}
+
+			if {_size} < 2:
+				add 0.5 to {_size}
+
+			wait 5 ticks

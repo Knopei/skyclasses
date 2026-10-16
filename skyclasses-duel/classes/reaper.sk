@@ -1,0 +1,292 @@
+# ============================================
+# REAPER (RS) — Reaper Scythe
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Perk 1 (level 2) "Extended Grapple": longer grapple range and improved pull physics.
+# Perk 2 (level 3) "Soul Collector": bonus damage/heal from blinded enemies after the ultimate.
+# "Reaping Grapple" (wither on grapple hit) was cut per design decision —
+# the original 3-perk kit is trimmed to 2 slots.
+# ============================================
+
+function rgHitEntity(a: player, victim: living entity):
+	updateAttacker({_a}, {_victim})
+	directAttack({_victim})
+	set {balance-abilitySource::%{_a}'s uuid%} to "TAC" # 19-balance-stats.sk
+	set {_gd} to 1.25 + skirmisherTacBonus({_a}) # Skirmisher category buff (level 2): +0.25
+	damage {_victim} by {_gd}
+	add potion effect of wither 1 without particles for 5 seconds to potion effects of {_victim}
+	delete {balance-abilitySource::%{_a}'s uuid%}
+
+	set {_d} to distance between {_a} and {_victim}
+	set {_d} to {_d}/5
+	if {_d} < 0.5:
+		set {_d} to 0.5
+
+	set {_v} to vector between {_victim} and {_a}
+	push {_victim} {_v} at speed {_d}
+	play sound "block_chain_break" with volume 5 and pitch 0.75 at {_victim}
+
+function rgMovement(p: player, loc: location):
+	set {_d} to distance between {_p} and {_loc}
+	set {_d} to {_d}/5
+
+	if {_d} > 1.75:
+		if classLevel({_p}, "RS") >= 2: # Perk 1 (Extended Grapple)
+			if {_d} > 2:
+				set {_d} to 2
+				set {_h} to 0.25
+			else:
+				set {_h} to 0.3
+		else:
+			set {_d} to 1.75
+			set {_h} to 0.3
+	else if {_d} > 1.25:
+		set {_h} to 0.35
+	else:
+		set {_h} to 0.4
+
+	set {_v} to vector between {_p} and {_loc}
+	set velocity of {_p} to vector(0, 0, 0)
+	push {_p} upward at speed {_h}
+	push {_p} {_v} at speed {_d}
+
+	play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at {_p}
+
+function reaperGrapple(p: player, length: number, victim: living entity):
+	set {_uuid} to {_p}'s uuid
+	set {_x} to 0
+	loop {_length} times:
+		add 1 to {_x}
+		set {_loc} to {rg::%{_uuid}%::%{_x}%}
+		draw 1 of dust using dustOption(black, 1) at {_loc}
+
+		if {rg-hitLoc::%{_uuid}%} = {_x}:
+			if {rg-movement::%{_uuid}%} is set:
+				rgMovement({_p}, {rg-movement::%{_uuid}%})
+			else if {rg-hitEntity::%{_uuid}%} is set:
+				rgHitEntity({_p}, {rg-hitEntity::%{_uuid}%})
+
+			delete {rg::%{_uuid}%::*}
+			delete {rg-hitEntity::%{_uuid}%}
+			delete {rg-movement::%{_uuid}%}
+			delete {rg-hitLoc::%{_uuid}%}
+			stop loop
+
+function rgHitEntityCHECK(p: player, victim: living entity) :: number:
+	set {_d} to distance between {_p} and {_victim}
+	set {_d} to {_d}/5
+
+	if {_d} < 0.5:
+		set {_mana} to {weapons::RS::S-TAC-COST}
+	else if {_d} < 1.75:
+		set {_mana} to {weapons::RS::M-TAC-COST}
+	else:
+		set {_mana} to {weapons::RS::L-TAC-COST}
+
+	set {rg-hitEntity::%{_p}'s uuid%} to {_victim}
+	return {_mana}
+
+function rgMovementCHECK(p: player, loc: location) :: number:
+	set {_d} to distance between {_p} and {_loc}
+	set {_d} to {_d}/5
+
+	if {_d} >= 1.75:
+		set {_mana} to {weapons::RS::L-TAC-COST}
+	else if {_d} >= 1:
+		set {_mana} to {weapons::RS::M-TAC-COST}
+	else:
+		set {_mana} to {weapons::RS::S-TAC-COST}
+
+	set {rg-movement::%{_p}'s uuid%} to {_loc}
+	return {_mana}
+
+function reaperGrappleCHECK(p: player, length: number) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
+	reaperGrappleCHECKWorker({_p}, {_length})
+	return {rgCheckResult}
+
+function reaperGrappleCHECKWorker(p: player, length: number):
+	set {_uuid} to {_p}'s uuid
+	set {_x} to 0
+	set {_l} to 0
+	loop {_length} times:
+		add 1 to {_x}
+		add 0.5 to {_l}
+		set {rg::%{_uuid}%::%{_x}%} to location {_l} blocks infront of {_p}
+		set {rg::%{_uuid}%::%{_x}%} to location 1.5 blocks above {rg::%{_uuid}%::%{_x}%}
+		set {_loc} to {rg::%{_uuid}%::%{_x}%}
+		set {_height} to 0
+		loop 3 times:
+			loop all living entities in radius 0.5 around {_loc}:
+				if loop-entity is not a armor stand:
+					if loop-entity is not {_p}:
+						if {_height} = 0:
+							set {_hit} to true
+						else if {_height} = 1:
+							if loop-entity is not a wolf:
+								set {_hit} to true
+						else if {_height} = 2:
+							if loop-entity is a cave spider:
+								set {_hit} to true
+						if {_hit} is set:
+							set {rg-hitLoc::%{_uuid}%} to {_x}
+							set {rgCheckResult} to rgHitEntityCHECK({_p}, loop-entity)
+							stop
+			add 1 to {_height}
+			set {_loc} to location 1 blocks below {_loc}
+		loop blocks in radius 0.5 around {rg::%{_uuid}%::%{_x}%}:
+			if loop-block is not fern, short grass, air or water:
+				set {rg-hitLoc::%{_uuid}%} to {_x}
+				set {rgCheckResult} to rgMovementCHECK({_p}, {rg::%{_uuid}%::%{_x}%})
+				stop
+	set {rgCheckResult} to {weapons::RS::0-TAC-COST}
+
+on right click with netherite hoe: # TACTICAL — grapple
+	if name of player's held item is "%{wc}%Reaper Scythe":
+		if classLevel(player, "RS") >= 2: # Perk 1 (Extended Grapple)
+			set {_grappleLength} to 26
+		else:
+			set {_grappleLength} to 18
+
+		set {_mana} to reaperGrappleCHECK(player, {_grappleLength})
+		if tacCHECK(player, {_mana}) is true:
+			play sound "block_chain_break" with volume 5 and pitch 1.2 at player
+			set {_victim} to {rg-hitEntity::%player's uuid%}
+			reaperGrapple(player, {_grappleLength}, {_victim})
+		else:
+			delete {rg::%player's uuid%::*}
+			delete {rg-hitEntity::%player's uuid%}
+			delete {rg-movement::%player's uuid%}
+			delete {rg-hitLoc::%player's uuid%}
+
+function reaperBeam(p: player, e: living entity, v: vector):
+	set vector length of {_v} to 0.1
+	set {_loc} to location of {_p}
+	add 1.25 to y-coord of {_loc}
+	loop (distance between {_loc} and {_e}) / 0.1 times:
+		draw 3 of dust using dustOption(black, 1) at {_loc}
+		set {_loc} to {_loc} ~ {_v}
+	updateAttacker({_p}, {_e})
+	play sound "block_chain_break" with volume 5 and pitch 0.5 at {_p}
+
+on drop of netherite hoe with priority low: # ULTIMATE
+	if name of event-item is "%{wc}%Reaper Scythe":
+		cancel event
+		if classLevel(player, "RS") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::RS::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::RS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::RS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::RS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::RS} to now
+			add potion effect of speed 2 without particles for 6 seconds to potion effects of player
+			set {_loc} to location of player
+			set {_y-max} to y-coord of {_loc}+2.5
+			set {_y-min} to y-coord of {_loc}-2.5
+
+			reaperSlash({_loc}, 9, 3, 1.5)
+			reaperSlash({_loc}, 7, 6, 1)
+			reaperSlash({_loc}, 3.5, 9, 0.75)
+			play sound "entity.player.attack.sweep" with volume 5 and pitch 1.5 at {_loc}
+			set {balance-abilitySource::%player's uuid%} to "ULT" # 19-balance-stats.sk
+			loop all living entities in radius 9.5 around {_loc}:
+				if loop-entity is not player:
+					if y-coord of loop-entity is between {_y-max} and {_y-min}:
+						updateAttacker(player, loop-entity)
+						add loop-entity to {_hitEnemies::*}
+						set {_amount} to 1.5
+						if distance between player and loop-entity >= 7:
+							set {_amount} to 2.5
+							play sound "entity.wither.hurt" with volume 0.5 and pitch 0.75 to player
+						add potion effect of wither 2 without particles for 6 seconds to potion effects of loop-entity
+						damage loop-entity by {_amount}
+			delete {balance-abilitySource::%player's uuid%}
+			wait 1 second
+			loop {_hitEnemies::*}:
+				set {_entity} to loop-value
+				if {_entity} is a living entity:
+					set {_v} to vector from player to {_entity}
+					reaperBeam(player, {_entity}, {_v})
+					add potion effect of blindness 1 without particles for 5 seconds to potion effects of {_entity}
+					set {_shapes::%{_entity}%} to a circle with radius 0.5
+					play sound "entity_wither_spawn" with volume 1 and pitch 1 to {_entity}
+
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(black, gray, 0.75)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			loop 100 times:
+				if {godlike-ULT-CANCEL::%player's uuid%::RS} is set:
+					stop loop
+				loop {_shapes::*}:
+					set {_e} to loop-index parsed as player
+					set {_loc} to {_e}'s location
+					add 1.5 to y-coord of {_loc}
+					if {_e} is not invisible:
+						draw shapes {_shapes::%loop-index%} at {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				wait 1 tick
+
+			set {godlike-ULT-CD::%player's uuid%::RS} to now
+			delete {godlike-ULT-USE::%player's uuid%::RS}
+			delete {godlike-ULT-CANCEL::%player's uuid%::RS}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::RS}
+			if {class::%player's uuid%} = "RS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on damage of living entity: # PASSIVE — every 3rd hit is empowered
+	if name of attacker's held item is "%{wc}%Reaper Scythe":
+		if {reaper-attack::%attacker's uuid%} = 2:
+			delete {reaper-attack::%attacker's uuid%}
+			set level of attacker to 0
+			set level progress of attacker to 0
+			loop all entities in radius 3 around attacker:
+				if loop-entity is not attacker:
+					updateAttacker(attacker, loop-entity)
+					add potion effect of wither 1 without particles for 5 seconds to potion effects of loop-entity
+					if loop-entity is a player:
+						setFireSource(loop-entity, "PASSIVE", 5) # 19-balance-stats.sk — bridges the wither DoT's later damage ticks back to this passive proc instead of defaulting to "MELEE" (function name is fire-specific but the tag is generic)
+
+			set {_loc} to attacker's location
+			reaperSlash({_loc}, 3, 9, 0.75)
+		else:
+			add 1 to {reaper-attack::%attacker's uuid%}
+			set level of attacker to 0
+			add 0.495 to level progress of attacker
+
+function reaperSlash(loc: location, main: number, degree: number, size: number):
+	set {_other} to {_main} - 0.5
+
+	set {_shapes::c1} to a circle with radius {_main}
+	set particle of {_shapes::c1} to 1 of dust particle using dustOption(black, {_size})
+	set {_shapes::c2} to a circle with radius {_other}
+	set particle of {_shapes::c2} to 1 of dust particle using dustOption(gray, {_size})
+	set {_shapes::c3} to a circle with radius {_other}
+	set particle of {_shapes::c3} to 1 of dust particle using dustOption(gray, {_size})
+	set {_rotation1} to rotation around vector(1, 1, 1) by {_degree} degrees
+	set {_rotation2} to rotation around vector(1, 1, 1) by (-1*{_degree}) degrees
+	rotate shapes {_shapes::c2} by {_rotation1}
+	rotate shapes {_shapes::c3} by {_rotation2}
+
+	add 1 to y-coord of {_loc}
+	draw shapes {_shapes::*} at {_loc}
+
+function rsCHECK(a: player, v: living entity, cause: text) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
+	delete {rsCheckResult}
+	rsCHECKWorker({_a}, {_v}, {_cause})
+	if {rsCheckResult} is set:
+		return {rsCheckResult}
+
+function rsCHECKWorker(a: player, v: living entity, cause: text): # Perk 2 (Soul Collector)
+	if {_cause} is "attack":
+		if classLevel({_a}, "RS") >= 3:
+			set {_potions::*} to active potion effects of {_v}
+			if {_potions::*} is set:
+				loop {_potions::*}:
+					set {_effect} to "%loop-value%"
+					if {_effect} contains "blindness":
+						heal {_a} by 0.5
+						set {rsCheckResult} to 0.5

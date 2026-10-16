@@ -1,0 +1,179 @@
+# ============================================
+# TEMPEST (TS) — Tempest Scythe
+# Tactical: always available (Air Burst — shoots a wind charge; 1.25 direct
+#   damage to whatever it hits, plus a separate AOE splash on impact that
+#   does 1 damage and 3s of Slowness 1 to mobs/players in a 2.5 block
+#   radius). Ultimate: unlocks at class level 1 (Tornado — a directional
+#   tornado that pushes and damages enemies in its path).
+# Passive: Airborne — briefly gain speed after using Air Burst ON YOURSELF
+#   (e.g. shooting it downward to launch yourself — checked via a 2-block
+#   radius around the impact point for the shooter, not "landed a hit on an
+#   enemy"), after a direct Air Burst hit on an enemy, after Tornado's own
+#   self-push moves you, or after spending stamina (hooked into
+#   03-resources.sk's staminaCHECK() so it fires no matter which ability
+#   spent the stamina).
+# Perk 1 (level 2) "Lingering Winds": extends the passive's (Airborne)
+#   speed buff from 2 seconds to 3 seconds. (Previously "Wind Amplification",
+#   which sped up Air Burst itself — replaced in this rework.)
+# Perk 2 (level 3) "Category 5": Tornado travels farther.
+# ============================================
+
+function tsAirborne(p: player): # passive (Airborne) — Speed 3 for 2 seconds, or 3 seconds with Perk 1 (Lingering Winds). Also flags {tsAirborne::*} for that same duration (currently unused elsewhere, kept for any future perk/effect that wants to check "is Airborne currently active"), and draws the same white/light-gray dust particle as Tornado's ult trail at the player's feet — sparse and inconsistent (a 35% chance each tick, 1 particle at a time) rather than a steady stream, so it reads as a light trailing effect instead of a constant marker
+	set {_duration} to 2 seconds
+	set {_ticks} to 40
+	if classLevel({_p}, "TS") >= 2: # Perk 1 (Lingering Winds)
+		set {_duration} to 3 seconds
+		set {_ticks} to 60
+	add potion effect of speed 3 without particles for {_duration} to potion effects of {_p}
+	set {tsAirborne::%{_p}'s uuid%} to true
+	loop {_ticks} times:
+		if random number between 1 and 100 <= 35: # sparse/inconsistent rather than every tick
+			draw 1 of dust_color_transition using dustTransition(white, light gray, 1) at (location of {_p}) with offset vector(0.3, 0.05, 0.3) with extra 0 # same particle style as the Tornado ult's trail
+		wait 1 tick
+	delete {tsAirborne::%{_p}'s uuid%}
+
+on projectile hit with priority low: # Air Burst impact — handles BOTH the direct hit and the AOE splash in one place. Wind charges deal 0 vanilla damage on contact, so a native "on damage of living entity" event never actually fires for them — that's why the old dedicated direct-hit handler never ran. "victim" here is the entity the projectile directly struck (none if it hit a block/ground instead) — the same native expression zeus.sk and 04-leveling.sk already rely on inside "on projectile hit", so it's the reliable way to detect a direct hit in this environment.
+	if event-projectile is a fireball: # wind charges implement Fireball in the API
+		if metadata value "type" of event-projectile is "TS":
+			set {_shooter} to metadata value "attacker" of event-projectile
+			set {_direct} to victim # the directly-struck entity, if any
+			if {_direct} is set:
+				if {_direct} is a living entity:
+					if {_direct} is not {_shooter}:
+						updateAttacker({_shooter}, {_direct})
+						directAttack({_direct})
+						set {balance-abilitySource::%{_shooter}'s uuid%} to "TAC" # 19-balance-stats.sk — matches how 08-damage.sk's own generic projectile handler tags TAC/ULT before calling dmgUpdate()
+						damage {_direct} by (1.25 + skirmisherTacBonus({_shooter})) # raw ability damage only — "damage X by Y" fires its own fresh damage event, which 08-damage.sk's generic handler catches and runs through dmgUpdate() itself (same as the AOE splash's flat "damage loop-entity by 1" below). Calling dmgUpdate() here too double-counted it: showDMG() fired twice, showing the hit number twice for one hit
+						if {_shooter} is a player: # a direct hit also triggers the passive (Airborne) for the shooter
+							tsAirborne({_shooter})
+			loop all living entities in radius 2.5 around event-location: # AOE splash — 1 damage + 3s Slowness 1 to everyone else in range. The direct-hit target is excluded so it gets ONLY the direct-hit effect, not both (per the original split: direct hit = damage+passive to shooter, splash = damage+slow to victims)
+				if loop-entity is not an armor stand:
+					if loop-entity is not {_shooter}:
+						if loop-entity is not {_direct}:
+							updateAttacker({_shooter}, loop-entity)
+							damage loop-entity by (1 + skirmisherTacBonus({_shooter}))
+							add potion effect of slowness 1 for 3 seconds to potion effects of loop-entity
+			if {_direct} isn't set: # self-launch case (shooting it at the ground near yourself) — only checked when nothing was hit directly, since a direct hit on another entity already triggered the passive above
+				if {_shooter} is a player:
+					loop all players in radius 2 around event-location:
+						if loop-player is {_shooter}:
+							tsAirborne({_shooter})
+							stop loop
+
+on right click with iron hoe: # TAC (Air Burst)
+	if name of player's held item is "%{wc}%Tempest Scythe":
+		if tacCHECK(player, {weapons::TS::TAC-COST}) is true:
+			set {_speed} to 1 # Perk 1 no longer touches this (see Lingering Winds above) — flat speed for everyone now
+
+			shoot wind charge from player at speed {_speed}
+
+			set metadata value "attacker" of shot projectile to player
+			set metadata value "type" of shot projectile to "TS"
+			set metadata value "balanceSource" of shot projectile to "TAC" # 19-balance-stats.sk
+			while metadata value "hit" of shot projectile isn't set:
+				if metadata value "type" of shot projectile is "TS":
+					draw 1 of electric spark particle at shot projectile with offset vector(0, 0, 0) with extra 0
+				if (y coord of shot projectile) < -75:
+					set metadata value "hit" of shot projectile to true
+				wait 1 tick
+			kill shot projectile
+
+on drop of iron hoe with priority low: # ULTIMATE (Tornado)
+	if name of event-item is "%{wc}%Tempest Scythe":
+		cancel event
+		if classLevel(player, "TS") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::TS::ULT-CD}) # 06-perks-general.sk — Spell Caster
+
+		if {godlike-ULT-USE::%player's uuid%::TS} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::TS} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::TS}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::TS::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::TS} to now
+
+			tornado(player)
+
+			set {godlike-ULT-CD::%player's uuid%::TS} to now
+			delete {godlike-ULT-USE::%player's uuid%::TS}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::TS}
+			if {class::%player's uuid%} = "TS":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function tornadoPHY(loc: location, ploc: location, a: player):
+	add 3 to y coord of {_loc}
+	loop all living entities in radius 5.5 around {_loc}:
+		if loop-entity is not armor stand:
+			set {_v} to vector between {_ploc} and {_loc}
+			if loop-entity is {_a}:
+				if {tornadoMovement::%{_a}'s uuid%} isn't set:
+					push loop-entity {_v} at speed 1.25
+					set {tornadoMovement::%{_a}'s uuid%} to true
+					play sound "entity.breeze.wind_burst" with volume 5 and pitch 0.75 at loop-entity
+					tsAirborne({_a}) # passive (Airborne) — speed burst from Tornado's own self-push
+			else:
+				updateAttacker({_a}, loop-entity)
+				directAttack(loop-entity)
+				push loop-entity {_v} at speed 1.25
+				damage loop-entity by 1.25 hearts
+
+				play sound "entity.breeze.wind_burst" with volume 5 and pitch 1.25 at loop-entity
+
+function tornado(p: player):
+	set {_ploc} to location of {_p}
+	set {_loc} to location of {_p}
+
+	play sound "entity.allay.ambient_without_item" with volume 10 and pitch 1 at {_ploc}
+
+	set {_yaw::1} to 0
+	set {_yaw::2} to 90
+	set {_yaw::3} to 180
+	set {_yaw::4} to 270
+	set {_radius::1} to 5
+	set {_radius::2} to 4
+	set {_radius::3} to 3
+	set {_radius::4} to 2
+
+	if classLevel({_p}, "TS") >= 3: # Perk 2 (Category 5)
+		set {_times} to 40 # ( 20 blocks travel )
+	else:
+		set {_times} to 30 # ( 15 blocks travel )
+	loop {_times} times: # * 0.5 (nado ticks every 5 times)
+
+		# causes tornado to move
+		set {_n} to 0.5
+		set {_loc} to location {_n} blocks horizontally in front of {_loc}
+
+		set {_center} to {_loc}
+		loop {_radius::*}:
+			set {_radius} to loop-index parsed as an integer
+			loop 4 times:
+				add 1 to {_count}
+				set {_shape} to a arc with radius {_radius}, height 0, and angle 10 degrees
+				set offset vector of {_shape} to vector(0, 0, 0)
+
+				set particle of {_shape} to 1 of dust_color_transition particle using dustTransition(white, light gray, 1.5) with offset vector(0, 0, 0) with extra 0
+				rotate shapes {_shape} around vector(0, 1, 0) by {_yaw::%{_count}%} degrees
+				draw shapes {_shape} at {_center}
+			delete {_shape}
+			delete {_count}
+			add 3 to y coord of {_center} # height distance between particles
+
+		loop {_yaw::*}: # causes the particles to spin based on yaw
+			add 1 to {_count}
+			add 9 to {_yaw::%{_count}%}
+		delete {_count}
+
+		# Physical effects of tornado
+		add 1 to {_tornadoPHY}
+		if {_tornadoPHY} = 10:
+			tornadoPHY({_loc}, {_ploc}, {_p})
+			delete {_tornadoPHY}
+
+		wait 1 tick
+	delete {tornadoMovement::%{_p}'s uuid%}

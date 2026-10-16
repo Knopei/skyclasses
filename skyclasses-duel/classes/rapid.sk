@@ -1,0 +1,156 @@
+# ============================================
+# RAPID (RB/RD) — Rapid Bow / Rapid Dagger
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Passive "Longshot" — every 3rd melee hit fires an empowered arrow dealing
+#   25% of the victim's max health (30% at Perk 1, see below, when the shot
+#   lands from >= 7.5 blocks away). Replaces the old "speed on landed ult
+#   arrow hit" passive.
+# Perk 1 (level 2) "Long Shot": the passive's arrow does 30% max health
+#   damage instead of 25% when fired from >= 7.5 blocks away.
+# Perk 2 (level 3) "Overheat": arrows ignite near the end of the rapid-fire ultimate.
+#
+# Cleanup notes:
+# - The original file checked {godlike-ULT-USE::%player's uuid%::WH} (a leftover
+#   copy-paste from the removed Warden class) instead of ::RB — fixed here.
+# - Removed a stray debug "broadcast {_ultCooldown}" line.
+# ============================================
+
+on right click with stone sword: # TACTICAL (dagger form)
+	if name of player's held item is "%{wc}%Rapid Dagger":
+		if tacCHECK(player, {weapons::RB::TAC-COST}) is true:
+			play sound "entity_generic_drink" with volume 1 and pitch 1 at player
+			add potion effect of speed 3 for 0.5 seconds to potion effects of player
+			wait 1 seconds
+			add potion effect of speed 2 for 2 seconds to potion effects of player
+
+on drop of stone sword with priority low: # ULTIMATE
+	if name of event-item is "%{wc}%Rapid Dagger":
+		cancel event
+		if classLevel(player, "RB") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::RB::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::RB} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::RB} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RB}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::RB} to now
+
+			set {_opponent} to {matchOpponent::%player's uuid%} # 09-death-match.sk / 10-match-manager.sk
+			play sound "entity_ender_dragon_growl" with volume 5 and pitch 2 to player # "to" (not "at") so it reaches the opponent below regardless of in-game distance
+			if {_opponent} is set:
+				play sound "entity_ender_dragon_growl" with volume 5 and pitch 2 to {_opponent}
+
+			# PRE — swap to bow form
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Rapid Dagger":
+				set player's held item to {class::weapon::RB}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Rapid Dagger":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::RB}
+						stop loop
+			# PHY ULT — ramping rapid-fire (0.4 R-AD base, 0.6 R-AD at >= 7.5 blocks — see 08-damage.sk's dmgUpdate())
+			set {_speed} to 0.5
+			set {_shotNum} to 0
+			loop 25 times: # fires every 4 ticks now instead of every 2 — halved the loop count to keep the same 5-second total duration
+				if {godlike-ULT-CANCEL::%player's uuid%::RB} is set:
+					stop loop
+				add 1 to {_shotNum} # "loop-index" only works on list loops ("loop {list::*}:"), not a numeric "loop X times:" like this one — tracking the shot number by hand instead
+				if name of player's held item is "%{wc}%Rapid Bow":
+					if {_speed} < 1.5:
+						add 0.1 to {_speed}
+						shoot a arrow from player at speed {_speed}
+					else:
+						if {_speed} < 3:
+							add 0.1 to {_speed}
+						set {_l} to location 0.5 in front of player # only used to compute the jittered aim direction below now — spawning the arrow FROM this location (instead of from the player) was the actual cause of the north-facing visual bug: the client can't render a fresh projectile's rotation correctly unless it's spawned from a living entity
+						add 1.5 to y-coord of {_l}
+						set {_y} to a random number between -4 and 4
+						set {_pitch} to a random number between -4 and 4
+						add {_y} to yaw of {_l}
+						add {_pitch} to pitch of {_l}
+						shoot a arrow from player at speed {_speed} # shooting from the player (not a custom location) is what renders correctly in every direction
+						set {_xz} to cos(pitch of {_l}) # converts {_l}'s (already-correct) jittered yaw/pitch into a real velocity vector by hand — "vector of {_l}" silently evaluated to a zero vector instead, which is why the last attempt made arrows drop dead on the spot
+						set {_dx} to 0 - ({_xz} * sin(yaw of {_l}) * {_speed}) # a leading "-" directly before an expression isn't parsed here — "0 - (...)" negates it instead
+						set {_dy} to 0 - (sin(pitch of {_l}) * {_speed})
+						set {_dz} to {_xz} * cos(yaw of {_l}) * {_speed}
+						set velocity of shot projectile to vector({_dx}, {_dy}, {_dz}) # vector()'s parser here only accepts plain values for x/y/z, not inline math — hence computing each component into its own variable first
+					set metadata value "attacker" of shot projectile to player
+					set metadata value "type" of shot projectile to "RB"
+					set metadata value "balanceSource" of shot projectile to "ULT" # 19-balance-stats.sk — RB only ever fires arrows from this ultimate, dagger-form TAC has none
+					trackProjectileTrail(shot projectile) # 01-utils.sk — registers the trail immediately without pausing this loop, so the next arrow isn't held up waiting on this one's particles
+					play sound "entity_arrow_shoot" with volume 3 and pitch 1 at player
+					if classLevel(player, "RB") >= 3: # Perk 2 (Overheat) — ignites the last 5 arrows of the ultimate's 25 total shots
+						if {_shotNum} > 20:
+							set metadata value "fire" of shot projectile to true
+							ignite shot projectile
+				wait 4 tick
+			# POST — swap back to dagger form
+			wait 5 ticks
+			if name of player's held item is "%{wc}%Rapid Bow":
+				set player's held item to {class::weapon::RD}
+			else:
+				wait 5 ticks
+				loop player's inventory:
+					if name of loop-value is "%{wc}%Rapid Bow":
+						set {_i} to index of loop-value
+						set slot {_i} of player's inventory to {class::weapon::RD}
+						stop loop
+
+			set {godlike-ULT-CD::%player's uuid%::RB} to now
+			delete {godlike-ULT-USE::%player's uuid%::RB}
+			delete {godlike-ULT-CANCEL::%player's uuid%::RB}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::RB}
+			if {class::%player's uuid%} = "RB":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+on damage of living entity: # ult arrow hit effect — Overheat's ignite (the old "speed on landed ult arrow hit" passive was removed; see the new "every 3rd hit" passive below)
+	if event-damagecause is a projectile:
+		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "RB":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				updateAttacker({_attacker}, victim)
+				directAttack(victim)
+				if metadata value "fire" of event-projectile is true:
+					setFireSource(victim, "ULT", 4) # 19-balance-stats.sk — Overheat only ignites arrows during the rapid-fire ultimate
+					set fire to victim for 4 seconds
+
+function rbPSS(p: player): # PASSIVE "Longshot" — fires from the "on left click" hook below once every 3rd melee hit lands; the arrow's damage (25%/30% max health) is applied by 08-damage.sk's dmgUpdate() when it lands, keyed off its "RB-PASSIVE" metadata type
+	shoot a arrow from {_p} at speed 2
+	set metadata value "type" of shot projectile to "RB-PASSIVE"
+	set metadata value "attacker" of shot projectile to {_p}
+	set metadata value "balanceSource" of shot projectile to "PASSIVE" # 19-balance-stats.sk — without this it defaulted to the generic "MELEE" bucket
+	play sound "entity_arrow_shoot" with volume 3 and pitch 1.5 at {_p}
+	while metadata value "hit" of shot projectile isn't set:
+		draw 1 of electric spark particle at shot projectile with offset vector(0, 0, 0) with extra 0
+		if (y-coord of shot projectile) < -75:
+			set metadata value "hit" of shot projectile to true
+		wait 1 tick
+	kill shot projectile
+
+on left click with priority high: # PASSIVE — every 3rd hit is empowered (see rbCHECK() in 08-damage.sk for the counter increment on a landed melee hit)
+	if name of player's held item is "%{wc}%Rapid Dagger":
+		if attack cooldown of player >= 0.75:
+			if {rapid-attack::%player's uuid%} = 3:
+				delete {rapid-attack::%player's uuid%}
+				set level progress of player to 0
+				rbPSS(player)
+
+function rbCHECK(a: player): # called from 08-damage.sk's dmgUpdate() on every landed RB melee hit — increments the passive's hit counter
+	if name of {_a}'s held item is "%{wc}%Rapid Dagger":
+		if {rapid-attack::%{_a}'s uuid%} = 3:
+			delete {rapid-attack::%{_a}'s uuid%}
+			set level of {_a} to 0
+			set level progress of {_a} to 0
+		else:
+			add 1 to {rapid-attack::%{_a}'s uuid%}
+			set level of {_a} to 0
+			add 0.33 to level progress of {_a}

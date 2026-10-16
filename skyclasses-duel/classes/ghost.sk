@@ -1,0 +1,169 @@
+# ============================================
+# GHOST (GD) — Ghost Dagger
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Perk 1 (level 2) "Lunge Master": reduces the tactical's mana cost.
+# Perk 2 (level 3) "Supportive Ghost": adds cleanse + regen to the ultimate.
+# "Parried Lunge" (damage reduction while dashing) was cut per design decision —
+# the original 3-perk kit is trimmed to 2 slots.
+# ============================================
+
+on sprint toggle: # smoke trail while sprinting
+	if name of player's held item is "%{wc}%Ghost Dagger":
+		if player isn't sprinting:
+			wait 1 tick
+			while player is sprinting:
+				if {godlike-ULT-USE::%player's uuid%::GD} is set:
+					stop
+				if player.isOnGround() is true:
+					draw 1 of smoke at player with extra 0
+				wait 1 tick
+
+on right click with golden sword: # TACTICAL
+	if name of player's held item is "%{wc}%Ghost Dagger":
+		if classLevel(player, "GD") >= 2: # Perk 1 (Lunge Master)
+			set {_mana} to {perk-var::GD::alt-tac-cost}
+		else:
+			set {_mana} to {weapons::GD::TAC-COST}
+		if tacCHECK(player, {_mana}) is true:
+			set velocity of player to vector(0, 0, 0)
+			push player forward at speed 1.1
+			play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at player
+
+			set {_gd} to 2 + skirmisherTacBonus(player) # Skirmisher category buff (level 2): +0.25
+			loop 10 times:
+				add 1 to {_n}
+				set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
+				if player isn't on ground:
+					loop all living entities in radius 2 around player:
+						if loop-entity is not player:
+							if {_tacHit::*} doesn't contain loop-entity:
+								updateAttacker(player, loop-entity)
+								directAttack(loop-entity)
+								damage loop-entity by {_gd}
+								add loop-entity to {_tacHit::*}
+				else if {_n} < 3:
+					loop all living entities in radius 2 around player:
+						if loop-entity is not player:
+							if {_tacHit::*} doesn't contain loop-entity:
+								updateAttacker(player, loop-entity)
+								directAttack(loop-entity)
+								damage loop-entity by {_gd}
+								add loop-entity to {_tacHit::*}
+				else:
+					delete {balance-abilitySource::%player's uuid%}
+					stop loop
+				delete {balance-abilitySource::%player's uuid%}
+				wait 5 ticks
+
+on drop of golden sword with priority low: # ULTIMATE
+	if name of event-item is "%{wc}%Ghost Dagger":
+		cancel event
+		if classLevel(player, "GD") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::GD::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::GD} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::GD} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::GD}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::GD::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::GD} to now
+			if classLevel(player, "GD") >= 3: # Perk 2 (Supportive Ghost)
+				removeBadEffects(player, "victim")
+				add potion effect of regeneration 3 without particles for 5 seconds to potion effects of player
+			add potion effect of speed 4 without particles for 5 seconds to potion effects of player
+			add potion effect of invisibility without particles for 5 seconds to potion effects of player
+			setLevelTagNameVisible(player, false) # 04-leveling.sk — the nametag armor stand isn't affected by the player's own invisibility, so it needs hiding separately
+			player.setArrowsInBody(0)
+			set {_ta} to {total-armor::%player's uuid%}
+			set {_pa} to {projectile-armor::%player's uuid%}
+			set {_armor::1} to player's helmet
+			set {_armor::2} to player's chestplate
+			set {_armor::3} to player's leggings
+			set {_armor::4} to player's boots
+			set player's helmet to air
+			set player's chestplate to air
+			set player's leggings to air
+			set player's boots to air
+			play sound "block_fire_extinguish" with volume 5 and pitch 1 at player
+			draw 25 of large_smoke at player with offset vector(0.5, 0.5, 0.5) with extra 0.1
+			wait 2 tick
+			set {total-armor::%player's uuid%} to {_ta}
+			set {projectile-armor::%player's uuid%} to {_pa}
+
+			while {godlike-ULT-USE::%player's uuid%::GD} is set:
+				if {godlike-ULT-CANCEL::%player's uuid%::GD} is set:
+					stop loop
+				add 1 to {_n}
+				if {_n} = 100:
+					stop loop
+				if {godlike-ULT-USE::%player's uuid%::GD} is false:
+					if {_n} > 20:
+						stop loop
+					else: # allows a guaranteed 1 second of ult
+						wait 1 second
+						stop loop
+				else:
+					wait 1 tick
+			delete {godlike-ULT-USE::%player's uuid%::GD}
+			delete {godlike-ULT-CANCEL::%player's uuid%::GD}
+			remove speed from active potion effects of player
+			remove invisibility from active potion effects of player
+			setLevelTagNameVisible(player, true) # 04-leveling.sk
+			if classLevel(player, "GD") >= 3:
+				remove regeneration from active potion effects of player
+
+			set player's helmet to {_armor::1}
+			set player's chestplate to {_armor::2}
+			set player's leggings to {_armor::3}
+			set player's boots to {_armor::4}
+			play sound "block_fire_extinguish" with volume 5 and pitch 1 at player
+			draw 25 of large_smoke at player with offset vector(0.5, 0.5, 0.5) with extra 0.1
+			set {godlike-ULT-CD::%player's uuid%::GD} to now
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::GD}
+			if {class::%player's uuid%} = "GD":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function gdCHECK(a: living entity, v: living entity) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
+	delete {gdCHECKResult}
+	gdCHECKWorker({_a}, {_v})
+	if {gdCHECKResult} is set:
+		return {gdCHECKResult}
+	# else falls through, returning nothing — matches the original, which only
+	# returns when its conditions are met, leaving the caller's {_temp} unset otherwise
+
+function gdCHECKWorker(a: living entity, v: living entity): # empowered next-hit after the tactical dash, or a weaker version if the ultimate has already ended
+	if name of {_a}'s held item is "%{wc}%Ghost Dagger":
+		if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
+			if {godlike-ULT-USE::%{_a}'s uuid%::GD} is false:
+				set {_multi} to 0.25
+			else:
+				set {_time} to difference between now and {godlike-ULT-USE::%{_a}'s uuid%::GD}
+				set {_check} to 80 ticks
+				set {_multi} to 0.25
+				loop 4 times:
+					if {_time} > {_check}:
+						add 0.1 to {_multi}
+					remove 20 ticks from {_check}
+
+			delete {godlike-ULT-USE::%{_a}'s uuid%::GD}
+			updateAttacker({_a}, {_v})
+			set {_h} to health of {_v}
+			set {_h} to {_h}*{_multi}
+			if {_h} < 2.5:
+				set {_h} to 2.5
+			set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk — the execute is Ghost's ultimate finishing off whatever hit triggered it
+			damage {_v} by {_h} # this re-enters the normal damage pipeline (on damage of living entity with priority high -> dmgUpdate -> dmgStats) on its own, so no separate dmgStats() call is needed here — the removed manual call was double-counting this hit
+			delete {balance-abilitySource::%{_a}'s uuid%}
+			make 25 of block particle using redstone block at block 1.5 above location of {_v}
+			play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_v}
+			set {gdCHECKResult} to 0
+
+on damage of player: # marks the empowered hit as "consumed" once landed
+	if "%event-damagecause%" is "attack" or "projectile":
+		if {godlike-ULT-USE::%victim's uuid%::GD} is set:
+			set {godlike-ULT-USE::%victim's uuid%::GD} to false

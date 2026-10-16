@@ -1,0 +1,118 @@
+# ============================================
+# FRANKENSTEIN (FH) — Frankenstein Hammer
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Passive "Hammer Down" (flavor text only — the +1 max health it used to
+#   describe now comes from Frankenstein being a Juggernaut, see the category
+#   buff in 02-class-data.sk) and Perk 1 (level 2) "The Biggest Boy" (+1 max
+#   health, on top of the category buff) are both handled centrally in
+#   04-leveling.sk's maxHealth() function, not in this file.
+# Perk 2 (level 3) "Undying": increases the ultimate's absorption shield strength.
+# ============================================
+
+on right click with mace: # TACTICAL
+	if name of player's held item is "%{wc}%Frankenstein Hammer":
+		if tacCHECK(player, {weapons::FH::TAC-COST}) is true:
+			push player upwards at speed 0.85
+			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
+
+			wait 5 ticks
+			while player isn't on ground:
+				set {_loc} to location of player
+				draw 3 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+				add 0.5 to y coord of {_loc}
+				draw 3 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0.1, 0.1, 0.1) with extra 0
+				wait 1 tick
+
+			set {_loc} to location of player
+			play sound "entity.warden.attack_impact" with volume 3 and pitch 0.5 at {_loc}
+			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
+			loop all living entities in radius 2.5 around {_loc}:
+				if loop-entity is not player:
+					updateAttacker(player, loop-entity)
+					directAttack(loop-entity)
+					damage loop-entity by 0.5
+					add potion effect of slowness 1 without particles for 2 seconds to potion effects of loop-entity
+
+				set {_shapes::circle} to a circle with radius 2.5
+				set particle of {_shapes::circle} to 2 of dust_color_transition particle using dustTransition(light gray, blue, 1)
+				draw shape {_shapes::circle} at {_loc}
+			delete {balance-abilitySource::%player's uuid%}
+
+on drop of mace with priority low: # ULTIMATE
+	if name of event-item is "%{wc}%Frankenstein Hammer":
+		cancel event
+		if classLevel(player, "FH") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::FH::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::FH} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::FH} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::FH}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+		else if ultCHECK(player, {weapons::FH::ULT-COST}) is true:
+			set {godlike-ULT-USE::%player's uuid%::FH} to now
+			if classLevel(player, "FH") >= 3: # Perk 2 (Undying)
+				add potion effect of absorption 2 without particles for 5 seconds to potion effects of player
+			else:
+				add potion effect of absorption 1 without particles for 5 seconds to potion effects of player
+			play sound "entity.warden.emerge" with volume 1 and pitch 1.5 at player
+			set {_shapes::triangle} to a triangle with radius 1.5
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			while (absorption amount of player) > 0:
+				if {godlike-ULT-CANCEL::%player's uuid%::FH} is set:
+					stop loop
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				wait 2 tick
+
+			set {godlike-ULT-CD::%player's uuid%::FH} to now
+			delete {godlike-ULT-USE::%player's uuid%::FH}
+			delete {godlike-ULT-CANCEL::%player's uuid%::FH}
+			# ULT CD
+			wait {_ultCooldown}
+			delete {godlike-ULT-CD::%player's uuid%::FH}
+			if {class::%player's uuid%} = "FH":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+
+function fhULT(a: living entity, p: player, dmg: number) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
+	fhULTWorker({_a}, {_p}, {_dmg})
+	return {fhULTResult}
+
+function fhULTWorker(a: living entity, p: player, dmg: number): # {_p} is the Frankenstein player; called from the damage pipeline while their ultimate is active
+	set {_v} to vector from {_p} to {_a}
+	set vector length of {_v} to 0.1
+	set {_loc} to location of {_p}
+	add 1.25 to y-coord of {_loc}
+	loop (distance between {_loc} and {_a}) / 0.1 times:
+		draw 1 of dust_color_transition using dustTransition(light gray, blue, 0.75) at {_loc} with offset vector(0, 0, 0) with extra 0
+		set {_loc} to {_loc} ~ {_v}
+	play sound "entity.warden.hurt" at volume 5 and pitch 0.75 at location of {_p}
+	play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_a}
+	updateAttacker({_p}, {_a})
+	set {_dmg} to {_dmg} / 2
+	set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk — this reflected hit is Frankenstein's ultimate dealing damage back to the original attacker
+	damage {_a} by {_dmg}
+	delete {balance-abilitySource::%{_p}'s uuid%}
+	set {fhULTResult} to 0
+
+on damage of player: # visual cue while the ultimate's shield is absorbing hits
+	if (absorption amount of victim) > 0:
+		if {class::%victim's uuid%} = "FH":
+			set {_loc} to location of victim
+			set {_x} to random number between -1 and 1
+			set {_y} to random number between 1 and 1.5
+			add {_x} to x-coord of {_loc}
+			add {_y} to y-coord of {_loc}
+			spawn 1 armor stand at {_loc}
+			set {_ls} to last spawned armor stand
+			add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
+			set name of last spawned armor stand to "&3✧&b&oSHIELDED&3✧"
+			wait 1 second
+			teleport {_ls} to block 100 below {_ls} # 01-utils.sk's showDMG — teleport away before killing so the kill's poof/particles don't show at the player's location
+			wait 1 tick
+			kill {_ls}
