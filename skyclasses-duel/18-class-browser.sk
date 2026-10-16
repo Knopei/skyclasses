@@ -1,0 +1,525 @@
+# ============================================
+# CLASS BROWSER (out-of-match /class command)
+# Not to be confused with 05-class-menu.sk's openClassMenu() — that's the
+# in-match "swap between your 3 drafted classes" GUI, used only during the
+# death-respawn flow now that the base region was scrapped. This is a
+# separate browser: every class's full kit, mastery progress, level-unlock
+# info, and — per class — a default-consumable and default-general-perk
+# selector (what 05-class-menu.sk's classSelect() equips that class with on
+# every respawn unless overridden in-match for that game — see
+# 06-perks-general.sk / 07-consumables.sk). The main browser page itself
+# stays purely informational; only the Class Info page's two default
+# selectors actually change any persistent state.
+#
+# Ratings (difficulty/melee/range/toughness/crowd control/mobility) are static
+# flavor data, not derived from anything — tune the strings directly below if
+# a class's kit changes enough to make them inaccurate. Each line shows the
+# pip bar first, then the stat's name.
+#
+# Level-unlock lore is written from the actual Perk 1 / Perk 2 descriptions
+# already documented at the top of each class file — see viking.sk, demon.sk,
+# etc. If a perk's behavior ever changes, update the matching block here too.
+# ============================================
+
+on load:
+	# ---- RATINGS (Difficulty / Melee / Range / Toughness / Crowd Control / Mobility) ----
+	set {class-rating::PGS::*} to "&a●&2●&7●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●&7●●● &bMobility"
+	set {class-rating::VBA::*} to "&a●●●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&7●●● &5Crowd Control" and "&a●●&7●● &bMobility"
+	set {class-rating::RB::*} to "&a●●●&7● &cClose Damage" and "&a●●●&2● &eRange Damage" and "&7●●●● &6Toughness" and "&7●●●● &5Crowd Control" and "&a●●&7●● &bMobility"
+	set {class-rating::DS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&a●●●&7● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●&7●●● &bMobility"
+	set {class-rating::GD::*} to "&a●●&2●&7● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●&7●● &6Toughness" and "&7●●●● &5Crowd Control" and "&a●●●● &bMobility"
+	set {class-rating::ZT::*} to "&a●●●&7● &cClose Damage" and "&a●●●&7● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●&7●●● &bMobility"
+	set {class-rating::MH::*} to "&a●●●&2● &cClose Damage" and "&7●●●● &eRange Damage" and "&2●&7●●● &6Toughness" and "&a●●●&7● &5Crowd Control" and "&a●&2●&7●● &bMobility"
+	set {class-rating::RS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&a●&7●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●●&2●&7● &bMobility"
+	set {class-rating::NS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&2●&7● &5Crowd Control" and "&a●●●&7● &bMobility"
+	set {class-rating::FH::*} to "&a●●&7●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●●&2● &6Toughness" and "&a●&7●●● &5Crowd Control" and "&a●●&7●● &bMobility"
+	set {class-rating::BS::*} to "&a●●&7●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●&2●&7● &6Toughness" and "&a●●●&7● &5Crowd Control" and "&a●&7●●● &bMobility"
+	set {class-rating::CB::*} to "&a●●&7●● &cClose Damage" and "&a●●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●●●&7● &bMobility"
+	set {class-rating::TS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&2●&7● &5Crowd Control" and "&a●●●&7● &bMobility" # Range 1/4 (was 1.5/4), Mobility 3/4 (was 2.5/4) — half a point moved from Range to Mobility
+	set {class-rating::EA::*} to "&a●●●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●&7●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●●&7●● &bMobility"
+
+	# ---- LEVEL UNLOCK INFO (Level 1 = ultimate, Level 2 = Perk 1, Level 3 = Perk 2) ----
+	# category feeds the item's display name ("Level N: <category>"); name is the
+	# ability/perk's own name, pre-colored (perks are all &6, ultimates keep the
+	# color they're shown with in class-display); desc is the description only.
+	set {classlevel-category::VBA::1} to "Unlocks Ultimate"
+	set {classlevel-name::VBA::1} to "&4Big Rage"
+	set {classlevel-desc::VBA::1::*} to "&8&oLittle Rage but more furious."
+	set {classlevel-category::VBA::2} to "Passive Upgrade"
+	set {classlevel-name::VBA::2} to "&6Joyful to Furious"
+	set {classlevel-desc::VBA::2::*} to "&8&oRefines the health-scaling damage" and "&8&oformula into more dramatic tiers."
+	set {classlevel-category::VBA::3} to "Ultimate Upgrade"
+	set {classlevel-name::VBA::3} to "&6Victim Chase"
+	set {classlevel-desc::VBA::3::*} to "&8&oWhile the ultimate is active, empowers" and "&8&othe tactical's on-hit speed from 2 to 3."
+
+	set {classlevel-category::DS::1} to "Unlocks Ultimate"
+	set {classlevel-name::DS::1} to "&4Blood Harvest"
+	set {classlevel-desc::DS::1::*} to "&8&oAutomatically shoot Blood Beams at" and "&8&oall nearby enemies."
+	set {classlevel-category::DS::2} to "Tactical Upgrade"
+	set {classlevel-name::DS::2} to "&6Extended Siphon"
+	set {classlevel-desc::DS::2::*} to "&8&oExtends the tactical beam's range."
+	set {classlevel-category::DS::3} to "Ultimate Upgrade"
+	set {classlevel-name::DS::3} to "&6Vampire"
+	set {classlevel-desc::DS::3::*} to "&8&oIncreases lifesteal per hit during" and "&8&othe ultimate."
+
+	set {classlevel-category::FH::1} to "Unlocks Ultimate"
+	set {classlevel-name::FH::1} to "&bIt's Alive!"
+	set {classlevel-desc::FH::1::*} to "&8&oCreate a powerful electric shield" and "&8&othat reflects projectiles."
+	set {classlevel-category::FH::2} to "Passive Upgrade"
+	set {classlevel-name::FH::2} to "&6The Biggest Boy"
+	set {classlevel-desc::FH::2::*} to "&8&oGain +1 max health."
+	set {classlevel-category::FH::3} to "Ultimate Upgrade"
+	set {classlevel-name::FH::3} to "&6Undying"
+	set {classlevel-desc::FH::3::*} to "&8&oIncreases the ultimate's absorption" and "&8&oshield strength."
+
+	set {classlevel-category::GD::1} to "Unlocks Ultimate"
+	set {classlevel-name::GD::1} to "&4Ghost"
+	set {classlevel-desc::GD::1::*} to "&8&oGain immense speed and invisibility" and "&8&o+ your next attack while invis does a" and "&8&olarge percent of the enemy's health."
+	set {classlevel-category::GD::2} to "Tactical Upgrade"
+	set {classlevel-name::GD::2} to "&6Lunge Master"
+	set {classlevel-desc::GD::2::*} to "&8&oReduces the tactical's mana cost."
+	set {classlevel-category::GD::3} to "Ultimate Upgrade"
+	set {classlevel-name::GD::3} to "&6Supportive Ghost"
+	set {classlevel-desc::GD::3::*} to "&8&oAdds cleanse + regen to the ultimate."
+
+	set {classlevel-category::BS::1} to "Unlocks Ultimate"
+	set {classlevel-name::BS::1} to "&6Shield Quake"
+	set {classlevel-desc::BS::1::*} to "&8&oSlam your shield multiple times," and "&8&oknocking up enemies and briefly" and "&8&odisabling their stamina usage."
+	set {classlevel-category::BS::2} to "Tactical Upgrade"
+	set {classlevel-name::BS::2} to "&6Resilient Basher"
+	set {classlevel-desc::BS::2::*} to "&8&oBigger stamina refund on bash."
+	set {classlevel-category::BS::3} to "Ultimate Upgrade"
+	set {classlevel-name::BS::3} to "&6Unsteady Grounds"
+	set {classlevel-desc::BS::3::*} to "&8&oIncreases the damage of Shield Quake" and "&8&oand the duration of stamina pause."
+
+	set {classlevel-category::MH::1} to "Unlocks Ultimate"
+	set {classlevel-name::MH::1} to "&bMighty Leap"
+	set {classlevel-desc::MH::1::*} to "&8&oLeap high and create a big explosion" and "&8&oon landing + dash mid-air."
+	set {classlevel-category::MH::2} to "Passive Upgrade"
+	set {classlevel-name::MH::2} to "&6Grenade Protection"
+	set {classlevel-desc::MH::2::*} to "&8&oTake less damage from grenades."
+	set {classlevel-category::MH::3} to "Ultimate Upgrade"
+	set {classlevel-name::MH::3} to "&6Fire Pit"
+	set {classlevel-desc::MH::3::*} to "&8&oCreates a fire ring on ultimate landing."
+
+	set {classlevel-category::NS::1} to "Unlocks Ultimate"
+	set {classlevel-name::NS::1} to "&6Dragon Blade"
+	set {classlevel-desc::NS::1::*} to "&8&oPull out a fiery katana and gain" and "&8&oimmense speed and jump boost."
+	set {classlevel-category::NS::2} to "Passive Upgrade"
+	set {classlevel-name::NS::2} to "&6Stamina Master"
+	set {classlevel-desc::NS::2::*} to "&8&oStamina dashes will launch you further."
+	set {classlevel-category::NS::3} to "Ultimate Upgrade"
+	set {classlevel-name::NS::3} to "&6Fiery Shurikens"
+	set {classlevel-desc::NS::3::*} to "&8&oIgnites your shurikens during the" and "&8&oultimate."
+
+	set {classlevel-category::PGS::1} to "Unlocks Ultimate"
+	set {classlevel-name::PGS::1} to "&6Holy Radiance"
+	set {classlevel-desc::PGS::1::*} to "&8&oCreate a holy radius that buffs you" and "&8&oand debuffs enemies."
+	set {classlevel-category::PGS::2} to "Tactical Upgrade"
+	set {classlevel-name::PGS::2} to "&6Elder Shield"
+	set {classlevel-desc::PGS::2::*} to "&8&oIncreases the duration of Holy Shield" and "&8&ofrom 2 seconds to 3 seconds."
+	set {classlevel-category::PGS::3} to "Ultimate Upgrade"
+	set {classlevel-name::PGS::3} to "&6Supreme Radiance"
+	set {classlevel-desc::PGS::3::*} to "&8&oLarger ultimate radius."
+
+	set {classlevel-category::RB::1} to "Unlocks Ultimate"
+	set {classlevel-name::RB::1} to "&6Rapid Bow"
+	set {classlevel-desc::RB::1::*} to "&8&oSwap to your bow and fire arrows" and "&8&olike a rapid-fire machine gun."
+	set {classlevel-category::RB::2} to "Passive Upgrade"
+	set {classlevel-name::RB::2} to "&6Long Shot"
+	set {classlevel-desc::RB::2::*} to "&8&oThe passive's arrow does 30%% max" and "&8&ohealth damage instead of 25%% when" and "&8&ofired from 7.5+ blocks away."
+	set {classlevel-category::RB::3} to "Ultimate Upgrade"
+	set {classlevel-name::RB::3} to "&6Overheat"
+	set {classlevel-desc::RB::3::*} to "&8&oArrows ignite near the end of the" and "&8&orapid-fire duration."
+
+	set {classlevel-category::CB::1} to "Unlocks Ultimate"
+	set {classlevel-name::CB::1} to "&6Cyber Glitch"
+	set {classlevel-desc::CB::1::*} to "&8&oPhase through doors and solid" and "&8&oterrain."
+	set {classlevel-category::CB::2} to "Tactical Upgrade"
+	set {classlevel-name::CB::2} to "&6Stamina Lockout"
+	set {classlevel-desc::CB::2::*} to "&8&oMalicious Dart disables stamina" and "&8&olonger."
+	set {classlevel-category::CB::3} to "Ultimate Upgrade"
+	set {classlevel-name::CB::3} to "&6Overclock"
+	set {classlevel-desc::CB::3::*} to "&8&oThe recharge time of your Ultimate" and "&8&ocharges is reduced."
+
+	set {classlevel-category::TS::1} to "Unlocks Ultimate"
+	set {classlevel-name::TS::1} to "&4Tornado"
+	set {classlevel-desc::TS::1::*} to "&8&oSummon a directional tornado that" and "&8&opushes and damages enemies."
+	set {classlevel-category::TS::2} to "Passive Upgrade"
+	set {classlevel-name::TS::2} to "&6Lingering Winds"
+	set {classlevel-desc::TS::2::*} to "&8&oAirborne's speed buff lasts 3" and "&8&oseconds instead of 2."
+	set {classlevel-category::TS::3} to "Ultimate Upgrade"
+	set {classlevel-name::TS::3} to "&6Category 5"
+	set {classlevel-desc::TS::3::*} to "&8&oIncreases the distance Tornado" and "&8&otravels."
+
+	set {classlevel-category::RS::1} to "Unlocks Ultimate"
+	set {classlevel-name::RS::1} to "&4Soul Collector"
+	set {classlevel-desc::RS::1::*} to "&8&oSwing your scythe around you," and "&8&oapplying withering and blindness to" and "&8&ohit enemies."
+	set {classlevel-category::RS::2} to "Tactical Upgrade"
+	set {classlevel-name::RS::2} to "&6Extended Grapple"
+	set {classlevel-desc::RS::2::*} to "&8&oLonger grapple range + improved pull" and "&8&ophysics."
+	set {classlevel-category::RS::3} to "Ultimate Upgrade"
+	set {classlevel-name::RS::3} to "&6Soul Collector+"
+	set {classlevel-desc::RS::3::*} to "&8&oBonus damage/heal from blinded" and "&8&oenemies after using the ultimate."
+
+	set {classlevel-category::ZT::1} to "Unlocks Ultimate"
+	set {classlevel-name::ZT::1} to "&bThunderstorm"
+	set {classlevel-desc::ZT::1::*} to "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance."
+	set {classlevel-category::ZT::2} to "Tactical Upgrade"
+	set {classlevel-name::ZT::2} to "&6Weight Reduction"
+	set {classlevel-desc::ZT::2::*} to "&8&oSpeed burst after landing the" and "&8&otactical throw."
+	set {classlevel-category::ZT::3} to "Ultimate Upgrade"
+	set {classlevel-name::ZT::3} to "&6Lightning Speed"
+	set {classlevel-desc::ZT::3::*} to "&8&oFaster ultimate telegraph (less" and "&8&owarning time)."
+
+	set {classlevel-category::EA::1} to "Unlocks Ultimate"
+	set {classlevel-name::EA::1} to "&4Death's Toll"
+	set {classlevel-desc::EA::1::*} to "&8&oCharge your axe for a devastating" and "&8&ofinishing blow - the longer you" and "&8&ocharge, the harder it hits."
+	set {classlevel-category::EA::2} to "Passive Upgrade"
+	set {classlevel-name::EA::2} to "&6Wider Mark"
+	set {classlevel-desc::EA::2::*} to "&8&oExecutioner's Mark now triggers at" and "&8&o4 hearts or below instead of 3."
+	set {classlevel-category::EA::3} to "Ultimate Upgrade"
+	set {classlevel-name::EA::3} to "&6Execution"
+	set {classlevel-desc::EA::3::*} to "&8&oDeath's Toll instead deals a percent" and "&8&oof the target's max health, never" and "&8&oless than its base damage."
+
+	# ---- STATIC DISPLAY ITEMS ----
+	set {browser::caption} to enchanted book of infinity 1 named "&6&lClass Browser" with lore "" and "&8&oBrowse every class's kit, mastery" and "&8&oprogress, and level unlocks." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {browser::stats} to book named "&f&lStatistics" with lore "" and "&7[CLICK] View" and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+command /class:
+	trigger:
+		openClassBrowser(player)
+
+# ============================================
+# CLASS BROWSER — main menu
+# ============================================
+
+function openClassBrowser(p: player):
+	set metadata tag "class browser" of {_p} to chest inventory with 6 rows named "Class Browser"
+	set slot (integers between 0 and 8) of metadata tag "class browser" of {_p} to black stained glass pane named " "
+	set slot (integers between 9 and 35) of metadata tag "class browser" of {_p} to gray stained glass pane named " " # these 3 rows (Striker/Juggernaut/Skirmisher) take the place of what used to be one blanket gray area
+	set slot (integers between 36 and 53) of metadata tag "class browser" of {_p} to black stained glass pane named " "
+
+	set slot 4 of metadata tag "class browser" of {_p} to {browser::caption}
+
+	delete {classBrowserSlotClass::%{_p}'s uuid%::*} # read by this menu's click handler below, rebuilt fresh every open
+	placeClassBrowserCategoryRow({_p}, 9, "STRIKER")
+	placeClassBrowserCategoryRow({_p}, 18, "JUGGERNAUT")
+	placeClassBrowserCategoryRow({_p}, 27, "SKIRMISHER")
+
+	set slot 49 of metadata tag "class browser" of {_p} to {browser::stats} # center bottom
+
+	open (metadata tag "class browser" of {_p}) to {_p}
+
+function placeClassBrowserCategoryRow(p: player, rowStart: number, category: text): # first column = category icon (name/buff/description), the rest of the row = that category's classes
+	set slot {_rowStart} of metadata tag "class browser" of {_p} to categoryIcon({_category}) # 02-class-data.sk
+	set {_slot} to {_rowStart} + 2 # leaves a gray gap right after the category icon
+	loop {category-classes::%{_category}%::*}: # 02-class-data.sk
+		placeClassBrowserIcon({_p}, {_slot}, loop-value)
+		set {classBrowserSlotClass::%{_p}'s uuid%::%{_slot}%} to loop-value
+		add 1 to {_slot}
+
+function classRatingLore(p: player, class: text) :: strings: # shared by this file's browser icons and 17-draft.sk's draft-pick icons — stat rating rows (Close Damage/Range Damage/Toughness/Crowd Control/Mobility; Difficulty removed) + mastery line, with no trailing content of its own (callers add whatever comes after)
+	set {_lore::*} to "" and {class-rating::%{_class}%::1}
+	add {class-rating::%{_class}%::2} to {_lore::*}
+	add {class-rating::%{_class}%::3} to {_lore::*}
+	add {class-rating::%{_class}%::4} to {_lore::*}
+	add {class-rating::%{_class}%::5} to {_lore::*}
+	add "" to {_lore::*}
+	add "&7Mastery: %getMasteryTier({_p}, {_class})% %getMasteryColor({_p}, {_class})%(%round(calcMasteryScore({_p}, {_class}))%)" to {_lore::*} # 13-mastery.sk — e.g. "&l&6Gold &6(512)"
+	return {_lore::*}
+
+function placeClassBrowserIcon(p: player, slot: number, class: text):
+	set {_lore::*} to classRatingLore({_p}, {_class})
+	add "" to {_lore::*}
+	add "&7[CLICK] Info" to {_lore::*}
+	add "" to {_lore::*}
+	set slot {_slot} of metadata tag "class browser" of {_p} to ({class::weapon::%{_class}%} named "&eClass: %{class-color::%{_class}%}%&l%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+on inventory click:
+	if event-inventory = (metadata tag "class browser" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		set {_class} to {classBrowserSlotClass::%player's uuid%::%{_slot}%}
+		if {_class} is set:
+			openClassInfoPage(player, {_class})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {_slot} is 49:
+			openStatsMenu(player, player) # 14-stats.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "class info" of player):
+		cancel event
+		set {_class} to {classInfoActiveClass::%player's uuid%}
+		if index of event-slot is 45:
+			openClassBrowser(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if index of event-slot is 48:
+			openClassDefaultConsumableSelect(player, {_class})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if index of event-slot is 50:
+			openClassDefaultGeneralPerkSelect(player, {_class})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "default consumable select" of player):
+		cancel event
+		set {_class} to {classInfoActiveClass::%player's uuid%}
+		set {_id} to ""
+		if index of event-slot is 19:
+			set {_id} to "MP"
+		else if index of event-slot is 20:
+			set {_id} to "SP"
+		else if index of event-slot is 21:
+			set {_id} to "HP"
+		else if index of event-slot is 22:
+			set {_id} to "GA"
+		else if index of event-slot is 23:
+			set {_id} to "CF"
+		else if index of event-slot is 24:
+			set {_id} to "GP"
+		else if index of event-slot is 25:
+			set {_id} to "GM"
+		if {_id} is not "":
+			set {class-default-consumable::%player's uuid%::%{_class}%} to {_id}
+			openClassDefaultConsumableSelect(player, {_class}) # reopen to refresh the "Default for <class>" highlight
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 36:
+			openClassInfoPage(player, {_class})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "default generalperk select" of player):
+		cancel event
+		set {_class} to {classInfoActiveClass::%player's uuid%}
+		set {_id} to ""
+		if index of event-slot is 19:
+			set {_id} to "nimblefeet"
+		else if index of event-slot is 20:
+			set {_id} to "staminarecovery"
+		else if index of event-slot is 21:
+			set {_id} to "reinforceddash"
+		else if index of event-slot is 22:
+			set {_id} to "healthyboy"
+		else if index of event-slot is 23:
+			set {_id} to "enchantedconsumables"
+		else if index of event-slot is 24:
+			set {_id} to "spellcaster"
+		else if index of event-slot is 25:
+			set {_id} to "quickfuse"
+		if {_id} is not "":
+			set {class-default-generalperk::%player's uuid%::%{_class}%} to {_id}
+			openClassDefaultGeneralPerkSelect(player, {_class}) # reopen to refresh the "Default for <class>" highlight
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 36:
+			openClassInfoPage(player, {_class})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+# ============================================
+# CLASS INFO — kit lore, mastery progress, level unlocks
+# ============================================
+
+function openClassInfoPage(p: player, class: text):
+	set {classInfoActiveClass::%{_p}'s uuid%} to {_class} # read by the click handler + the two default-selector sub-menus below, so they always know which class they're editing
+	set metadata tag "class info" of {_p} to chest inventory with 6 rows named "Class Info"
+	set slot (integers between 0 and 8) of metadata tag "class info" of {_p} to black stained glass pane named " "
+	set slot (integers between 9 and 44) of metadata tag "class info" of {_p} to gray stained glass pane named " "
+	set slot (integers between 45 and 53) of metadata tag "class info" of {_p} to black stained glass pane named " "
+
+	# ---- top: full kit lore ----
+	# RB's own class-display has no tactical section — that only exists on the
+	# dagger form (RD), since RB (the bow) is purely the ultimate-swap state.
+	# Show RD's full passive/tactical/ultimate lore here instead, on the bow icon.
+	set {_lore::*} to lore of {class-display::%{_class}%}
+	if {_class} = "RB":
+		set {_lore::*} to lore of {class-display::RD}
+	set {_topIcon} to ({class::weapon::%{_class}%} named "&eClass: %{class-color::%{_class}%}%&l%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	add nbt compound of "{""minecraft:tooltip_display"":{hidden_components:[""minecraft:attribute_modifiers"",""minecraft:enchantments"",""minecraft:stored_enchantments"",""minecraft:unbreakable"",""minecraft:can_break"",""minecraft:can_place_on"",""minecraft:dyed_color"",""minecraft:trim"",""minecraft:potion_contents"",""minecraft:jukebox_playable"",""minecraft:banner_patterns"",""minecraft:firework_explosion"",""minecraft:fireworks"",""minecraft:map_id"",""minecraft:bundle_contents"",""minecraft:lodestone_tracker"",""minecraft:instrument"",""minecraft:suspicious_stew_effects"",""minecraft:writable_book_content"",""minecraft:written_book_content"",""minecraft:charged_projectiles"",""minecraft:container""]}}" to nbt of {_topIcon} # same fix as the Combat/Reinforced Dash icons — the weapon's inherent attack damage/speed survive the item flag alone
+	set slot 4 of metadata tag "class info" of {_p} to {_topIcon}
+
+	# ---- mastery row (9 tiers, fills the entire second row, current tier enchanted) ----
+	set {_tierMaterial::1} to nether brick
+	set {_tierMaterial::2} to brick
+	set {_tierMaterial::3} to copper ingot
+	set {_tierMaterial::4} to iron ingot
+	set {_tierMaterial::5} to gold ingot
+	set {_tierMaterial::6} to diamond
+	set {_tierMaterial::7} to emerald
+	set {_tierMaterial::8} to amethyst shard
+	set {_tierMaterial::9} to wither skeleton skull
+
+	set {_score} to calcMasteryScore({_p}, {_class}) # 13-mastery.sk
+	set {_gamesPlayed} to {class-games::%{_p}'s uuid%::%{_class}%}
+	set {_currentTier} to getMasteryTierNumber({_p}, {_class})
+	set {_slot} to 8
+
+	loop integers between 1 and 9:
+		add 1 to {_slot}
+		set {_minGames} to {mastery-min-games::%loop-value%}
+		set {_lore::*} to "" and "&7Score Range: &e%{mastery-range::%loop-value%}%"
+		if {_gamesPlayed} >= {_minGames}:
+			add "&7Your Score: &e%{_score}%" to {_lore::*}
+		else:
+			add "&7Games: &e%{_gamesPlayed}%&7/&e%{_minGames}%" to {_lore::*}
+		if loop-value = {_currentTier}:
+			add "" to {_lore::*}
+			add "&aYour current tier" to {_lore::*}
+		add "" to {_lore::*}
+		set {_icon} to ({_tierMaterial::%loop-value%} named "%{mastery-tier::%loop-value%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		if loop-value = {_currentTier}:
+			enchant {_icon} with unbreaking 1
+			set {_icon} to {_icon} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set slot {_slot} of metadata tag "class info" of {_p} to {_icon}
+
+	# ---- level-unlock row (Level 0 = category buff, Level 1 = ultimate, Level 2 = Perk 1, Level 3 = Perk 2) — one row below the mastery row ----
+	# Laid out as (glass, lvl0, glass, lvl1, glass, lvl2, glass, lvl3, glass) —
+	# the surrounding glass panes are already gray from this function's blanket
+	# fill above, so only the 4 icon slots need setting here.
+	set {_levelMaterial::1} to light blue dye
+	set {_levelMaterial::2} to cyan dye
+	set {_levelMaterial::3} to blue dye
+
+	set slot 28 of metadata tag "class info" of {_p} to levelZeroIcon({_class}) # 02-class-data.sk
+
+	loop integers between 1 and 3:
+		set {_lore::*} to "" and {classlevel-name::%{_class}%::%loop-value%}
+		add {classlevel-desc::%{_class}%::%loop-value%::*} to {_lore::*}
+		if loop-value = 2:
+			set {_cat} to {class-category::%{_class}%}
+			if {category-buffdesc-l2::%{_cat}%} is set: # category buff that unlocks at level 2 (Skirmisher)
+				add "" and "&f&lCATEGORY BUFF" and {category-buffdesc-l2::%{_cat}%} to {_lore::*}
+		add "" to {_lore::*}
+		set {_name} to "&e&lLevel %loop-value%&e: &7%{classlevel-category::%{_class}%::%loop-value%}%"
+		set {_icon} to ({_levelMaterial::%loop-value%} named {_name} with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set slot (28 + (loop-value * 2)) of metadata tag "class info" of {_p} to {_icon}
+
+	# ---- default consumable + default general perk selectors — flanking the center of the bottom row ----
+	set {_uuid} to {_p}'s uuid
+	set {_defaultConsumable} to {class-default-consumable::%{_uuid}%::%{_class}%}
+	if {_defaultConsumable} isn't set:
+		set {_defaultConsumable} to "GA"
+	set slot 48 of metadata tag "class info" of {_p} to (potion of healing named "&c&lDefault Consumable" with lore " " and "&7Currently: &f%name of {health-item::%{_defaultConsumable}%}%" and " " and "&7[CLICK] Change" and " ") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set {_defaultPerk} to {class-default-generalperk::%{_uuid}%::%{_class}%}
+	if {_defaultPerk} isn't set:
+		set {_defaultPerk} to "healthyboy"
+	set slot 50 of metadata tag "class info" of {_p} to (glowstone dust named "&e&lDefault General Perk" with lore " " and "&7Currently: &f%name of {gp-display::%{_defaultPerk}%}%" and " " and "&7[CLICK] Change" and " ") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- bottom row: back (left corner) + consumable (48) + general perk (50) + class statistics (right corner) ----
+	set slot 45 of metadata tag "class info" of {_p} to {class-bottom::back} # 05-class-menu.sk
+	set slot 53 of metadata tag "class info" of {_p} to classStatisticsIcon({_p}, {_class})
+
+	open (metadata tag "class info" of {_p}) to {_p}
+
+function classStatisticsIcon(p: player, class: text) :: item:
+	set {_uuid} to {_p}'s uuid
+	set {_ckd} to safeDivide({class-kill::%{_uuid}%::%{_class}%}, {class-death::%{_uuid}%::%{_class}%}) # 14-stats.sk
+	set {_cwinrate} to safeDivide({class-wins::%{_uuid}%::%{_class}%}, {class-games::%{_uuid}%::%{_class}%}) * 100
+	set {_lore::*} to "" and "&7Games: &e%{class-games::%{_uuid}%::%{_class}%}% &7(&a%{class-wins::%{_uuid}%::%{_class}%}%W &7- &c%{class-losses::%{_uuid}%::%{_class}%}%L&7)" and "&7Win Rate: &e%{_cwinrate}%%%" and "&7Kills: &e%{class-kill::%{_uuid}%::%{_class}%}% &7Deaths: &e%{class-death::%{_uuid}%::%{_class}%}% &7K/D: &e%{_ckd}%" and "&7Damage: &e%formatNumber({class-damage::%{_uuid}%::%{_class}%})%" and "&7Player Damage: &e%formatNumber({class-playerdamage::%{_uuid}%::%{_class}%})%" and "&7Damage Taken: &e%formatNumber({class-damagetaken::%{_uuid}%::%{_class}%})%" and "&7Jungle Slain: &e%{class-jungleslain::%{_uuid}%::%{_class}%}% &7Bosses: &e%{class-bossesslain::%{_uuid}%::%{_class}%}%" and "&7Best Killstreak: &e%{class-ks::%{_uuid}%::%{_class}%::top}%" and ""
+	return (book named "&fClass Statistics" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+# ============================================
+# DEFAULT CONSUMABLE SELECTOR — per class, reached from that class's Class
+# Info page (slot 36). Unlike 07-consumables.sk's in-match picker, this one
+# is never ambiguous (it's always tied to the class info page it was opened
+# from, tracked via {classInfoActiveClass::%uuid%}), so it behaves like the
+# old single-selection GUI: picking an item saves it immediately and the
+# current default stays visibly highlighted.
+# ============================================
+
+function openClassDefaultConsumableSelect(p: player, class: text):
+	set {classInfoActiveClass::%{_p}'s uuid%} to {_class}
+	set metadata tag "default consumable select" of {_p} to chest inventory with 5 rows named "Default: %{class-name::%{_class}%}%"
+	set slot (integers between 9 and 35) of metadata tag "default consumable select" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "default consumable select" of {_p} to red stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "default consumable select" of {_p} to red stained glass pane named " "
+
+	set slot 4 of metadata tag "default consumable select" of {_p} to {hi-caption} # 07-consumables.sk
+
+	set {_selected} to {class-default-consumable::%{_p}'s uuid%::%{_class}%}
+	if {_selected} isn't set:
+		set {_selected} to "GA"
+
+	set {_display::19} to {hi-display::MP} # 07-consumables.sk
+	set {_display::20} to {hi-display::SP}
+	set {_display::21} to {hi-display::HP}
+	set {_display::22} to {hi-display::GA}
+	set {_display::23} to {hi-display::CF}
+	set {_display::24} to {hi-display::GP}
+	set {_display::25} to {hi-display::GM}
+
+	set {_ids::19} to "MP"
+	set {_ids::20} to "SP"
+	set {_ids::21} to "HP"
+	set {_ids::22} to "GA"
+	set {_ids::23} to "CF"
+	set {_ids::24} to "GP"
+	set {_ids::25} to "GM"
+
+	loop {_display::*}:
+		set {_index} to loop-index parsed as a integer
+		set {_id} to {_ids::%{_index}%}
+		set {_lore::*} to lore of loop-value # base lore already ends with two trailing blank lines — overwrite the last one with the status line
+		set {_size} to size of {_lore::*}
+		if {_id} = {_selected}:
+			set {_lore::%{_size}%} to "&aDefault for %{class-name::%{_class}%}%"
+		else:
+			set {_lore::%{_size}%} to "&7Click to set as default"
+		set {_icon} to (loop-value with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		if {_id} = {_selected}:
+			enchant {_icon} with unbreaking 1
+			set {_icon} to {_icon} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set slot {_index} of metadata tag "default consumable select" of {_p} to {_icon}
+
+	set slot 36 of metadata tag "default consumable select" of {_p} to {class-bottom::back} # 05-class-menu.sk
+
+	open (metadata tag "default consumable select" of {_p}) to {_p}
+
+# ============================================
+# DEFAULT GENERAL PERK SELECTOR — per class, reached from that class's Class
+# Info page (slot 44). Same relationship to 06-perks-general.sk's in-match
+# picker that the function above has to 07-consumables.sk's.
+# ============================================
+
+function openClassDefaultGeneralPerkSelect(p: player, class: text):
+	set {classInfoActiveClass::%{_p}'s uuid%} to {_class}
+	set metadata tag "default generalperk select" of {_p} to chest inventory with 5 rows named "Default: %{class-name::%{_class}%}%"
+	set slot (integers between 9 and 35) of metadata tag "default generalperk select" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "default generalperk select" of {_p} to yellow stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "default generalperk select" of {_p} to yellow stained glass pane named " "
+
+	set slot 4 of metadata tag "default generalperk select" of {_p} to {gp-caption} # 06-perks-general.sk
+
+	set {_selected} to {class-default-generalperk::%{_p}'s uuid%::%{_class}%}
+	if {_selected} isn't set:
+		set {_selected} to "healthyboy"
+
+	set {_display::19} to {gp-display::nimblefeet} # 06-perks-general.sk
+	set {_display::20} to {gp-display::staminarecovery}
+	set {_display::21} to {gp-display::reinforceddash}
+	set {_display::22} to {gp-display::healthyboy}
+	set {_display::23} to {gp-display::enchantedconsumables}
+	set {_display::24} to {gp-display::spellcaster}
+	set {_display::25} to {gp-display::quickfuse}
+
+	set {_ids::19} to "nimblefeet"
+	set {_ids::20} to "staminarecovery"
+	set {_ids::21} to "reinforceddash"
+	set {_ids::22} to "healthyboy"
+	set {_ids::23} to "enchantedconsumables"
+	set {_ids::24} to "spellcaster"
+	set {_ids::25} to "quickfuse"
+
+	loop {_display::*}:
+		set {_index} to loop-index parsed as a integer
+		set {_id} to {_ids::%{_index}%}
+		set {_lore::*} to lore of loop-value # base lore: "", PASSIVE, description, "" — already ends with a blank after the description
+		if {_id} = {_selected}:
+			add "&aDefault for %{class-name::%{_class}%}%" to {_lore::*}
+		else:
+			add "&7Click to set as default" to {_lore::*}
+		add "" to {_lore::*}
+		set {_icon} to (loop-value with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		if {_id} = {_selected}:
+			enchant {_icon} with unbreaking 1
+			set {_icon} to {_icon} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set slot {_index} of metadata tag "default generalperk select" of {_p} to {_icon}
+
+	set slot 36 of metadata tag "default generalperk select" of {_p} to {class-bottom::back} # 05-class-menu.sk
+
+	open (metadata tag "default generalperk select" of {_p}) to {_p}
