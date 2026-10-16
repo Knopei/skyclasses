@@ -1,0 +1,195 @@
+# ============================================
+# RESOURCE ECONOMY (Mana & Stamina)
+# The gatekeeper functions every class's tactical/ultimate/dash ability calls
+# before firing, plus the regen ticker and action bar HUD.
+# Cleaned from the original mana.sk / stamina.sk — removed the CB-specific
+# cooldown calc (class not kept) and the old Spell Caster ult-cooldown
+# reduction (only the mana-cost reduction survives, per design decision).
+# ============================================
+
+function atkCHECK(p: player, mana: integer) :: boolean:
+	set {_mana} to {_mana}*10
+	if {mana::%{_p}'s uuid%::curr} < {_mana}:
+		send "&cNot enough Mana!" to {_p}
+		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
+		stop
+	remove {_mana} from {mana::%{_p}'s uuid%::curr}
+	actionBar({_p})
+	return true
+
+function tacCHECK(p: player, mana: integer) :: boolean:
+	set {_mana} to {_mana}*10
+	if {ability-cooldown::%{_p}'s uuid%} is set:
+		if difference between now and {ability-cooldown::%{_p}'s uuid%} < 15 ticks:
+			send "&cAbility on Cooldown!" to {_p}
+			stop
+	if {mana::%{_p}'s uuid%::curr} < {_mana}:
+		send "&cNot enough Mana!" to {_p}
+		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
+		stop
+	remove {_mana} from {mana::%{_p}'s uuid%::curr}
+	actionBar({_p})
+	set {ability-cooldown::%{_p}'s uuid%} to now
+	recordAbilityCast({_p}, "TAC", {_mana}) # 19-balance-stats.sk
+	return true
+
+function ultCHECK(p: player, mana: integer) :: boolean:
+	# General perk "Spell Caster" reduces ultimate mana cost here; it also
+	# reduces ultimate cooldown (for base cooldowns over 45 seconds), applied
+	# separately by ultCooldownFor() — see 06-perks-general.sk.
+	# FIX: this used to check a stale {general-perk::%uuid%::owned::*} list
+	# left over from the old multi-perk boss-reward system — that list hasn't
+	# been populated since the redesign to a single {general-perk::%uuid%::
+	# selected} value, so this perk silently did nothing. Now reads the same
+	# "currently effective" value everything else reads.
+	if {general-perk::%{_p}'s uuid%::selected} is "spellcaster":
+		remove {gp-ultManaReduction} from {_mana} # 06-perks-general.sk
+		if {_mana} < 0:
+			set {_mana} to 0
+	set {_mana} to {_mana}*10
+	if {mana::%{_p}'s uuid%::curr} < {_mana}:
+		send "&cNot enough Mana!" to {_p}
+		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
+		stop
+	remove {_mana} from {mana::%{_p}'s uuid%::curr}
+	actionBar({_p})
+	recordAbilityCast({_p}, "ULT", {_mana}) # 19-balance-stats.sk
+	return true
+
+function staminaCHECK(p: player, stamina: integer) :: boolean:
+	set {_stamina} to {_stamina}*300
+	if {stamina-cooldown::%{_p}'s uuid%} is set:
+		if difference between now and {stamina-cooldown::%{_p}'s uuid%} < 15 ticks:
+			stop
+	if {staminaPause::%{_p}'s uuid%} is set:
+		send "&cStamina Disabled!" to {_p}
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		stop
+	if {stamina::%{_p}'s uuid%::curr} < {_stamina}:
+		send "&cNot enough Stamina!" to {_p}
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		stop
+	remove {_stamina} from {stamina::%{_p}'s uuid%::curr}
+	if {class::%{_p}'s uuid%} is "TS": # tempest.sk passive (Airborne) — speed burst after spending stamina, from any source
+		tsAirborne({_p})
+	actionBar({_p})
+	set {stamina-cooldown::%{_p}'s uuid%} to now
+	return true
+
+on join:
+	if {mana::%player's uuid%::max} isn't set:
+		set {mana::%player's uuid%::max} to 1000
+		set {mana::%player's uuid%::curr} to 0
+	if {stamina::%player's uuid%::max} isn't set:
+		set {stamina::%player's uuid%::max} to 900
+		set {stamina::%player's uuid%::curr} to 0
+	delete {staminaPause::%player's uuid%}
+
+every 5 ticks: # 1 stamina point = 300 internal units, 1 mana point = 10 internal units
+	loop all players:
+		if {mana::%loop-player's uuid%::max} > {mana::%loop-player's uuid%::curr}:
+			add 10 to {mana::%loop-player's uuid%::curr}
+			if {mana::%loop-player's uuid%::curr} > {mana::%loop-player's uuid%::max}:
+				set {mana::%loop-player's uuid%::curr} to {mana::%loop-player's uuid%::max}
+		if {stamina::%loop-player's uuid%::max} > {stamina::%loop-player's uuid%::curr}:
+			add 7.5 to {stamina::%loop-player's uuid%::curr}
+			if {stamina::%loop-player's uuid%::curr} > {stamina::%loop-player's uuid%::max}: # without this clamp, a tick that also picks up Stamina Recovery's bonus (06-perks-general.sk) can overshoot past max instead of landing exactly on it — which broke that perk's "stamina is completely full" speed check, since curr was never exactly equal to max again after the first refill
+				set {stamina::%loop-player's uuid%::curr} to {stamina::%loop-player's uuid%::max}
+		actionBar(loop-player)
+
+function actionBar(p: player):
+	set {_uuid} to {_p}'s uuid
+	set {_mCurr} to floor({mana::%{_uuid}%::curr}/10)
+	set {_mMax} to {mana::%{_uuid}%::max}/10
+	set {_sCurr} to floor({stamina::%{_uuid}%::curr}/300)
+	set {_sMax} to {stamina::%{_uuid}%::max}/300
+	# ULT %
+	set {_class} to {class::%{_uuid}%}
+	if {_class} is "CB": # cyberpunk.sk — a 2-charge ultimate, not a single 0-100%% cooldown, so it gets its own charge-count readout instead of the generic ULT%% below
+		set {_charges} to {cb-ULT-count::%{_uuid}%}
+		if {_charges} isn't set:
+			set {_charges} to 0
+		if {_charges} >= 2:
+			set {_ultText} to "&b2/2 ULT"
+		else:
+			set {_cooldown} to cbCalcCooldownULT({_p}) # cyberpunk.sk — perk-aware (Overclock, level 3, shortens this)
+			set {_pct} to 100
+			if {godlike-ULT-CD::%{_uuid}%::CB} is set:
+				set {_time} to difference between now and {godlike-ULT-CD::%{_uuid}%::CB}
+				if {_time} < {_cooldown}:
+					set {_pct} to floor(({_time} / {_cooldown}) * 100)
+			set {_ultText} to "&b%{_charges}%/2 ULT &7(%{_pct}%%%)"
+	else:
+		if {godlike-ULT-CD::%{_uuid}%::%{_class}%} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%{_uuid}%::%{_class}%}
+			set {_cooldown} to ultCooldownFor({_p}, {weapons::%{_class}%::ULT-CD}) # 06-perks-general.sk — must match the ACTUAL wait duration each class's ultimate trigger uses, or Spell Caster's shortened cooldown finishes before this percentage (still dividing by the unshortened base) reaches 100%%, making it jump straight from some lower number to 100%% the instant the tag clears
+			if {_time} < {_cooldown}:
+				set {_ult} to floor(({_time} / {_cooldown}) * 100) # dividing the two timespans directly avoids the old string-split/parse bug: once a cooldown reached 60+ seconds, Skript formats it as "X minute(s)" instead of "X seconds", and grabbing only the leading number while discarding the unit compared minutes against seconds, producing percentages in the thousands
+		else:
+			set {_ult} to 100
+		if {_ult} isn't set:
+			set {_ult} to 100
+		set {_ultText} to "&b%{_ult}%%% ULT"
+	if {staminaPause::%{_uuid}%} is set:
+		set {_sc} to "&7"
+	else:
+		set {_sc} to "&e"
+	send action bar "%{_sc}%%{_sCurr}%/%{_sMax}% Stamina  &9%{_mCurr}%/%{_mMax}% Mana  %{_ultText}%" to {_p}
+
+on xp spawn: # prevents vanilla XP orbs from interfering with the class-level display (sidebar/nametag only, no XP bar usage)
+	cancel event
+
+on player pickup xp:
+	cancel event
+
+# ---- BASELINE MOVEMENT SPEED (also covers GD's and VBA's speed-related passives) ----
+every 1 seconds:
+	loop all players:
+		if {top::%loop-player's uuid%} is set:
+			if {class::%loop-player's uuid%} = "GD": # Ghost passive (Quick Feet) — permanent increased speed
+				add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+			else if {class::%loop-player's uuid%} = "VBA": # Viking passive (Little Rage) — more speed the lower current health is
+				if loop-player's health <= 5:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else: # baseline speed for all other classes
+				add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+
+# ---- STAMINA DASH (shared movement ability, used by most classes) ----
+on sneak toggle:
+	if {top::%player's uuid%} is set:
+		if player isn't on ground:
+			if staminaCHECK(player, 1) is true:
+				perkDashReduction(player) # defined in 06-perks-general.sk — applies damage reduction while dashing if that perk is owned
+				if {isShielding::%player's uuid%} is set:
+					recordAbilityCast(player, "TAC", 0) # 19-balance-stats.sk — Basher's dash-bash is its tactical, but it's gated by staminaCHECK above, not tacCHECK, so it needs its own cast-count call (no mana cost of its own to log)
+					bsBash(player, "TAC") # basher.sk
+					play sound "entity_bat_takeoff" with volume 0.5 and pitch 0.5 at player
+				else:
+					play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at player
+				set {_pitch} to pitch of player
+				if {_pitch} > 75:
+					if {class::%player's uuid%} = "NS":
+						nkStamina(player) # ninja.sk
+						set velocity of player to vector(0, 0, 0)
+						if classLevel(player, "NS") >= 2: # Perk 1 (Stamina Master) — dashes launch further
+							push player upward at speed 1.35
+						else:
+							push player upward at speed 1
+					else:
+						set velocity of player to vector(0, 0, 0)
+						push player upward at speed 1
+				else:
+					if {class::%player's uuid%} = "NS":
+						nkStamina(player)
+						push player horizontally forward at speed 0.5
+						wait 1 tick
+						push player horizontally forward at speed 0.5
+						if classLevel(player, "NS") >= 2: # Perk 1 (Stamina Master) — dashes launch further
+							wait 1 tick
+							push player horizontally forward at speed 0.25
+					else:
+						push player horizontally forward at speed 0.5
+						wait 1 tick
+						push player horizontally forward at speed 0.5

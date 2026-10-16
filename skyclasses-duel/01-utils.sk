@@ -1,0 +1,298 @@
+# ============================================
+# SHARED UTILITIES
+# Generic helper functions used across class files, damage, death, and objectives.
+# Extracted and trimmed from the original class-func.sk / damage.sk.
+# ============================================
+
+function formatCooldown(t: timespan) :: text: # displays a cooldown as plain seconds (e.g. "80 seconds") in lore — Skript's default timespan-to-text formatting switches to "1 minute and 20 seconds" once a value crosses 60, which reads worse than just naming the seconds
+	set {_seconds} to {_t} / (1 second) # dividing two timespans gives a plain number — same trick already used for the ULT%% math in 03-resources.sk's actionBar()
+	return "%round({_seconds})% seconds"
+
+function updateAttacker(a: living entity, v: living entity):
+	if {_a} != {_v}:
+		if {_v} is a player:
+			set metadata value "attacker" of {_v} to {_a}
+		else if {_v} is a living entity:
+			set metadata value "attacker" of {_v} to {_a}
+
+function directAttack(v: living entity):
+	# Cancels Ghost's (GD) mid-ultimate empowered-next-hit flag if the ultimate
+	# fires from something other than the empowered attack itself (e.g. a tactical
+	# or an unrelated hit landing while the ultimate is active).
+	if {godlike-ULT-USE::%{_v}'s uuid%::GD} is set:
+		set {godlike-ULT-USE::%{_v}'s uuid%::GD} to false
+
+function itemEnchant(p: player, name: string):
+	loop {_p}'s inventory:
+		if name of loop-value is {_name}:
+			set {_i} to index of loop-value
+			enchant slot {_i} of {_p}'s inventory with unbreaking 1
+			stop loop
+
+function itemDisenchant(p: player, name: string):
+	loop {_p}'s inventory:
+		if name of loop-value is {_name}:
+			set {_i} to index of loop-value
+			disenchant slot {_i} of {_p}'s inventory
+			stop loop
+
+function staminaPause(p: player, time: number):
+	set {staminaPause::%{_p}'s uuid%} to true
+	set {_time} to "%{_time}% seconds" parsed as a timespan
+	wait {_time}
+	delete {staminaPause::%{_p}'s uuid%}
+
+function invulnerabilityFix(e: living entity): # tracks a living entity's invulnerability time so it can be checked without waiting on it
+	set {invulnerabilityFix::%{_e}'s uuid%} to ({_e}'s invulnerability time) - 1 ticks
+	while {invulnerabilityFix::%{_e}'s uuid%} > 0 ticks:
+		wait 1 tick
+		remove 1 tick from {invulnerabilityFix::%{_e}'s uuid%}
+	delete {invulnerabilityFix::%{_e}'s uuid%}
+
+function invulnerabilityCheck(e: living entity) :: timespan:
+	if {invulnerabilityFix::%{_e}'s uuid%} is set:
+		return {invulnerabilityFix::%{_e}'s uuid%}
+	else:
+		return 0 ticks
+
+function showDMG(v: living entity, dmg: number): # floating damage number above a hit entity
+	if {_dmg} >= 0.25:
+		if {_v} is not invisible:
+			set {_loc} to location of {_v}
+			set {_x} to random number between -1 and 1
+			set {_y} to random number between 1 and 1.5
+			add {_x} to x-coord of {_loc}
+			add {_y} to y-coord of {_loc}
+			spawn 1 armor stand at {_loc}
+			set {_ls} to last spawned armor stand
+			add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
+			set name of last spawned armor stand to "&7%{_dmg}%"
+			wait 1 second
+			teleport {_ls} to block 100 below {_ls}
+			wait 1 tick
+			kill {_ls}
+
+on skript stop:
+	loop all entities:
+		if loop-entity is a armor stand or dropped item:
+			kill loop-entity
+
+# Flags any projectile as "hit" the moment it hits anything (block or entity).
+# Several classes' trail-particle loops (viking.sk, ninja.sk, rapid.sk, zeus.sk)
+# only stop on this metadata being set, previously falling back only to a
+# y < -75 void check — a projectile that stuck in a block instead of falling
+# would loop drawing particles forever.
+on projectile hit:
+	set metadata value "hit" of event-projectile to true
+
+# Non-blocking trail-particle tracker — for a class that fires several
+# projectiles in a row (ninja.sk's tac, rapid.sk's ult), drawing each
+# projectile's trail with its own "while not hit: draw; wait 1 tick" loop
+# (the pattern most single-shot classes use — viking.sk, cyberpunk.sk, zeus.sk,
+# tempest.sk) would pause that shooting loop itself at every "wait", so the
+# next shot couldn't fire until the previous one's trail finished. Registering
+# a projectile here instead is instant — the shooting loop is never paused —
+# and a single shared "every 1 tick" trigger below handles drawing/cleanup for
+# every registered projectile independently.
+function trackProjectileTrail(p: entity):
+	add {_p} to {trailTrack::*}
+
+every 1 tick:
+	loop {trailTrack::*}:
+		if metadata value "hit" of loop-value is set:
+			remove loop-value from {trailTrack::*}
+		else if (y-coord of loop-value) < -75:
+			set metadata value "hit" of loop-value to true
+			kill loop-value
+			remove loop-value from {trailTrack::*}
+		else:
+			draw 1 of electric spark particle at loop-value with offset vector(0, 0, 0) with extra 0
+
+# ---- ZEUS (ZT) SUPPORT ----
+# projectileChangeFix (zeus.sk's TAC) is read as "difference between now and
+# {...}" before it's ever been set on a fresh join — initialize it here so
+# that first-ever trident throw doesn't skip the cancel/restore and let the
+# vanilla throw consume the real weapon.
+on join:
+	set {projectileChangeFix::%player's uuid%} to now
+
+# ---- BASIC ADMIN COMMANDS (kept per design decision; all other debug tools dropped) ----
+command /gmsp [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to spectator
+			send "&7You set &f%arg 1%'s &7gamemode to &aSPECTATOR"
+		else:
+			set gamemode of player to spectator
+			send "&7You set your gamemode to &aSPECTATOR"
+
+command /gms [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to survival
+			send "&7You set &f%arg 1%'s &7gamemode to &aSURVIVAL"
+		else:
+			set gamemode of player to survival
+			send "&7You set your gamemode to &aSURVIVAL"
+
+command /gmc [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to creative
+			send "&7You set &f%arg 1%'s &7gamemode to &aCREATIVE"
+		else:
+			set gamemode of player to creative
+			send "&7You set your gamemode to &aCREATIVE"
+
+command /gma [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set gamemode of arg 1 to adventure
+			send "&7You set &f%arg 1%'s &7gamemode to &aADVENTURE"
+		else:
+			set gamemode of player to adventure
+			send "&7You set your gamemode to &aADVENTURE"
+
+command /hset <number>: # sets your max health (in hearts, 1 = 1 heart) and fully heals you
+	permission: op
+	usage: /hset <max health in hearts>
+	trigger:
+		if arg 1 < 0.5:
+			send "&cMax health must be at least 0.5 hearts."
+			stop
+		if arg 1 > 512:
+			send "&cMax health can't be above 512 hearts."
+			stop
+		set max health of player to arg 1
+		set health of player to arg 1
+		send "&7You set your max health to &a%arg 1% &7hearts and healed"
+
+command /mana <text> [<integer>] [<player>]:
+	permission: op
+	trigger:
+		if arg 3 is online:
+			set {_player} to arg 3
+		else:
+			set {_player} to player
+		if arg-1 is "set":
+			if arg-2 is set:
+				set {_m} to arg-2
+				set {mana::%{_player}'s uuid%::curr} to {_m}
+				send "&aYou set your mana to %{_m}%!"
+		else if arg-1 is "pace":
+			if arg-2 is set:
+				set {_m} to arg-2
+				if {_m} > 10:
+					set {_m} to 10
+				send "&eYou now gain x%{_m}% times the mana!"
+				set {mana::%{_player}'s uuid%::pace} to {_m}
+		else if arg-1 is "max":
+			if arg-2 is set:
+				set {_m} to arg-2
+				send "&eYou set you max mana to %{_m}%"
+				set {mana::%{_player}'s uuid%::max} to arg-2
+
+command /stamina <text> [<integer>] [<player>]:
+	permission: op
+	trigger:
+		if arg 3 is online:
+			set {_player} to arg 3
+		else:
+			set {_player} to player
+		if arg-1 is "set":
+			if arg-2 is set:
+				set {_m} to arg-2
+				set {stamina::%{_player}'s uuid%::curr} to {_m}
+				send "&aYou set your stamina to %{_m}%!"
+		else if arg-1 is "pace":
+			if arg-2 is set:
+				set {_m} to arg-2
+				if {_m} > 10:
+					set {_m} to 10
+				send "&eYou now gain x%{_m}% times the stamina!"
+				set {stamina::%{_player}'s uuid%::pace} to {_m}
+		else if arg-1 is "max":
+			if arg-2 is set:
+				set {_m} to arg-2
+				send "&eYou set you max stamina to %{_m}%"
+				set {stamina::%{_player}'s uuid%::max} to arg-2
+
+function clearCurrClass(p: player): # called by 05-class-menu.sk's classSelect() when swapping away from a class — resets per-class visual/state flags
+	set {_uuid} to {_p}'s uuid
+	delete {godlike-ULT-USE::%{_uuid}%::*}
+	delete {godlike-ULT-CANCEL::%{_uuid}%::*}
+	delete {isShielding::%{_uuid}%}
+	delete {mighty-DASH::%{_uuid}%}
+	delete {reaper-attack::%{_uuid}%}
+	delete {zeus-attack::%{_uuid}%}
+	delete {playerDefense::%{_uuid}%}
+	set level of {_p} to 0
+	set level progress of {_p} to 0
+
+# ---- MOB AGGRO (passive until hit) ----
+# Uses Paper's Mob#setAware() — when false, a mob won't move, target, or attack
+# on its own, but will still register hits and fight back once provoked.
+function mobActivate(m: living entity, attacker: living entity): # called when one of our tagged mobs takes a hit from a player
+	{_m}.setAware(true)
+	{_m}.setTarget({_attacker}) # setAware(true) alone just re-enables the mob's normal AI goals — for cave spiders specifically, those goals include a vanilla "neutral in daylight unless already targeting someone" quirk, which is exactly why Crawlers wouldn't fight back during the day when provoked by an ability. Explicitly assigning the target bypasses that regardless of light level.
+
+function mobDeactivate(m: living entity): # called on spawn, and again whenever the mob is pulled back by its leash
+	{_m}.setAware(false)
+	{_m}.setTarget(null)
+
+on damage of a zombie, cave spider, or iron golem with priority high: # activates any of our tagged mobs the moment a player lands the first hit — priority high ensures 08-damage.sk's normal-priority melee attacker-tracking has already run (Skript priority order: lowest -> low -> normal -> high -> highest -> monitor)
+	set {_attacker} to metadata value "attacker" of victim # set by updateAttacker() — works for melee (08-damage.sk tracks it there), abilities, and grenades alike, unlike the native "attacker" value which only populates for direct melee hits
+	if {_attacker} is a player:
+		if metadata value "minibossLoc" of victim is set:
+			mobActivate(victim, {_attacker})
+		else if metadata value "isMajorBoss" of victim is set:
+			mobActivate(victim, {_attacker})
+
+# ---- BOSS LEASH ----
+# Shared by mini-bosses.sk and major-boss.sk. Call this on a repeating timer for
+# every active boss entity to keep it tethered to its spawn point. Radius/heal
+# are passed in since mini-bosses and the major boss use different configs.
+function bossLeashCheck(boss: living entity, spawnloc: location, radius: number, healpercent: number):
+	if {_boss} is alive:
+		set {_target} to {_boss}.getTarget()
+		if {_target} is a player: # loses track entirely of a target it can no longer meaningfully fight — invisible (covers both the dead/respawning state, which applies invisibility, and Ghost's combat invisibility ultimate) or explicitly mid-respawn
+			if {_target} is invisible:
+				mobDeactivate({_boss})
+			else if {respawning::%{_target}'s uuid%} is set:
+				mobDeactivate({_boss})
+
+		set {_dis} to distance between {_boss} and {_spawnloc}
+		if {_dis} > {_radius}:
+			teleport {_boss} to {_spawnloc}
+			set {_pathfinder} to {_boss}.getPathfinder()
+			{_pathfinder}.stopPathfinding() # clears any in-progress path immediately — setAware(false)/setTarget(null) alone don't abort a movement goal already mid-execution, which is why the mob visibly kept walking a step or two after being pulled back
+			set {_maxHealth} to max health of {_boss}
+			set {_healAmount} to ({_maxHealth} * {_healpercent}) / 100
+			set {_newHealth} to (health of {_boss}) + {_healAmount}
+			if {_newHealth} > {_maxHealth}:
+				set {_newHealth} to {_maxHealth}
+			set health of {_boss} to {_newHealth}
+
+			if metadata value "minibossLoc" of {_boss} is set: # 11-mini-bosses.sk — refresh the live-health name after the leash heal
+				set {_name} to "Marauder"
+				if {_boss} is a cave spider:
+					set {_name} to "Crawler"
+				updateMobHealthName({_boss}, {_name})
+			else if metadata value "isMajorBoss" of {_boss} is set: # 12-major-boss.sk — refresh the bossbar after the leash heal
+				updateMajorBossBar()
+
+			set {_target} to {_boss}.getTarget()
+			set {_keepAggro} to false
+			if {_target} is set:
+				set {_targetDis} to distance between {_target} and {_spawnloc}
+				if {_targetDis} <= {_radius}: # the player who was chasing it is still within leash range — keep fighting
+					set {_keepAggro} to true
+			if {_keepAggro} is false:
+				mobDeactivate({_boss}) # nobody worth chasing nearby — goes back to passive/idle
+
+			play sound "ENTITY_ENDERMAN_TELEPORT" at volume 3 and pitch 0.5 at {_spawnloc}
+			draw 20 of portal at {_spawnloc} with extra 0.3

@@ -1,0 +1,114 @@
+# ============================================
+# GAME CONFIG
+# All tunable values live here. Change freely — everything else reads from these.
+# ============================================
+
+on load:
+	# ---- MATCH ----
+	set {config::life-pool} to 30 # total lives each player starts a match with
+	# Pacing note: assumes ~8-12 second individual fights, so 30 lives gives a
+	# match with plenty of back-and-forth without dragging. Tune after playtesting.
+
+	# ---- COMBAT STATE (20-combat.sk) ----
+	set {config::combat::duration} to 5 seconds # how long after the last damage dealt/taken (vs the opponent or the major boss) a player stays "in combat" — each new hit resets it. While in combat, the opponent sees that player's bossbar.
+
+	# ---- DISPLAY ----
+	set {config::nametags-enabled} to false # floating "[Lvl N] Class" armor-stand nametag above each player (04-leveling.sk). OFF now that the combat bossbar (20-combat.sk) replaces it — all nametag code is still in place; set this to true to bring them back.
+
+	# ---- PREGAME DRAFT (ban / coinflip / snake-draft pick, in the "lobby" world) ----
+	set {config::draft::ban-count} to 3 # classes banned before drafting begins each game — drawn from the shuffle-bag deck in 17-draft.sk, not a plain reroll
+	set {config::draft::pick-timeout} to 10 # seconds - plain number, used as a loop count
+	set {config::lobby::player1-spawn} to location(-3.5, -29.5, -36.5, world "lobby", -90, 0)
+	set {config::lobby::player2-spawn} to location(4.5, -29.5, -36.5, world "lobby", 90, 0)
+	set {config::lobby::draft-center} to location(0.5, -29, -36.5, world "lobby")
+	set {config::lobby::draft-center-temp} to location(0.5, -39, 1, world "lobby") # used to spawn reveal items so they don't fall oddly at the real center
+
+	# ---- CLASS LEVELING (per class, resets each match, persists through death) ----
+	set {config::pvpkill::xp-reward} to 10 # kill's worth of XP toward the killer's active class from defeating the opponent
+	set {config::xp-threshold::1} to 10 # kills needed to reach level 1 (unlocks ultimate)
+	set {config::xp-threshold::2} to 50 # kills needed to reach level 2 (unlocks perk 1)
+	set {config::xp-threshold::3} to 100 # kills needed to reach level 3 (max, unlocks perk 2)
+
+	# ---- DEATH COOLDOWN (per-class swap lockout after dying on that class) ----
+	set {config::deathcd::base} to 3 # seconds - plain number now, needed for clean math in the cooldown bossbars
+	set {config::deathcd::per-level} to 3 # seconds
+	set {config::deathcd::per-objective} to 2 # seconds
+	set {config::deathcd::max} to 30 # seconds
+
+	# ---- RESPAWN FLOW ----
+	set {config::respawn::menu-delay} to 3 seconds # how long a player stays frozen at the deathmode spawn before the "Your Classes" respawn-choice menu opens
+
+	# ---- MINI-BOSSES (4 fixed locations, all active simultaneously) ----
+	set {config::miniboss::locations} to 4
+	set {config::miniboss::respawn-min} to 30 # seconds - kept as a plain number so a random wait duration can be built from it
+	set {config::miniboss::respawn-max} to 30 # seconds
+	set {config::miniboss::individual::xp-reward} to 7 # Marauder - a single tougher target, worth more XP
+	set {config::miniboss::pack::xp-reward} to 2 # Crawlers - each individual kill in the pack grants this on its own (2x3 = 6 total for the group)
+	set {config::miniboss::individual::max-health} to 12 # Marauder
+	set {config::miniboss::pack::max-health} to 4 # Crawlers - per individual spider, not the pack total
+
+	# ---- MAJOR BOSS (1 fixed location) ----
+	set {config::majorboss::max-health} to 30 # Iron Golem
+	set {config::majorboss::max-spawns} to 5 # total spawns over a match (design target: 3-5)
+	set {config::majorboss::interval} to 3 minutes # time between spawns, starting from match start
+	set {config::majorboss::interval-seconds} to 180 # same value as above in plain seconds — needed for the respawn-countdown hologram's timestamp math; keep in sync if you change the interval
+	set {config::majorboss::xp-reward} to 10 # counts as 10 kills' worth of XP toward the killer's active class — a much bigger swing than a mini-boss
+
+	# ---- XP PHASES (wall-clock seconds elapsed since match start — used for the Early/Mid/Late-Game XP stats) ----
+	set {config::xpphase::early-end} to 300 # before this = early game (5 minutes)
+	set {config::xpphase::mid-end} to 600 # before this (and after early-end) = mid game (5-10 minutes); beyond = late game
+
+	# ---- SIGNIFICANT LEAD (fixed life count, checked once against final life totals at match end) ----
+	set {config::lead::threshold-lives} to 7 # finishing the match 7+ lives ahead of the other player counts as "significant" — used for the comeback stats
+
+	# ---- BALANCE STATS (19-balance-stats.sk) ----
+	# Damage-by-source / hit-rate attribution is done per exact damage instance
+	# (each class file tags its own tactical/ultimate damage line directly), not
+	# via a time window — so there's no config value needed here for that
+	# anymore. Fire-tick and lightning-strike attribution windows are bounded to
+	# the exact duration/flash-window already hardcoded at each ignition/strike
+	# call site (see setFireSource()/setAbilitySourceTimed() in 19-balance-stats.sk).
+
+	# ---- MASTERY RANKING ELIGIBILITY ----
+	set {config::mastery::min-tier-for-ranking} to 3 # Bronze, under the 9-tier system (Trash/Rookie/Bronze/Silver/Gold/Diamond/Master/Grandmaster/Predator) — the minimum mastery tier a class needs before it's eligible for Best/Worst Class
+
+	# ---- BOSS LEASH (separate radii for mini-bosses vs the major boss) ----
+	set {config::miniboss::leash-radius} to 5 # blocks from spawn point before a mini-boss is pulled back
+	set {config::miniboss::leash-heal-percent} to 10 # %% of max health restored on leash-reset
+	set {config::majorboss::leash-radius} to 7 # the major boss's arena is bigger, so it gets more leash room
+	set {config::majorboss::leash-heal-percent} to 10
+
+	# ---- BOSS/MOB COMBAT TUNING ----
+	set {config::mob::melee-damage-min} to 0.5 # basic touch/melee damage from any boss or mob (0.25 hearts)
+	set {config::mob::melee-damage-max} to 1.0 # (0.5 hearts)
+	set {config::mob::move-slowness-level} to 2 # Slowness potion level applied to every boss/mob to make them slower (Slowness I)
+
+	# ---- CONSUMABLES ----
+	set {config::consumable::kill-reward} to "golden apple" # always given on kill, in addition to the killer's selected consumable
+
+	# ---- ARENA ----
+	# The map is pre-built and permanent in the "arena_1" world — never recreated,
+	# pasted, or torn down. Since 10-match-manager.sk only supports one match at a
+	# time, both matches always reuse this same static arena.
+	set {config::lobby-spawn} to location(0.5, -44.5, 0.5, world "arena_1", 180, 0) # where players go before/after a match — placeholder coords, update once the lobby exists
+	set {config::arena::world-name} to "arena_1"
+
+	set {config::arena::spawn-a} to location(9.5, -29.5, -18.5, world "arena_1", 0, 0) # facing south
+	set {config::arena::spawn-b} to location(-8.5, -29.5, 19.5, world "arena_1", 180, 0) # facing north
+
+	set {config::arena::miniboss-spawn::1} to location(9.5, -44.5, 14.5, world "arena_1", 90, 0) # facing west
+	set {config::arena::miniboss-spawn::2} to location(-8.5, -44.5, -13.5, world "arena_1", 270, 0) # facing east
+	set {config::arena::miniboss-spawn::3} to location(9.5, -44.5, -11.5, world "arena_1", 90, 0) # facing west
+	set {config::arena::miniboss-spawn::4} to location(-8.5, -44.5, 12.5, world "arena_1", 270, 0) # facing east
+
+	set {config::arena::majorboss-spawn} to location(0.5, -44.5, 0.5, world "arena_1", 180, 0) # facing north
+	set {config::arena::deathmode-spawn} to location(0.5, -10, 0.5, world "arena_1") # center-top of the map — where a player is frozen while choosing their respawn class, regardless of where they actually died
+
+	# ---- SECRET DOORS (tripwire hook activated, see 16-world-rules.sk) ----
+	# Each door's OPEN-state tripwire hook location — the single hook that
+	# remains once the door is open. Used by resetSecretDoors() to force
+	# every door open at the start of a match.
+	set {config::arena::secretdoor::1} to location(4.5, -43.5, -13.5, world "arena_1")
+	set {config::arena::secretdoor::2} to location(-3.5, -43.5, -14.5, world "arena_1")
+	set {config::arena::secretdoor::3} to location(4.5, -43.5, 15.5, world "arena_1")
+	set {config::arena::secretdoor::4} to location(-3.5, -43.5, 14.5, world "arena_1")
