@@ -1,0 +1,342 @@
+# ============================================
+# MAJOR BOSS
+# 1 fixed location. Spawns a limited number of times over the match, spaced
+# out by a fixed interval. Reward: a random permanent general perk, or a life
+# back — rolled the moment someone lands the first hit (not at kill time), so
+# a bossbar can preview it to both players; the same rolled reward is what
+# actually gets granted on the kill. Also increments {majorbosses-claimed},
+# which 04-leveling.sk reads to scale the death-cooldown formula.
+#
+# An Iron Golem with 3 telegraphed, dodgeable special attacks: Fortify (self
+# buff), Ground Slam (AOE around itself), and Rock Throw (ranged, locks onto
+# a player's position at cast time — dodge by moving away during the
+# telegraph). Passive until hit (see 01-utils.sk's mobActivate/mobDeactivate)
+# and its ordinary melee touch is deliberately weak (see 08-damage.sk) — only
+# these 3 special attacks, flagged via "specialAttack" metadata, hit hard.
+# ============================================
+
+# ---- LIFECYCLE (called from 10-match-manager.sk) ----
+
+function startMajorBossTimer():
+	set {majorbossSpawnCount} to 0
+	set {majorbossLastDespawn} to 0
+	set {majorbossLastSpawnStart} to unix timestamp of now # baseline for the very first interval
+	set {majorbossActive} to true
+	clearMajorBossRespawnHolo() # 12-major-boss.sk — in case one's somehow left over
+
+function stopMajorBossTimer():
+	delete {majorbossActive}
+	if {majorbossmob} is set:
+		if {majorbossmob} is alive:
+			kill {majorbossmob}
+	delete {majorbossmob}
+	clearMajorBossBar() # 12-major-boss.sk
+	clearMajorBossRespawnHolo() # 12-major-boss.sk
+	clearMajorBossHole() # 12-major-boss.sk — instant open, no animation; a match being force-ended mid-fight shouldn't leave the platform filled for the next one
+
+# ---- SPAWNING ----
+
+function spawnMajorBoss():
+	set {majorbossLastSpawnStart} to unix timestamp of now # re-anchors the countdown hologram's "next interval" math to this spawn
+	clearMajorBossRespawnHolo() # 12-major-boss.sk
+	fillMajorBossHole() # 12-major-boss.sk — safety net: the periodic checker below already fills this 1 second before calling here, but guarantee it's filled regardless (idempotent — refilling already-filled blocks is harmless)
+	set {_spawnloc} to {config::arena::majorboss-spawn}
+	broadcast "&4&lAn Iron Golem awakens..."
+	spawn 1 iron golem at {_spawnloc}
+	set {_mob} to last spawned iron golem
+	set max health of {_mob} to {config::majorboss::max-health} # 00-config.sk
+	set health of {_mob} to {config::majorboss::max-health}
+	set display name of {_mob} to "&4&lIron Golem"
+	add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
+	set metadata value "isMajorBoss" of {_mob} to true
+	mobDeactivate({_mob}) # 01-utils.sk — passive until a player hits it
+	set {majorbossmob} to {_mob}
+	majorBossLeashLoop({_mob}, {_spawnloc})
+	majorBossAttackLoop({_mob})
+	majorBossLifetimeTimer({_mob})
+
+function majorBossLifetimeTimer(mob: living entity): # despawns the boss if it isn't killed in time, so the next one can spawn on schedule
+	wait 2 minutes
+	if {_mob} is alive:
+		if {_mob}.isAware(): # still being actively fought — give it a bit more time to be finished off
+			wait 30 seconds
+		if {_mob} is alive: # still not dead — force despawn, no kill credit or reward
+			broadcast "&4&lThe Iron Golem grows restless and vanishes..."
+			set metadata value "forcedDespawn" of {_mob} to true # tells "on death of an iron golem" this wasn't a real kill, so the previewed reward is never granted even if a player had already hit it
+			kill {_mob}
+			clearMajorBossBar() # 12-major-boss.sk
+			clearMajorBossHole() # 12-major-boss.sk — no kill happened, so just open the hole back up immediately rather than running the slain-only collapse animation
+			set {majorbossLastDespawn} to unix timestamp of now
+			delete {majorbossmob}
+
+on damage of an iron golem with priority high: # tracks who hit the boss first, for Boss Steal detection on death — priority high ensures 08-damage.sk's normal-priority melee attacker-tracking has already run
+	if metadata value "isMajorBoss" of victim is set:
+		set {_attacker} to metadata value "attacker" of victim # set by updateAttacker() — works for melee, abilities, and grenades alike, unlike the native "attacker" value which only populates for direct melee hits
+		if {_attacker} is a player:
+			if metadata value "firstDamager" of victim isn't set:
+				set metadata value "firstDamager" of victim to {_attacker}
+				showMajorBossBar({_attacker}) # 12-major-boss.sk — first hit only: rolls the reward and shows the bar to both match participants
+		wait 1 tick # health isn't actually applied yet at the moment this event fires
+		updateMajorBossBar()
+
+function majorBossLeashLoop(mob: living entity, spawnloc: location):
+	while {_mob} is alive:
+		bossLeashCheck({_mob}, {_spawnloc}, {config::majorboss::leash-radius}, {config::majorboss::leash-heal-percent}) # 01-utils.sk
+		wait 2 seconds
+
+# ---- SPECIAL ATTACKS (telegraphed, dodgeable — cycles randomly between the 3) ----
+
+function majorBossAttackLoop(mob: living entity):
+	while {_mob} is alive:
+		set {_wait} to a random integer between 10 and 15
+		set {_wait} to "%{_wait}% seconds" parsed as a timespan
+		wait {_wait}
+		if {_mob} is alive:
+			set {_nearby::*} to all players in radius 12 around {_mob}
+			if {_nearby::*} is set:
+				set {_attack} to random integer between 1 and 3
+				if {_attack} = 1:
+					majorBossGroundSlam({_mob})
+				else if {_attack} = 2:
+					majorBossRockThrow({_mob})
+				else:
+					majorBossFortify({_mob})
+
+function majorBossFortify(mob: living entity): # self-buff, telegraphed but not directly dangerous
+	play sound "ENTITY_IRON_GOLEM_REPAIR" at volume 3 and pitch 1 at location of {_mob}
+	set {_shapes::circle} to a circle with radius 2
+	set particle of {_shapes::*} to 1 of dust particle using dustOption(gray, 1.2)
+	loop 20 times: # 1 second telegraph
+		draw shapes {_shapes::*} at location of {_mob}
+		wait 1 tick
+	if {_mob} is alive:
+		add potion effect of resistance 1 without particles for 6 seconds to potion effects of {_mob}
+		play sound "ENTITY_IRON_GOLEM_REPAIR" at volume 3 and pitch 1.5 at location of {_mob}
+
+function majorBossGroundSlam(mob: living entity): # telegraph, then a large AOE burst centered on the boss
+	set {_loc} to location of {_mob}
+	play sound "ENTITY_IRON_GOLEM_ATTACK" at volume 3 and pitch 0.6 at {_loc}
+	set {_shapes::circle} to a circle with radius 4
+	set particle of {_shapes::*} to 1 of dust particle using dustOption(gray, 1.2)
+	loop 40 times: # 2 second telegraph
+		draw shapes {_shapes::*} at {_loc}
+		wait 1 tick
+	if {_mob} is alive:
+		play sound "ENTITY_GENERIC_EXPLODE" at volume 3 and pitch 0.5 at {_loc}
+		set metadata value "specialAttack" of {_mob} to true # 08-damage.sk skips the melee-nerf override when this is set
+		loop all players in radius 4 around {_loc}:
+			damage loop-player by (random number between 1 and 3)
+			markCombat(loop-player) # 20-combat.sk — special attacks damage by hand, so they never reach dmgUpdate() with the boss as the attacker
+			push loop-player upward at speed 0.7
+		delete metadata value "specialAttack" of {_mob}
+
+function majorBossRockThrow(mob: living entity): # locks onto a player's position at cast time — telegraph, then impact there
+	set {_target} to a random player out of (all players in radius 12 around {_mob})
+	if {_target} is set:
+		set {_impactLoc} to location of {_target} # locked in now, not tracked — dodge by moving away
+		play sound "ENTITY_IRON_GOLEM_ATTACK" at volume 3 and pitch 1 at location of {_mob}
+		set {_shapes::line} to a line from location of {_mob} to {_impactLoc}
+		set particle of {_shapes::line} to 1 of dust particle using dustOption(gray, 1)
+		loop 25 times: # 1.25 second telegraph
+			draw shape {_shapes::line} at location of {_mob}
+			wait 1 tick
+		if {_mob} is alive:
+			play sound "ENTITY_GENERIC_EXPLODE" at volume 2 and pitch 1.2 at {_impactLoc}
+			draw 20 of block particle using stone at {_impactLoc} with extra 0.3
+			set metadata value "specialAttack" of {_mob} to true
+			loop all players in radius 2 around {_impactLoc}:
+				damage loop-player by (random number between 1 and 3)
+				markCombat(loop-player) # 20-combat.sk — special attacks damage by hand, so they never reach dmgUpdate() with the boss as the attacker
+			delete metadata value "specialAttack" of {_mob}
+
+# ---- DEATH / REWARD ----
+
+on death of an iron golem:
+	if metadata value "isMajorBoss" of victim is set:
+		if metadata value "forcedDespawn" of victim isn't set: # skip the reward entirely on a forced timeout despawn — majorBossLifetimeTimer() already handled that case
+			set {_killer} to metadata value "attacker" of victim # set by updateAttacker() — works for melee, abilities, and grenades alike
+			if {_killer} is a player:
+				if {inMatch::%{_killer}'s uuid%} is set: # ignore kills from anyone not actually in an active match (e.g. a bystander/admin in the arena)
+					set {_class} to {class::%{_killer}'s uuid%}
+					add 1 to {majorbosses-claimed} # 04-leveling.sk reads this for the death-cooldown formula — a gameplay-affecting counter, kept unconditional even in a test duel so the death-cooldown formula still behaves like a real match
+					add 1 to {matchobjectives::%{_killer}'s uuid%}
+					if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
+						add 1 to {bossesslain::%{_killer}'s uuid%}
+						add 1 to {class-bossesslain::%{_killer}'s uuid%::%{_class}%}
+					add 1 to {matchbosskills::%{_killer}'s uuid%::%{_class}%} # 19-balance-stats.sk reads this at match end for the boss carry-rate stat (that function itself no-ops during a test duel)
+					addClassKill({_killer}, {_class}, {config::majorboss::xp-reward}) # 04-leveling.sk
+
+					set {_firstDamager} to metadata value "firstDamager" of victim
+					if {_firstDamager} is set:
+						if {_firstDamager} isn't {_killer}:
+							if {testMatch} isn't set:
+								add 1 to {bosssteals::%{_killer}'s uuid%}
+								add 1 to {class-bosssteals::%{_killer}'s uuid%::%{_class}%}
+							send "&d&lBOSS STEAL! &7You claimed a boss %{_firstDamager}% had already started fighting." to {_killer}
+
+					grantMajorBossReward({_killer})
+					broadcast "&4&lThe Iron Golem has fallen to &c%{_killer}%&4!"
+		clearMajorBossBar() # 12-major-boss.sk
+		set {majorbossLastDespawn} to unix timestamp of now
+		delete {majorbossmob}
+		if metadata value "forcedDespawn" of victim isn't set: # real kill only — a forced despawn already opened the hole immediately in majorBossLifetimeTimer(), no animation
+			collapseMajorBossHole() # 12-major-boss.sk — runs its own 3-second sequence; placed last so it doesn't delay the state cleanup above
+
+function grantMajorBossReward(p: player): # extra life is the only reward now — general perks moved to their own selectable system (06-perks-general.sk)
+	grantExtraLife({_p})
+
+function grantExtraLife(p: player):
+	add 1 to {lifepool::%{_p}'s uuid%}
+	send "&a&lEXTRA LIFE! &7You now have &c%{lifepool::%{_p}'s uuid%}% &7lives." to {_p}
+	updateMatchSidebar({_p}) # 10-match-manager.sk
+
+# ---- REWARD PREVIEW + BOSSBAR ----
+
+function showMajorBossBar(p: player): # called once, on the boss's first hit
+	set {_bar} to boss bar with id "majorboss-bar" with title "&4&lIron Golem &7— Reward: &c&lExtra Life" with color red
+	set bar style of {_bar} to segmented 10
+	set bar progress of {_bar} to 100
+	add {_p} to {_bar}
+	set {_opponent} to {matchOpponent::%{_p}'s uuid%}
+	if {_opponent} is set:
+		add {_opponent} to {_bar}
+
+function updateMajorBossBar(): # called after every hit, once health has actually been applied
+	if {majorbossmob} is set:
+		if {majorbossmob} is alive:
+			set {_pct} to ((health of {majorbossmob}) / (max health of {majorbossmob})) * 100
+			set bar progress of boss bar with id "majorboss-bar" to {_pct}
+
+function clearMajorBossBar(): # called on kill, forced despawn, or the timer being stopped entirely
+	loop all players:
+		remove loop-player from boss bar with id "majorboss-bar"
+	delete boss bar with id "majorboss-bar"
+
+# ---- SPAWN SCHEDULING + RESPAWN COUNTDOWN HOLOGRAM ----
+# One periodic checker drives both concerns: it decides when the boss's next
+# spawn is due (respecting the fixed interval and the 1-minute minimum gap
+# after a despawn) and either shows a countdown hologram above its spawn
+# point or, once the countdown reaches zero, actually spawns it. Doing both
+# here — rather than one long-lived delayed loop sitting through the whole
+# match, as this used to be — avoids the deep, ever-growing nested-delay
+# chain that was the likely cause of the boss never coming back after being
+# killed once. Uses the same "respawnHolo" metadata tag as the mini-boss
+# holograms, so it's covered by the same hit/damage protection already set
+# up in 11-mini-bosses.sk.
+
+every 1 seconds:
+	if {majorbossActive} is set:
+		if {majorbossmob} is set:
+			clearMajorBossRespawnHolo() # boss is alive right now
+		else if {majorbossSpawnCount} >= {config::majorboss::max-spawns}:
+			clearMajorBossRespawnHolo() # no spawns left this match
+		else if {majorbossLastSpawnStart} is set:
+			set {_scheduledAt} to {majorbossLastSpawnStart} + {config::majorboss::interval-seconds}
+			set {_minGapAt} to {majorbossLastDespawn} + 60
+			set {_nextSpawnAt} to {_scheduledAt}
+			if {_minGapAt} > {_nextSpawnAt}:
+				set {_nextSpawnAt} to {_minGapAt}
+			set {_remaining} to {_nextSpawnAt} - (unix timestamp of now)
+			set {_remaining} to floor({_remaining}) # unix timestamps here can carry sub-second precision, which showed up as decimals in the hologram
+			if {_remaining} > 0:
+				updateMajorBossRespawnHolo({_remaining})
+				if {_remaining} = 1: # exactly 1 second before spawnMajorBoss() fires below — fill the hole now so the boss spawns standing on solid ground
+					fillMajorBossHole()
+			else: # countdown's up — spawn it
+				clearMajorBossRespawnHolo()
+				add 1 to {majorbossSpawnCount}
+				spawnMajorBoss()
+	else:
+		clearMajorBossRespawnHolo() # no match currently using this timer
+
+function updateMajorBossRespawnHolo(remainingSeconds: number):
+	if {majorbossRespawnHolo} isn't set:
+		spawn 1 armor stand at ({config::arena::majorboss-spawn} offset by vector(0, 2.5, 0))
+		set {majorbossRespawnHolo} to last spawned armor stand
+		add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of {majorbossRespawnHolo}
+		set metadata value "respawnHolo" of {majorbossRespawnHolo} to true
+	if {majorbossRespawnHolo} is alive:
+		set name of {majorbossRespawnHolo} to "&4&lIron Golem &7spawns in &f%{_remainingSeconds}%s"
+	else:
+		delete {majorbossRespawnHolo}
+
+function clearMajorBossRespawnHolo():
+	if {majorbossRespawnHolo} is set:
+		if {majorbossRespawnHolo} is alive:
+			kill {majorbossRespawnHolo}
+		delete {majorbossRespawnHolo}
+
+# ============================================
+# SPAWN PLATFORM HOLE
+# The map has a 3x3 (X/Z), 1-block-deep hole directly beneath the major boss's
+# spawn point. It's open (air) whenever the boss isn't alive, and gets filled
+# with Stripped Jungle Log so the boss has solid ground to stand on — filled 1
+# second before it actually spawns (see the periodic checker above), and
+# opened back up over a 3-second collapse sequence after a real kill (an
+# instant open, no animation, on a forced timeout despawn instead).
+# ============================================
+
+function majorBossHoleBlockLocations() :: locations: # the 9 individual block locations, one Y level below the spawn point
+	set {_center} to {config::arena::majorboss-spawn}
+	set {_y} to (y-coord of {_center}) - 1
+	set {_holeCenter} to location(x-coord of {_center}, {_y}, z-coord of {_center}, world of {_center})
+	loop integers between -1 and 1:
+		set {_dx} to loop-value
+		loop integers between -1 and 1:
+			set {_dz} to loop-value-2
+			add ({_holeCenter} offset by vector({_dx}, 0, {_dz})) to {_locs::*}
+	return {_locs::*}
+
+function fillMajorBossHole():
+	set {_center} to {config::arena::majorboss-spawn}
+	set {_locs::*} to majorBossHoleBlockLocations()
+	loop {_locs::*}:
+		set block at loop-value to stripped jungle log
+	play sound "BLOCK_PISTON_EXTEND" at volume 3 and pitch 1 at {_center} # "piston close" — the platform sealing shut beneath the spawn point
+
+function clearMajorBossHole(): # instant open, no animation — used on a forced despawn and as a defensive reset between matches. Also how the barriers below get removed at the start of the next match, since "open" is just air either way.
+	set {_locs::*} to majorBossHoleBlockLocations()
+	loop {_locs::*}:
+		set block at loop-value to air
+
+function fillMajorBossHoleWithBarriers(): # called by 15-arena-manager.sk's teardownArena() at match end — seals the hole so nobody can wander into it while everyone's being sent back to the lobby
+	set {_locs::*} to majorBossHoleBlockLocations()
+	loop {_locs::*}:
+		set block at loop-value to barrier
+
+function collapseMajorBossHole(): # called once, on a real kill — runs its own 3-second sequence
+	set {_center} to {config::arena::majorboss-spawn}
+	set {_locs::*} to majorBossHoleBlockLocations()
+	set {_participants::*} to all players in world {config::arena::world-name} # cosmetic fake-damage overlay only — simplest reliable way to reach both match participants without depending on how the kill was credited
+
+	# FIX: Skript's native "make X see damage of block Y as Z" effect is a known-
+	# buggy built-in — it only reliably displays on one block at a time (see
+	# forums.skunity.com/threads/show-block-break-damage.17725) and takes a 0-9
+	# int stage, not the 0.0-1.0 float this was originally passed (3/6/9 instantly
+	# clamped to "fully cracked", matching the reported bug exactly). Calling
+	# Paper's own Player#sendBlockDamage(Location, float, int) directly via
+	# skript-reflect instead: the float is the real 0.0-1.0 progress the user
+	# asked for (0.3/0.6/0.9), and the int is an arbitrary "source entity id" —
+	# giving each of the 9 blocks its own id is what lets all of them show
+	# damage at once instead of overwriting each other.
+	loop integers between 1 and 3:
+		if {majorbossActive} is not set: # FIX: the match ended while this 3-second sequence was still running in the background (this function has its own "wait"s, so it keeps going after the death event that started it has long since returned) — endMatch() already called stopMajorBossTimer() (which deletes {majorbossActive}) and teardownArena() (which sealed the hole with barriers) by now, so bail out here rather than let this sequence's own block changes race with and undo that seal
+			stop
+		set {_progress} to loop-value * 0.3 # 0.3, 0.6, 0.9
+		set {_blockCounter} to 0 # FIX: "loop-index-2" isn't recognized as valid syntax by this Skript version ("no loop that matches 'loop-index-2' parsed as an integer") — counting manually instead gives the same stable, distinct-per-block id without relying on it
+		loop {_locs::*}: # loop-value-2 — this is the 2nd loop currently open, so plain loop-value is ambiguous here
+			set {_loc} to loop-value-2
+			add 1 to {_blockCounter}
+			set {_blockId} to -1000 - {_blockCounter} # stable per-block id (same order every pass, since {_locs::*} is unchanged across all 3 seconds), chosen well outside the range of any real entity id
+			loop {_participants::*}: # loop-value-3
+				set {_participant} to loop-value-3
+				{_participant}.sendBlockDamage({_loc}, {_progress}, {_blockId})
+		play sound "BLOCK_STONE_BREAK" at volume 2 and pitch (1.3 - (loop-value * 0.2)) at {_center} # gets lower/heavier each second, like it's about to give way — back to only one loop open here, so plain loop-value is fine
+		wait 1 second
+
+	if {majorbossActive} is not set: # same race guard as above, checked once more right before the final open
+		stop
+
+	play sound "BLOCK_PISTON_CONTRACT" at volume 3 and pitch 1 at {_center} # the platform retracting, opening the hole back up
+	loop {_locs::*}:
+		set block at loop-value to air

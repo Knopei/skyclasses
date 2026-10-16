@@ -1,0 +1,256 @@
+# ============================================
+# MINI-BOSSES
+# 4 fixed locations around the map, all active simultaneously, respawning
+# every 30-60 seconds (respawn timing waits for the whole group to clear).
+# Reward fires per individual kill (not per group): XP toward the killer's
+# active class + 1 toward Jungle Mobs Slain.
+#
+# Two mob types, one per pair of locations (mirrored across the map):
+#   - Locations 1 & 2: "Marauder" - a single buffed, armored zombie (the
+#     helmet stops it burning in daylight) with 2 telegraphed, dodgeable
+#     AOE special attacks. Worth more XP per kill (solo target).
+#   - Locations 3 & 4: "Crawlers" - a pack of 3 cave spiders; each individual
+#     kill grants its own (smaller) reward.
+#
+# All mobs are passive until hit (Paper's setAware, see 01-utils.sk) — they
+# won't pathfind or target on their own, only once a player lands the first
+# hit, and go passive again if leashed back to their spawn point. Their
+# ordinary melee touch is deliberately weak (see 08-damage.sk); only the
+# telegraphed special attacks below hit hard, flagged via the "specialAttack"
+# metadata so the damage pipeline knows not to nerf them.
+#
+# Each mob's display name shows its live health, refreshed on every hit.
+#
+# All mini-bosses use the shared boss-leash mechanic from 01-utils.sk.
+# ============================================
+
+on load:
+	set {minibosstype::1} to "individual"
+	set {minibosstype::2} to "individual"
+	set {minibosstype::3} to "pack"
+	set {minibosstype::4} to "pack"
+
+# ---- LIFECYCLE (called from 10-match-manager.sk) ----
+
+function startMiniBossTimers():
+	loop integers between 1 and {config::miniboss::locations}:
+		set {minibossActive::%loop-value%} to true
+		delete {minibossRespawnAt::%loop-value%}
+		spawnMiniBoss(loop-value)
+
+function stopMiniBossTimers():
+	loop integers between 1 and {config::miniboss::locations}:
+		delete {minibossActive::%loop-value%}
+		delete {minibossRespawnAt::%loop-value%}
+		loop {minibossmobs::%loop-value%::*}:
+			if loop-value-2 is alive:
+				kill loop-value-2
+		delete {minibossmobs::%loop-value%::*}
+		clearMiniBossRespawnHolo(loop-value)
+
+# ---- DISPLAY NAME (shows live health, refreshed on every hit) ----
+
+function updateMobHealthName(mob: living entity, name: text):
+	if {_mob} is alive:
+		set display name of {_mob} to "&7%{_name}% &c%health of {_mob}%❤"
+
+# ---- SPAWNING ----
+
+function spawnMiniBoss(loc: number):
+	clearMiniBossRespawnHolo({_loc})
+	delete {minibossRespawnAt::%{_loc}%}
+	set {_spawnloc} to {config::arena::miniboss-spawn::%{_loc}%}
+	set {_type} to {minibosstype::%{_loc}%}
+	delete {minibossmobs::%{_loc}%::*}
+
+	if {_type} is "individual":
+		spawn 1 zombie at {_spawnloc}
+		set {_mob} to last spawned zombie
+		make {_mob} an adult # zombies can otherwise spawn as a baby (faster, smaller hitbox) — the Marauder is always meant to be the full-size adult
+		set max health of {_mob} to {config::miniboss::individual::max-health} # 00-config.sk
+		set health of {_mob} to {config::miniboss::individual::max-health}
+		updateMobHealthName({_mob}, "Marauder")
+		set helmet of {_mob} to unbreakable chainmail helmet of unbreaking 1 # prevents burning in daylight — the item is "chainmail helmet", not "chain helmet"; "unbreakable" alone also doesn't parse as a valid item type in this codebase (every other "unbreakable X" item pairs it with "of unbreaking N", per 02-class-data.sk etc.)
+		add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
+		set metadata value "minibossLoc" of {_mob} to {_loc}
+		mobDeactivate({_mob}) # 01-utils.sk — passive until a player hits it
+		add {_mob} to {minibossmobs::%{_loc}%::*}
+		miniBossAttackLoop({_mob})
+	else if {_type} is "pack":
+		# Equilateral triangle centered on the spawn point, each vertex 1 block
+		# out from the center — fixed offsets rather than computed trig, since
+		# there are only ever 3 of them: vertices at 0°, 120°, 240°.
+		set {_triangle::1} to vector(1, 0, 0)
+		set {_triangle::2} to vector(-0.5, 0, 0.866)
+		set {_triangle::3} to vector(-0.5, 0, -0.866)
+		loop {_triangle::*}:
+			set {_spawnPos} to {_spawnloc} offset by loop-value
+			spawn 1 cave spider at {_spawnPos}
+			set {_mob} to last spawned cave spider
+			set max health of {_mob} to {config::miniboss::pack::max-health} # 00-config.sk
+			set health of {_mob} to {config::miniboss::pack::max-health}
+			updateMobHealthName({_mob}, "Crawler")
+			add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
+			set metadata value "minibossLoc" of {_mob} to {_loc}
+			mobDeactivate({_mob}) # 01-utils.sk
+			add {_mob} to {minibossmobs::%{_loc}%::*}
+
+	miniBossLeashLoop({_loc}, {_spawnloc})
+
+function miniBossLeashLoop(loc: number, spawnloc: location):
+	while {minibossmobs::%{_loc}%::*} is set:
+		loop {minibossmobs::%{_loc}%::*}:
+			if loop-value is alive:
+				bossLeashCheck(loop-value, {_spawnloc}, {config::miniboss::leash-radius}, {config::miniboss::leash-heal-percent}) # 01-utils.sk
+		wait 2 seconds
+
+on damage of a zombie or cave spider: # refreshes the live-health display name after every hit
+	if metadata value "minibossLoc" of victim is set:
+		set {_name} to "Marauder"
+		if victim is a cave spider:
+			set {_name} to "Crawler"
+		wait 1 tick # health isn't actually applied yet at the moment this event fires
+		updateMobHealthName(victim, {_name})
+
+# ---- MARAUDER SPECIAL ATTACKS (telegraphed, dodgeable) ----
+
+function miniBossAttackLoop(mob: living entity):
+	while {_mob} is alive:
+		set {_wait} to a random integer between 8 and 12
+		set {_wait} to "%{_wait}% seconds" parsed as a timespan
+		wait {_wait}
+		if {_mob} is alive:
+			set {_nearby::*} to all players in radius 10 around {_mob}
+			if {_nearby::*} is set:
+				set {_attack} to random integer between 1 and 2
+				if {_attack} = 1:
+					miniBossGroundSlam({_mob})
+				else:
+					miniBossPoisonCloud({_mob})
+
+function miniBossGroundSlam(mob: living entity): # telegraph, then AOE damage centered on the boss
+	set {_loc} to location of {_mob}
+	play sound "ENTITY_RAVAGER_ROAR" at volume 3 and pitch 0.8 at {_loc}
+	set {_shapes::circle} to a circle with radius 3
+	set particle of {_shapes::*} to 1 of dust particle using dustOption(red, 1)
+	loop 30 times: # 1.5 second telegraph
+		draw shapes {_shapes::*} at {_loc}
+		wait 1 tick
+	if {_mob} is alive:
+		play sound "ENTITY_GENERIC_EXPLODE" at volume 2 and pitch 0.7 at {_loc}
+		set metadata value "specialAttack" of {_mob} to true # 08-damage.sk skips the melee-nerf override when this is set
+		loop all players in radius 3 around {_loc}:
+			damage loop-player by (random number between 1 and 3)
+			push loop-player upward at speed 0.6
+		delete metadata value "specialAttack" of {_mob}
+
+function miniBossPoisonCloud(mob: living entity): # telegraph on a target's location, then a lingering damage pool
+	set {_target} to a random player out of (all players in radius 10 around {_mob})
+	if {_target} is set:
+		set {_loc} to location of {_target}
+		play sound "ENTITY_WITCH_CELEBRATE" at volume 2 and pitch 0.6 at {_loc}
+		set {_shapes::circle} to a circle with radius 2.5
+		set particle of {_shapes::*} to 1 of dust particle using dustOption(green, 1)
+		loop 30 times: # 1.5 second telegraph
+			draw shapes {_shapes::*} at {_loc}
+			wait 1 tick
+		loop 5 times: # 2.5 seconds of lingering poison/slow — no direct damage, the poison tick is the only damage source
+			loop all players in radius 2.5 around {_loc}:
+				add potion effect of poison 2 for 4 seconds to potion effects of loop-player
+				add potion effect of slowness 2 for 4 seconds to potion effects of loop-player
+			draw shapes {_shapes::*} at {_loc}
+			wait 10 ticks
+
+# ---- DEATH / REWARD ----
+
+on death of a zombie or cave spider:
+	if metadata value "minibossLoc" of victim is set:
+		set {_loc} to metadata value "minibossLoc" of victim
+		set {_type} to {minibosstype::%{_loc}%}
+		remove victim from {minibossmobs::%{_loc}%::*}
+
+		set {_killer} to metadata value "attacker" of victim # set by updateAttacker() — works for melee, abilities, and grenades alike, unlike the native "attacker" value which only populates for direct melee hits
+		if {_killer} is a player:
+			if {inMatch::%{_killer}'s uuid%} is set: # ignore kills from anyone not actually in an active match (e.g. a bystander/admin in the arena)
+				set {_class} to {class::%{_killer}'s uuid%}
+				set {_name} to "Marauder"
+				if {_type} is "individual":
+					set {_xp} to {config::miniboss::individual::xp-reward}
+				else:
+					set {_name} to "Crawler"
+					set {_xp} to {config::miniboss::pack::xp-reward}
+				addClassKill({_killer}, {_class}, {_xp}) # 04-leveling.sk
+				if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
+					add 1 to {jungleslain::%{_killer}'s uuid%}
+					add 1 to {class-jungleslain::%{_killer}'s uuid%::%{_class}%}
+				add 1 to {matchjungleslain::%{_killer}'s uuid%} # 14-stats.sk reads this for Best CS Game
+				add 1 to {matchobjectives::%{_killer}'s uuid%}
+				send "&f%{_name}% slain! &7+%{_xp}% XP" to {_killer}
+
+		# (the respawn itself is handled by the watchdog below — it no longer depends on this handler surviving a long wait)
+
+# ---- RESPAWN WATCHDOG ----
+# Every 2 seconds each active camp is checked: dead/removed mobs are dropped from its list, and once NO live mob is left a
+# respawn timer is scheduled (a timestamp, not a wait) and the camp respawns when it passes. Because it is state-driven, a camp
+# can't get stuck by a missed death event, a mob removed without dying, or a kill that landed outside a match.
+
+every 2 seconds:
+	loop integers between 1 and {config::miniboss::locations}:
+		if {minibossActive::%loop-value%} is set:
+			miniBossWatch(loop-value)
+
+function miniBossWatch(loc: number):
+	set {_mobs::*} to {minibossmobs::%{_loc}%::*}
+	loop {_mobs::*}:
+		if loop-value is not alive:
+			remove loop-value from {minibossmobs::%{_loc}%::*}
+	if {minibossmobs::%{_loc}%::*} is set: # still has a live mob
+		stop
+	if {minibossRespawnAt::%{_loc}%} is not set: # camp just cleared — schedule the respawn
+		set {_waitSeconds} to a random integer between {config::miniboss::respawn-min} and {config::miniboss::respawn-max}
+		set {minibossRespawnAt::%{_loc}%} to (unix timestamp of now) + {_waitSeconds}
+		startMiniBossRespawnHolo({_loc}, {config::arena::miniboss-spawn::%{_loc}%}, {_waitSeconds}) # runs independently
+		stop
+	if (unix timestamp of now) >= {minibossRespawnAt::%{_loc}%}:
+		delete {minibossRespawnAt::%{_loc}%}
+		spawnMiniBoss({_loc})
+
+# ---- RESPAWN COUNTDOWN HOLOGRAM ----
+# Shows above a jungle camp's spawn point only while it's dead, counting down
+# to its next spawn. Uses the same Marker armor-stand technique (and the same
+# protection) as 04-leveling.sk's level tags, so it can't be hit or destroyed.
+
+function startMiniBossRespawnHolo(loc: number, spawnloc: location, seconds: number):
+	clearMiniBossRespawnHolo({_loc}) # in case one's somehow still lingering
+	set {_endTime} to (unix timestamp of now) + {_seconds}
+	spawn 1 armor stand at ({_spawnloc} offset by vector(0, 2, 0))
+	set {_holo} to last spawned armor stand
+	add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of {_holo}
+	set metadata value "respawnHolo" of {_holo} to true
+	set {minibossHolo::%{_loc}%} to {_holo}
+	while (unix timestamp of now) < {_endTime}:
+		if {minibossHolo::%{_loc}%} isn't set: # cleared elsewhere (e.g. match ended) — stop updating
+			stop loop
+		if {_holo} is alive:
+			set {_remaining} to {_endTime} - (unix timestamp of now)
+			set {_remaining} to floor({_remaining})
+			set name of {_holo} to "&e&lRespawning in &f%{_remaining}%s"
+		else:
+			stop loop
+		wait 1 second
+	clearMiniBossRespawnHolo({_loc})
+
+function clearMiniBossRespawnHolo(loc: number):
+	if {minibossHolo::%{_loc}%} is set:
+		if {minibossHolo::%{_loc}%} is alive:
+			kill {minibossHolo::%{_loc}%}
+		delete {minibossHolo::%{_loc}%}
+
+on damage of an armor stand: # extra safety net beyond the Marker NBT flag — guarantees it can never be damaged or knocked around
+	if metadata value "respawnHolo" of victim is set:
+		cancel event
+
+on projectile hit: # stops arrows/tridents from registering a hit on the hologram and being consumed by it
+	if victim is an armor stand:
+		if metadata value "respawnHolo" of victim is set:
+			cancel event
