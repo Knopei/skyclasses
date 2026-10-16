@@ -1,0 +1,282 @@
+# ============================================
+# DAMAGE PIPELINE
+# The central damage-modification function every class's *CHECK() hook feeds
+# into, the raw attack-damage-multiplier lookup, and persistent damage stats.
+# Cleaned from the original damage.sk — removed every branch for a class
+# outside the kept 10. This also drops a branch that called ptPerkCHECK() on
+# Zeus's projectile hits — that function was never defined anywhere in the
+# original files, so it was already dead/broken code before this cleanup.
+#
+# Also overrides ordinary boss/mob melee damage down to a weak, config-driven
+# range — their telegraphed special attacks (flagged via "specialAttack"
+# metadata in 11-mini-bosses.sk / 12-major-boss.sk) bypass this and hit at
+# their intended, higher damage.
+# ============================================
+
+function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text, other: text) :: number:
+	# Damage Addons
+	if {class::%{_a}'s uuid%} is "MH":
+		if {_cause} = "attack":
+			if {_dmg} > 4:
+				set {_dmg} to 4
+	else if {class::%{_a}'s uuid%} is "VBA":
+		if {_cause} = "attack": # VBA's TAC arrow is a projectile and already tagged via metadata (viking.sk) — only ordinary melee swings need the ult-active check here
+			if {godlike-ULT-USE::%{_a}'s uuid%::VBA} is set: # 19-balance-stats.sk — the ultimate is what's scaling this melee hit, so it counts as ULT damage rather than plain melee
+				set {balance-abilitySource::%{_a}'s uuid%} to "ULT"
+		set {_temp} to vbaCHECK({_a}, {_v}, {_dmg}, {_other})
+	else if {class::%{_a}'s uuid%} is "ZT":
+		if {_cause} = "attack":
+			set {_temp} to ztCHECK({_a})
+	else if {class::%{_a}'s uuid%} is "RB":
+		if {_cause} = "attack": # melee hit — rapid.sk's rbCHECK() advances the "every 3rd hit" passive counter
+			rbCHECK({_a})
+		else if {_cause} = "projectile":
+			if {_other} = "RB-PASSIVE": # Longshot passive arrow — 25% max health, 30% at Perk 1 (Long Shot) when fired from >= 7.5 blocks, clamped to 2.25-4 damage
+				set {_dist} to distance between {_a} and {_v}
+				set {_dmg} to (max health of {_v}) * 0.25
+				if classLevel({_a}, "RB") >= 2:
+					if {_dist} >= 7.5:
+						set {_dmg} to (max health of {_v}) * 0.3
+				if {_dmg} > 4:
+					set {_dmg} to 4
+				else if {_dmg} < 2.25:
+					set {_dmg} to 2.25
+			else if {_other} = "RB": # base ultimate's rapid-fire arrows — 0.4 R-AD base, scales up to 0.6 R-AD at >= 7.5 blocks
+				if (distance between {_a} and {_v}) >= 7.5:
+					set {_dmg} to {_dmg}*1.5 # bridges 0.4 up to 0.6 (0.6 / 0.4 = 1.5x)
+	else if {class::%{_a}'s uuid%} is "CB":
+		if {_cause} = "projectile": # Malicious Dart — capped at 2 damage
+			if {_dmg} > 2:
+				set {_dmg} to 2
+	else if {godlike-ULT-USE::%{_a}'s uuid%::RS} is set:
+		set {_temp} to rsCHECK({_a}, {_v}, {_cause})
+		if {_temp} is set: # 19-balance-stats.sk — Soul Collector's perk bonus only fires on some of RS's melee hits (blinded victim + perk owned); only those specific hits count as ULT, not every RS swing while the ult is merely active
+			set {balance-abilitySource::%{_a}'s uuid%} to "ULT"
+	else if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
+		set {_temp} to gdCHECK({_a}, {_v})
+	else if {class::%{_a}'s uuid%} is "FH": # attacker
+		if {_cause} = "attack":
+			if {_dmg} > 3.5:
+				set {_dmg} to 3.5
+	else if {class::%{_v}'s uuid%} is "FH": # victim
+		if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
+			if {_cause} = "projectile":
+				set {_temp} to fhULT({_a}, {_v}, {_dmg})
+	else if {class::%{_a}'s uuid%} is "EA": # Executioner — executioner.sk
+		if {_cause} = "attack":
+			if {godlike-ULT-USE::%{_a}'s uuid%::EA} is set: # Death's Toll — this melee hit consumes the charge and overrides the damage, then ends the ultimate (the charge loop in executioner.sk polls this flag every tick and stops once it's gone)
+				set {_level} to {ea-chargeLevel::%{_a}'s uuid%}
+				if classLevel({_a}, "EA") >= 3: # Perk 2 (Execution) — percent-of-max-health damage, floored at the flat value so it never does less than the base charge tiers
+					if {_level} = 1:
+						set {_dmg} to (max health of {_v})*0.25
+						if {_dmg} < 2.5:
+							set {_dmg} to 2.5
+					else if {_level} = 2:
+						set {_dmg} to (max health of {_v})*0.5
+						if {_dmg} < 5:
+							set {_dmg} to 5
+					else:
+						set {_dmg} to (max health of {_v})*0.75
+						if {_dmg} < 7.5:
+							set {_dmg} to 7.5
+				else:
+					if {_level} = 1:
+						set {_dmg} to 2.5
+					else if {_level} = 2:
+						set {_dmg} to 5
+					else:
+						set {_dmg} to 7.5
+				if {_dmg} > 10: # hard cap, mainly relevant to the Perk 2 percent-of-max-health formula against very high-health targets (bosses)
+					set {_dmg} to 10
+				play sound "entity.player.attack.strong" with volume 1.8 and pitch 0.6 at {_v} # a heavy, devastating slash — slightly louder than before
+				play sound "entity.player.attack.sweep" with volume 1.6 and pitch 0.5 at {_v}
+				play sound "block.anvil.land" with volume 0.5 and pitch 1.4 at {_v} # a noticeable but quiet anvil layer underneath the slash
+				eaRedstoneEffect({_v}) # executioner.sk — same redstone block-break particle + sound as the TAC's buffed hit
+				set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk
+				delete {godlike-ULT-USE::%{_a}'s uuid%::EA}
+				delete {ea-chargeLevel::%{_a}'s uuid%}
+			else if {ea-tacBuff::%{_a}'s uuid%} is set: # Cleaving Rush's +55% next-hit buff
+				set {_dmg} to {_dmg}*1.55
+				set {balance-abilitySource::%{_a}'s uuid%} to "TAC"
+				delete {ea-tacBuff::%{_a}'s uuid%}
+				eaRedstoneEffect({_v}) # executioner.sk
+			eaMarkCheck({_a}, {_v}) # executioner.sk — Executioner's Mark; just registers the victim for the real-health check on the global 1-second ticker, no health math happens here
+	if {_temp} is set: # checks if any addon changed the damage
+		if {_temp} > 0:
+			set {_dmg} to {_dmg}+{_temp}
+		else if {_temp} = 0: # a value of exactly 0 means the addon fully overrides {_dmg}
+			set {_dmg} to {_temp}
+
+	# 19-balance-stats.sk — DoT damage (fire-tick from Mighty's Fire Pit/Ninja's ignites/Rapid's Overheat, and wither from Reaper's passive) doesn't happen synchronously with the ability effect that started it, so the class file tags the VICTIM (setFireSource(), despite the name, is reused for any timed DoT) instead of the attacker; bridge that over to the attacker-keyed tag dmgStats()/recordDamageBySource() actually reads, for exactly this one hit
+	if {_cause} is "fire" or "fire_tick" or "fire tick" or "wither" or "poison":
+		if {balance-fireSource::%{_v}'s uuid%} is set:
+			set {balance-abilitySource::%{_a}'s uuid%} to {balance-fireSource::%{_v}'s uuid%}
+
+	# Damage Reductions
+	if {_cause} is "lightning":
+		if {class::%{_v}'s uuid%} is "ZT":
+			set {_dmg} to {_dmg}*0.4
+		else:
+			set {_dmg} to {_dmg}*0.6
+
+	if {playerDefense::%{_v}'s uuid%} is set: # Reinforced Dash / Executioner's ult resistance (shared damage-reduction variable)
+		if {playerDefense::%{_v}'s uuid%} > 0:
+			set {_reduction} to (100 - {playerDefense::%{_v}'s uuid%}) * 0.01
+			set {_dmg} to {_dmg}*{_reduction}
+
+	if {isShielding::%{_v}'s uuid%} is set:
+		if {_v}.isBlocking():
+			bsCHECK({_v}, {_dmg}, {_cause})
+
+	if {_cause} is "fall":
+		set {_dmg} to 0 # fall damage is disabled entirely; Nimble Feet's extra landing-stun cancel lives in 06-perks-general.sk
+
+	# Damage Fixes
+	if {godlike-ULT-USE::%{_v}'s uuid%::ZT} isn't set:
+		showDMG({_v}, {_dmg}) # 01-utils.sk
+
+	if {_a} is a player:
+		if {balance-abilitySource::%{_a}'s uuid%} is set: # 19-balance-stats.sk — hit rate counts landing on ANY entity (a boss/mini-boss hit still counts), unlike damage-by-source below which is player-damage only
+			recordAbilityHit({_a}, {balance-abilitySource::%{_a}'s uuid%})
+	dmgStats({_a}, {_v}, {_dmg}, {_cause})
+	combatCheck({_a}, {_v}, {_dmg}) # 20-combat.sk — starts/resets the in-combat timer for hits between the two players or involving the major boss (instant, no waits)
+	delete {balance-abilitySource::%{_a}'s uuid%} # 19-balance-stats.sk — cleanup so this tag (however it got set: an addon branch above, or the projectile-metadata bridge below) never leaks into the attacker's next, unrelated hit
+	return {_dmg}
+
+function mobMeleeCHECK(a: living entity, dmg: number) :: number: # weak, config-driven default damage for our mobs/bosses — their telegraphed special attacks (flagged "specialAttack" in 11-mini-bosses.sk / 12-major-boss.sk) bypass this and hit at their intended, higher damage
+	set {_isOurMob} to false
+	if metadata value "minibossLoc" of {_a} is set:
+		set {_isOurMob} to true
+	if metadata value "isMajorBoss" of {_a} is set:
+		set {_isOurMob} to true
+	if {_isOurMob} is true:
+		if metadata value "specialAttack" of {_a} isn't set:
+			return random number between {config::mob::melee-damage-min} and {config::mob::melee-damage-max}
+	return {_dmg}
+
+function dmgStats(a: living entity, v: living entity, dmg: number, cause: text): # persistent + current-match damage tracking
+	if metadata value "protoRole" of {_a} is set: # 21-prototype-core.sk — prototype bosses/summons never touch player stats (and shouldn't mint stat variables for throwaway entity UUIDs)
+		stop
+	if {_a} != {_v}:
+		if {_dmg} < 10:
+			if {_cause} is not "void" or "suffocation":
+				set {_class} to {class::%{_a}'s uuid%}
+				if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
+					add {_dmg} to {damage::%{_a}'s uuid%} # lifetime total (account stats)
+					add {_dmg} to {class-damage::%{_a}'s uuid%::%{_class}%} # lifetime per-class (account stats / mastery)
+				add {_dmg} to {matchdamage::%{_a}'s uuid%} # current-match total
+				add {_dmg} to {matchdamage::%{_a}'s uuid%::%{_class}%} # current-match per-class, read by 14-stats.sk's end-of-match summary
+
+				if {_a} is a player: # Player Damage Dealt — only counts player-vs-player hits
+					if {_v} is a player:
+						if {testMatch} isn't set:
+							add {_dmg} to {playerdamage::%{_a}'s uuid%}
+							add {_dmg} to {class-playerdamage::%{_a}'s uuid%::%{_class}%}
+						add {_dmg} to {matchplayerdamage::%{_a}'s uuid%} # 14-stats.sk reads this for Highest Player Damage Game
+						recordDamageBySource({_a}, {_class}, {_dmg}) # 19-balance-stats.sk — buckets into tactical/ultimate/melee for the balance dashboard (this function itself no-ops during a test duel)
+
+			if {_v} is a player: # Damage Taken — excludes void per design decision, but counts from any source (players, mobs, bosses)
+				if {_cause} is not "void":
+					set {_vClass} to {class::%{_v}'s uuid%}
+					if {testMatch} isn't set:
+						add {_dmg} to {damagetaken::%{_v}'s uuid%}
+						add {_dmg} to {class-damagetaken::%{_v}'s uuid%::%{_vClass}%}
+
+on damage of living entity:
+	if attacker is a player:
+		updateAttacker(attacker, victim) # 01-utils.sk
+
+on damage of player: # void = instant death, bypassing normal damage scaling
+	if damage was caused by void:
+		cancel event
+		if {spawn-protection::%victim's uuid%} is set:
+			if {playerSpawn::%victim's uuid%} is set:
+				teleport victim to {playerSpawn::%victim's uuid%}
+				stop
+		kill victim
+
+on shoot with priority low: # tags every projectile with its shooter's weapon class ID (read from lore line 1, see 02-class-data.sk)
+	set {_type} to (uncolored line 1 of lore of shooter's held item)
+	set metadata value "type" of event-projectile to {_type}
+	set metadata value "attacker" of event-projectile to shooter
+
+on damage of living entity with priority high: # BASE DAMAGE — converts raw vanilla damage into the class-scaled amount
+	set {_dmg} to "%damage%" parsed as a number
+	set {_cause} to "%event-damagecause%"
+	set {_respawnCheck} to metadata value "attacker" of victim # set by updateAttacker() — already fresh by this priority regardless of whether the hit was melee or an ability (see 01-utils.sk / 1.2 in the technical guide)
+	if {_respawnCheck} is a player:
+		if {respawning::%{_respawnCheck}'s uuid%} is set: # a frozen/dead player shouldn't be able to deal damage — they can still hold a weapon and trigger an ability while frozen otherwise
+			cancel event
+			stop
+	if invulnerabilityCheck(victim) > 0 ticks: # 01-utils.sk
+		if {_cause} = "lightning":
+			cancel event
+			stop
+	if {class::%victim's uuid%} is "BS":
+		if {isShielding::%victim's uuid%} is set:
+			if victim.isBlocking():
+				cancel event
+	if {_dmg} > 0:
+		if victim is not a armor stand:
+			if event-damagecause is projectile:
+				set {_w} to metadata value "type" of event-projectile
+				if event-projectile is a arrow or trident:
+					set {_new} to {_dmg} # default: raw damage passes through unscaled (e.g. Zeus's ZT trident, which has no R-AD multiplier) — without this, {_new} stayed unset for it and the whole block below (including showDMG) never ran, so a direct trident hit sometimes never showed its damage number
+					if {weapons::%{_w}%::R-AD} is set:
+						set {_new} to {_dmg}*{weapons::%{_w}%::R-AD}
+						if {_new} < 0.5:
+							set {_new} to 0.5
+						if {_w} is "NS": # shuriken/arrow damage scales with the projectile's impact speed, which a downward throw can inflate past the intended amount — cap it so it always hits for the same damage regardless of angle
+							set {_cap} to 0.7
+							if skirmisherTacBonus(metadata value "attacker" of event-projectile) > 0: # Skirmisher category buff (level 2): 0.75 per shuriken
+								set {_cap} to 0.75
+								set {_new} to {_dmg} * 0.375
+							if {_new} > {_cap}:
+								set {_new} to {_cap}
+						else if {_w} is "CB": # Malicious Dart — Skirmisher category buff (level 2): +0.25
+							set {_new} to {_new} + skirmisherTacBonus(metadata value "attacker" of event-projectile)
+				if {_new} is set:
+					set {_attacker} to metadata value "attacker" of event-projectile
+					set {_projSource} to metadata value "balanceSource" of event-projectile # 19-balance-stats.sk — "TAC"/"ULT", set by the class file at shoot time
+					if {_projSource} is set:
+						set {balance-abilitySource::%{_attacker}'s uuid%} to {_projSource}
+					set damage to dmgUpdate({_attacker}, victim, {_new}, {_cause}, {_w}) # {_w} (the projectile's metadata type) now rides in the "other" slot for projectile hits — used by RB's dmgUpdate() branch above to tell its passive arrow apart from its ult arrows
+					delete {balance-abilitySource::%{_attacker}'s uuid%} # dmgUpdate() already cleans this up too — kept here as well since {_attacker} may differ in type from dmgUpdate's own {_a} parameter binding
+			else if event-damagecause is attack: # gates this to genuine melee hits — this was a bare, non-functional condition before, so it never actually filtered anything
+				if attacker is a player:
+					set {_w} to (uncolored line 1 of lore of attacker's held item)
+					set {_dmgMult} to {weapons::%{_w}%::AD}
+					if {_w} is set:
+						if {class::%attacker's uuid%} is "VBA":
+							if classLevel(attacker, "VBA") >= 2: # Perk 1 (Joyful to Furious) alt multiplier — 04-leveling.sk
+								set {_dmgMult} to {weapons::VBA::AD-PERK}
+						set {_new} to {_dmg}*{_dmgMult}
+						if {_new} is set:
+							if hit is critical:
+								set {_other} to "critical"
+							else:
+								set {_other} to "none"
+							set damage to dmgUpdate(attacker, victim, {_new}, {_cause}, {_other})
+				else: # mob melee — a mob/boss's ordinary attack also has cause "attack" just like a player's, and this branch was only ever handling the player case. FIX: this used to fall through to the generic fallback further below (back when the top-level gate was "if attacker is a player" instead of "if cause is attack" — see that fallback's own comment), so once the gate changed, mob melee silently stopped being scaled down or passed through dmgUpdate()/showDMG() at all, hitting for raw, unscaled vanilla damage.
+					set {_attacker} to attacker
+					set {_dmg} to mobMeleeCHECK({_attacker}, {_dmg})
+					set damage to dmgUpdate({_attacker}, victim, {_dmg}, {_cause}, "none")
+			else: # everything else non-melee, non-projectile — fire, fall, lightning, etc. Checked regardless of what "attacker" resolves to (a fire tick attributed by Paper to the original igniter satisfies "attacker is a player" too, but isn't cause=attack, and used to fall through here doing nothing — no damage was ever applied)
+				if event-damagecause is fall:
+					set {_dmg} to 0
+					set {_attacker} to metadata value "attacker" of victim
+				else if {_cause} is "lightning": # native "attacker" resolves to the LightningStrike entity itself, not whoever caused the strike — updateAttacker() already set the real player in metadata before every "strike lightning" call (see zeus.sk), so always prefer that here
+					set {_attacker} to metadata value "attacker" of victim
+				else if attacker is set: # native event attacker — mob melee is no longer handled here (see the "attack" branch above), but a non-attack, non-projectile cause can still have a native mob attacker (e.g. a mob's ranged/area effect)
+					set {_attacker} to attacker
+					set {_dmg} to mobMeleeCHECK({_attacker}, {_dmg})
+				else:
+					set {_attacker} to metadata value "attacker" of victim
+				set damage to dmgUpdate({_attacker}, victim, {_dmg}, {_cause}, "none")
+	wait 1 tick
+	if {_w} is "RB":
+		set victim's invulnerability time to 10 ticks
+	else if {_cause} is "lightning":
+		invulnerabilityFix(victim) # 01-utils.sk
+	else if {_cause} is not "attack" or "lightning" or "suffocation":
+		set victim's invulnerability time to 0 ticks

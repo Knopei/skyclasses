@@ -1,0 +1,398 @@
+# ============================================
+# MATCH MANAGER
+# The /duel matchmaking entry point and the overall match lifecycle: starting
+# a match (resetting all per-match state, sending players to the arena,
+# opening loadout select), ending a match (announcing the winner, saving
+# match history), and the shared sidebar that combines life pool + leveling.
+#
+# NOTE: this currently supports one match at a time, using the single
+# placeholder arena from 00-config.sk. Once 15-arena-manager.sk exists with
+# real per-match Multiverse world instancing, this will need updating to
+# track state per-match-instance instead of globally.
+# ============================================
+
+command /duel:
+	trigger:
+		if {inMatch::%player's uuid%} is set:
+			send "&cYou're already in a match!" to player
+			stop
+		if {duelQueue} is set:
+			if {duelQueue} is player:
+				delete {duelQueue}
+				send "&7Left the duel queue." to player
+			else:
+				set {_opponent} to {duelQueue}
+				delete {duelQueue}
+				startMatch(player, {_opponent})
+		else:
+			set {duelQueue} to player
+			send "&aSearching for an opponent... &7(run /duel again to cancel)" to player
+
+# ---- TESTING: a full duel with no persistent/balance stats recorded ----
+# Mirrors /duel's own queue flow exactly, using a separate queue variable so a
+# real /duel search and a /testduel search don't cross-match each other. The
+# only functional difference from a real match is the global {testMatch} flag,
+# set just before startMatch() and cleared at the end of the match (endMatch()
+# and forceEndMatchWorker() both clear it) — every stat-recording call site
+# checks it and no-ops, while all core gameplay (life pool, class levels/XP,
+# kill rewards, match summary, etc.) runs completely untouched.
+command /testduel:
+	trigger:
+		if {inMatch::%player's uuid%} is set:
+			send "&cYou're already in a match!" to player
+			stop
+		if {testDuelQueue} is set:
+			if {testDuelQueue} is player:
+				delete {testDuelQueue}
+				send "&7Left the test-duel queue." to player
+			else:
+				set {_opponent} to {testDuelQueue}
+				delete {testDuelQueue}
+				set {testMatch} to true
+				send "&e&lTEST DUEL &7— no stats will be recorded from this match." to player
+				send "&e&lTEST DUEL &7— no stats will be recorded from this match." to {_opponent}
+				startMatch(player, {_opponent})
+		else:
+			set {testDuelQueue} to player
+			send "&aSearching for a test-duel opponent... &7(run /testduel again to cancel)" to player
+
+# ---- TESTING: force-end the current duel without recording any stats ----
+# Unlike endMatch(), this does NOT touch wins/losses/games/durations or any
+# other persistent stat. Also used by 17-draft.sk if a player disconnects
+# during the pregame draft, since the match can't continue with one player.
+#
+# Split into a worker (has the loops) and a thin wrapper with no loops itself,
+# working around a Skript bug where a function containing "wait" or "loop"
+# breaks any "return" effect in it — see: github.com/SkriptLang/Skript/issues/7100
+function forceEndMatch(reason: text) :: boolean:
+	delete {forceEndResult}
+	forceEndMatchWorker({_reason})
+	if {forceEndResult} is true:
+		return true
+	return false
+
+function forceEndMatchWorker(reason: text):
+	delete {duelQueue}
+	delete {testDuelQueue} # /testduel
+	delete {testMatch} # /testduel — force-ending (disconnect, /endduel, etc.) never records stats anyway, but clear the flag so it can't leak into the next real match
+	set {_found} to false
+	loop all players:
+		if {inMatch::%loop-player's uuid%} is set:
+			set {_found} to true
+			add loop-player to {_participants::*}
+
+	if {_found} is false:
+		set {forceEndResult} to false
+		stop
+
+	clearLeftoverBossMobs() # 15-arena-manager.sk
+	stopMiniBossTimers() # 11-mini-bosses.sk
+	stopMajorBossTimer() # 12-major-boss.sk — opens the hole instantly (no animation); immediately sealed with barriers below just like a normal match end
+	fillMajorBossHoleWithBarriers() # 12-major-boss.sk — /endduel and other force-ends are a match ending too, so seal the hole before anyone's sent back
+	resetSecretDoors() # 16-world-rules.sk — and force every door back open, same as a normal match end
+	delete {majorbosses-claimed}
+	delete {matchStartTime}
+	delete {firstBloodClaimed}
+	draftCenterClear({config::lobby::draft-center}, "clear") # 17-draft.sk — removes any leftover draft armor stands/dropped items
+	delete {draftBanned::*}
+	delete {draftPicked::*}
+	wait 1 second # same courtesy as a normal match end — gives the barrier fill/door reset a moment to land before anyone's teleported
+
+	loop {_participants::*}:
+		set {_p} to loop-value
+		if {_p} is online:
+			clear {_p}'s inventory
+			killLevelTag({_p}) # 04-leveling.sk — remove the level-tag armor stand
+			close {_p}'s inventory # closes any open draft/starting-class GUI so it doesn't linger
+			remove {_p} from boss bar with id "%{_p}%-draftbar" # harmless if that bar doesn't exist for this player
+			delete boss bar with id "%{_p}%-draftbar"
+		delete {inMatch::%{_p}'s uuid%}
+		delete {matchOpponent::%{_p}'s uuid%}
+		delete {playerSpawn::%{_p}'s uuid%}
+		delete {lifepool::%{_p}'s uuid%}
+		delete {class::%{_p}'s uuid%}
+		delete {loadout::%{_p}'s uuid%::*}
+		delete {draftPickCount::%{_p}'s uuid%}
+		delete {draftSelection::%{_p}'s uuid%}
+		delete {draftMenuActive::%{_p}'s uuid%}
+		delete {startingClassChoice::%{_p}'s uuid%}
+		delete {respawning::%{_p}'s uuid%}
+		delete {pendingClassSelect::%{_p}'s uuid%}
+		if {_p} is online:
+			remove invisibility from active potion effects of {_p}
+			{_p}.setFlying(false)
+			{_p}.setAllowFlight(false)
+		delete {hadLead::%{_p}'s uuid%}
+		delete {wasBehind::%{_p}'s uuid%}
+		delete {spawn-protection::%{_p}'s uuid%}
+		resetPlayerLeveling({_p}) # 04-leveling.sk
+		resetMatchStats({_p})
+		if {_p} is online:
+			clear fastboard of {_p}
+			teleport {_p} to {config::lobby-spawn}
+			set gamemode of {_p} to adventure
+			send "&c%{_reason}%" to {_p}
+
+	delete {_participants::*}
+	set {forceEndResult} to true
+
+command /unstuck <player>:
+	permission: op
+	trigger:
+		set {_target} to arg 1
+		delete {respawning::%{_target}'s uuid%}
+		delete {pendingClassSelect::%{_target}'s uuid%}
+		remove invisibility from active potion effects of {_target}
+		{_target}.setFlying(false)
+		{_target}.setAllowFlight(false)
+		set gamemode of {_target} to adventure
+		teleport {_target} to {config::lobby-spawn}
+		send "&aYou've been unstuck." to {_target}
+		send "&aUnstuck %{_target}%." to player
+
+# ---- DISCONNECT HANDLING ----
+# Before first blood (including the whole pregame draft), a disconnect just
+# cancels the match with no stats recorded — forceEndMatch() already covers
+# the draft phase; this covers the same rule once players are in the arena
+# but nothing meaningful has happened yet. After first blood, a disconnect
+# is a real forfeit: the player still online gets a win, the one who left
+# gets a loss, both fully recorded via the normal endMatch() pipeline.
+on quit:
+	if {inMatch::%player's uuid%} is set:
+		set {_opponent} to {matchOpponent::%player's uuid%}
+		if {firstBloodClaimed} is set:
+			if {_opponent} is set:
+				if {_opponent} is online:
+					endMatch(player, {_opponent}) # player (disconnecting) = loser, opponent = winner
+				else:
+					forceEndMatch("Both players disconnected — match cancelled.")
+			else:
+				forceEndMatch("Your opponent disconnected.")
+		else:
+			forceEndMatch("Your opponent disconnected before the match properly began. No stats were recorded.")
+
+command /endduel:
+	permission: op
+	trigger:
+		if forceEndMatch("The duel was force-ended by an admin. No stats were recorded.") is true:
+			send "&aForce-ended the duel." to player
+		else:
+			send "&cNo match is currently in progress." to player
+
+function resetMatchStats(p: player):
+	set {matchkills::%{_p}'s uuid%} to 0
+	delete {matchkills::%{_p}'s uuid%::*}
+	set {matchdeaths::%{_p}'s uuid%} to 0
+	delete {matchdeaths::%{_p}'s uuid%::*}
+	set {matchdamage::%{_p}'s uuid%} to 0
+	delete {matchdamage::%{_p}'s uuid%::*}
+	set {matchplayerdamage::%{_p}'s uuid%} to 0
+	set {matchjungleslain::%{_p}'s uuid%} to 0
+	set {matchobjectives::%{_p}'s uuid%} to 0
+	delete {hadLead::%{_p}'s uuid%}
+	delete {wasBehind::%{_p}'s uuid%}
+
+function startMatch(p1: player, p2: player):
+	set {inMatch::%{_p1}'s uuid%} to true
+	set {inMatch::%{_p2}'s uuid%} to true
+	set {matchOpponent::%{_p1}'s uuid%} to {_p2}
+	set {matchOpponent::%{_p2}'s uuid%} to {_p1}
+
+	resetPlayerLeveling({_p1}) # 04-leveling.sk
+	resetPlayerLeveling({_p2})
+	resetMatchStats({_p1})
+	resetMatchStats({_p2})
+
+	broadcast "&e&l%{_p1}% &7vs &e&l%{_p2}% &7— match starting!"
+
+	teleport {_p1} to {config::lobby::player1-spawn}
+	teleport {_p2} to {config::lobby::player2-spawn}
+	set gamemode of {_p1} to adventure
+	set gamemode of {_p2} to adventure
+
+	runClassDraft({_p1}, {_p2}) # 17-draft.sk — blocks until the draft finishes; on success, calls enterArena() itself as its very last step. On failure/disconnect, forceEndMatch() has already handled all cleanup independently, so there's nothing further to do here either way.
+
+function enterArena(p1: player, p2: player): # called by 17-draft.sk once the draft (including starting-class/consumable choice) is complete
+	setupArena() # 15-arena-manager.sk
+
+	set {lifepool::%{_p1}'s uuid%} to {config::life-pool}
+	set {lifepool::%{_p2}'s uuid%} to {config::life-pool}
+
+	set {playerSpawn::%{_p1}'s uuid%} to {config::arena::spawn-a}
+	set {playerSpawn::%{_p2}'s uuid%} to {config::arena::spawn-b}
+
+	set {majorbosses-claimed} to 0 # global per-match objective-stakes counter — 04-leveling.sk reads this
+	set {matchStartTime} to unix timestamp of now # 04-leveling.sk reads this for Early/Mid/Late-Game XP; also used for match duration
+	delete {firstBloodClaimed} # 09-death-match.sk checks this
+
+	set {projectileChangeFix::%{_p1}'s uuid%} to now # zeus.sk's TAC breaks if this is ever unset (see 01-utils.sk's on-join initializer) — set again here as a guarantee at the start of every match, regardless of what happened before
+	set {projectileChangeFix::%{_p2}'s uuid%} to now
+
+	teleport {_p1} to {playerSpawn::%{_p1}'s uuid%}
+	teleport {_p2} to {playerSpawn::%{_p2}'s uuid%}
+
+	classSelect({_p1}, {startingClassChoice::%{_p1}'s uuid%}) # 05-class-menu.sk — the class each player chose to start as
+	classSelect({_p2}, {startingClassChoice::%{_p2}'s uuid%})
+
+	updateMatchSidebar({_p1}) # shows title + both players' lives from the start, rather than leaving the board blank until the first death
+	updateMatchSidebar({_p2})
+
+	startMiniBossTimers() # 11-mini-bosses.sk
+	startMajorBossTimer() # 12-major-boss.sk
+
+	broadcast "&a&lFIGHT! &7%{_p1}% vs %{_p2}%"
+
+function processEndMatchStats(p: offline player, result: text, duration: number): # called once per player from endMatch() — offline player since a disconnect-forfeit loser might not be online
+	set {_uuid} to {_p}'s uuid
+	add 1 to {games::%{_uuid}%}
+	add {_duration} to {duration-total::%{_uuid}%}
+
+	# ---- XP BY PHASE: track which phases this game actually reached, so 14-stats.sk can show an average per phase instead of a lifetime total ----
+	add 1 to {phasegames-early::%{_uuid}%} # every match reaches the early phase
+	if {_duration} >= {config::xpphase::early-end}:
+		add 1 to {phasegames-mid::%{_uuid}%}
+	if {_duration} >= {config::xpphase::mid-end}:
+		add 1 to {phasegames-late::%{_uuid}%}
+
+	if {_result} = "WIN":
+		add 1 to {wins::%{_uuid}%}
+		add {_duration} to {duration-win-total::%{_uuid}%}
+	else:
+		add 1 to {losses::%{_uuid}%}
+		add {_duration} to {duration-loss-total::%{_uuid}%}
+
+	if {hadLead::%{_uuid}%} is set:
+		add 1 to {leadgames::%{_uuid}%}
+		if {_result} = "LOSS":
+			add 1 to {leadlossgames::%{_uuid}%}
+	if {wasBehind::%{_uuid}%} is set:
+		if {_result} = "WIN":
+			add 1 to {behindwingames::%{_uuid}%}
+
+	loop integers between 1 and 3:
+		set {_class} to {loadout::%{_uuid}%::%loop-value%}
+		if {_class} is set:
+			add 1 to {class-games::%{_uuid}%::%{_class}%}
+			add 1 to {balance-class-games::%{_class}%} # 19-balance-stats.sk — global (all-players) denominator for carry rate + average tac/ult usage per game
+			recordClassDefaultPicks({_p}, {_class}) # 19-balance-stats.sk — consumable/perk pick rate
+			add {_duration} to {class-duration-total::%{_uuid}%::%{_class}%}
+			if {_result} = "WIN":
+				set {_livesOnClass} to {matchkills::%{_uuid}%::%{_class}%} + {matchdeaths::%{_uuid}%::%{_class}%}
+				if {_livesOnClass} >= 3: # anti-boost rule: a win only counts toward this class's mastery if you meaningfully played it this match (3+ combined kills/deaths on it) — otherwise the game/duration still count, just not the win
+					add 1 to {class-wins::%{_uuid}%::%{_class}%}
+				add {_duration} to {class-duration-win-total::%{_uuid}%::%{_class}%}
+			else:
+				add 1 to {class-losses::%{_uuid}%::%{_class}%}
+				add {_duration} to {class-duration-loss-total::%{_uuid}%::%{_class}%}
+			if {hadLead::%{_uuid}%} is set:
+				add 1 to {class-leadgames::%{_uuid}%::%{_class}%}
+				if {_result} = "LOSS":
+					add 1 to {class-leadlossgames::%{_uuid}%::%{_class}%}
+			if {wasBehind::%{_uuid}%} is set:
+				if {_result} = "WIN":
+					add 1 to {class-behindwingames::%{_uuid}%::%{_class}%}
+
+	# ---- BEST-GAME RECORDS (overall only — see design note in the stats tracker breakdown) ----
+	if {matchdamage::%{_uuid}%} > {bestgame-damage::%{_uuid}%}:
+		set {bestgame-damage::%{_uuid}%} to {matchdamage::%{_uuid}%}
+	if {matchplayerdamage::%{_uuid}%} > {bestgame-playerdamage::%{_uuid}%}:
+		set {bestgame-playerdamage::%{_uuid}%} to {matchplayerdamage::%{_uuid}%}
+	if {matchjungleslain::%{_uuid}%} > {bestgame-cs::%{_uuid}%}:
+		set {bestgame-cs::%{_uuid}%} to {matchjungleslain::%{_uuid}%}
+	if {matchdeaths::%{_uuid}%} = 0:
+		set {_kd} to {matchkills::%{_uuid}%}
+	else:
+		set {_kd} to {matchkills::%{_uuid}%} / {matchdeaths::%{_uuid}%}
+	if {_kd} > {bestgame-kd::%{_uuid}%}:
+		set {bestgame-kd::%{_uuid}%} to {_kd}
+
+	delete {hadLead::%{_uuid}%}
+	delete {wasBehind::%{_uuid}%}
+
+function endMatch(loser: offline player, winner: player): # loser is "offline player" since a disconnect-forfeit loser might not be online
+	if {_loser} is online:
+		broadcast "&a&l%{_winner}% &7has defeated &c&l%{_loser}%&7!"
+	else:
+		broadcast "&a&l%{_winner}% &7wins — &c&l%{_loser}% &7disconnected!"
+
+	set {_duration} to (unix timestamp of now) - {matchStartTime}
+
+	# ---- COMEBACK STATS ----
+	# {hadLead::*}/{wasBehind::*} are tracked LIVE now, in 09-death-match.sk
+	# right after every life-pool change, not recomputed here from the final
+	# life totals. Checking only the final numbers missed real comebacks: the
+	# loser always ends at 0 lives, so a big lead they built mid-match and
+	# then lost anyway often doesn't show up in the end-of-match margin at
+	# all. The live version catches the lead (in either direction) the moment
+	# it actually happens and keeps the flag set for the rest of the match
+	# even if the gap later closes. Nothing more to compute here — just read
+	# them below.
+
+	if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch any persistent/balance stat, including match history
+		processEndMatchStats({_winner}, "WIN", {_duration})
+		processEndMatchStats({_loser}, "LOSS", {_duration})
+		recordClassCarry({_winner}) # 19-balance-stats.sk — kill/boss carry rate among each player's 3 loadout classes
+		recordClassCarry({_loser})
+
+	# ---- MATCH SNAPSHOT (always) + HISTORY (real matches only) — 14-stats.sk ----
+	# The snapshot is taken here, before cleanup, because it reads {loadout} and the per-match stats. It's saved even for a /testduel so the end-of-match summary screen below has something to render; only a real match is pushed into the last-7 /matchhistory list.
+	stampMatchEnd() # 14-stats.sk
+	snapshotMatch({_winner}, {_loser}, "WIN", {_duration})
+	snapshotMatch({_loser}, {_winner}, "LOSS", {_duration})
+	if {testMatch} isn't set:
+		pushMatchHistory({_winner})
+		pushMatchHistory({_loser})
+
+	# ---- CLEANUP ----
+	clear {_winner}'s inventory
+	set gamemode of {_winner} to adventure
+	killLevelTag({_winner}) # 04-leveling.sk — remove the level-tag armor stand
+	clear fastboard of {_winner}
+	if {_loser} is online:
+		clear {_loser}'s inventory
+		set gamemode of {_loser} to adventure
+		killLevelTag({_loser})
+		clear fastboard of {_loser}
+
+	delete {inMatch::%{_winner}'s uuid%}
+	delete {inMatch::%{_loser}'s uuid%}
+	delete {matchOpponent::%{_winner}'s uuid%}
+	delete {matchOpponent::%{_loser}'s uuid%}
+	delete {respawning::%{_winner}'s uuid%} # in case the match ended while either was mid-respawn-choice
+	delete {respawning::%{_loser}'s uuid%}
+	delete {pendingClassSelect::%{_winner}'s uuid%}
+	delete {pendingClassSelect::%{_loser}'s uuid%}
+	delete {match-override-generalperk::%{_winner}'s uuid%::*} # in-match perk/consumable overrides never outlive the match — 04-leveling.sk's resetPlayerLeveling() clears these too, but that only runs again at the START of the next match, so this makes the revert immediate on a normal match end as well
+	delete {match-override-generalperk::%{_loser}'s uuid%::*}
+	delete {match-override-consumable::%{_winner}'s uuid%::*}
+	delete {match-override-consumable::%{_loser}'s uuid%::*}
+	delete {pendingPerkChoice::%{_winner}'s uuid%}
+	delete {pendingPerkChoice::%{_loser}'s uuid%}
+	delete {pendingConsumableChoice::%{_winner}'s uuid%}
+	delete {pendingConsumableChoice::%{_loser}'s uuid%}
+	stopMiniBossTimers() # 11-mini-bosses.sk
+	stopMajorBossTimer() # 12-major-boss.sk
+	teardownArena() # 15-arena-manager.sk — includes the wait + teleport back to lobby spawn
+
+	# FIX: opening the match summary GUI before teardownArena()'s teleport meant
+	# the teleport (which Bukkit closes any open inventory for) immediately shut
+	# the menu right back down. Opening it after the teleport instead — none of
+	# the per-match stats it reads (matchkills/matchdamage/etc.) get cleared
+	# until the START of the next match (resetMatchStats(), in startMatch()), so
+	# they're still intact here.
+	wait 2.5 seconds
+	openMatchSummary({_winner}, 0) # 14-stats.sk — slot 0 = the match that just ended
+	if {_loser} is online:
+		openMatchSummary({_loser}, 0)
+	delete {testMatch} # /testduel — clear the flag now that the match (and all its stat-skipping) is fully finished
+
+function updateMatchSidebar(p: player): # combines life pool (lines 2-3) with leveling detail (lines 5-7, written by 04-leveling.sk, which also sets the trailing blank line at the bottom) — blank spacer lines at 1 and 4
+	clear fastboard of {_p}
+	set title of {_p}'s fastboard to "&l1v1 DUEL"
+	set line 1 of {_p}'s fastboard to ""
+	set line 2 of {_p}'s fastboard to "&7Your Lives: &c%{lifepool::%{_p}'s uuid%}%"
+	set {_opp} to {matchOpponent::%{_p}'s uuid%}
+	if {_opp} is set:
+		set line 3 of {_p}'s fastboard to "&7Opp Lives: &c%{lifepool::%{_opp}'s uuid%}%"
+	set line 4 of {_p}'s fastboard to ""
+	updateLevelSidebar({_p}) # 04-leveling.sk

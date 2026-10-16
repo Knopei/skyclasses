@@ -1,0 +1,272 @@
+# ============================================
+# DEATH & LIFE POOL
+# Handles a player's death: persistent + current-match stat tracking, kill
+# rewards, class XP, the death-cooldown trigger, life pool decrement, the win
+# check, and respawn. Cleaned from the original death.sk — the old duel-round
+# logic (commented out in the original) is fully replaced by the life pool
+# system below, and this now hooks into 04-leveling.sk for XP/cooldowns.
+#
+# NOTE: all stat initialization for new players now lives in a single place —
+# 14-stats.sk's initializePlayerStats(), triggered on first join. It used to
+# be split across two "on join" blocks here, which has been consolidated to
+# avoid two places partially initializing overlapping variables.
+# ============================================
+
+function removeBadEffects(p: player, type: string):
+	remove poison from active potion effects of {_p}
+	remove wither from active potion effects of {_p}
+	remove ("wither" parsed as a potion effect type) from active potion effects of {_p}
+	remove slowness from active potion effects of {_p}
+	remove weakness from active potion effects of {_p}
+	remove mining fatigue from active potion effects of {_p}
+	extinguish {_p}
+
+on death of player: # ---------------------------------------------------------------------DEATH
+	if {inMatch::%victim's uuid%} isn't set: # not in an active match — let vanilla death/respawn handle it, nothing here applies
+		stop
+
+	cancel event
+	clearCombat(victim) # 20-combat.sk — dying ends their combat state and takes their bar off the opponent
+	killLevelTag(victim) # 04-leveling.sk — done immediately rather than relying on the ridden armor stand surviving death; it gets recreated fresh once they actually respawn
+	set {_attacker} to metadata value "attacker" of victim
+	set {_vClass} to {class::%victim's uuid%}
+	set {_aClass} to {class::%{_attacker}'s uuid%}
+
+	if {godlike-ULT-USE::%victim's uuid%::%{_vClass}%} is set: # their ultimate is currently active — flag it to stop immediately rather than continuing to run/deal damage after death. Checked inside each class's own ultimate loop (mighty.sk already had its own version of this; this generalizes it to every class).
+		set {godlike-ULT-CANCEL::%victim's uuid%::%{_vClass}%} to true
+
+	# Only the victim's actual registered match opponent can trigger kill-crediting
+	# below — guards against a bystander in the arena (e.g. an admin) accidentally
+	# getting credit if they happen to land the killing blow.
+	if {_attacker} is a player:
+		if {_attacker} isn't {matchOpponent::%victim's uuid%}:
+			delete {_attacker}
+
+	# ---- PERSISTENT (account-wide) STATS ----
+	if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
+		add 1 to {death::%victim's uuid%}
+		add 1 to {class-death::%victim's uuid%::%{_vClass}%}
+		if {ks::%victim's uuid%::count} > {ks::%victim's uuid%::top}:
+			set {ks::%victim's uuid%::top} to {ks::%victim's uuid%::count}
+		if {class-ks::%victim's uuid%::%{_vClass}%::count} > {class-ks::%victim's uuid%::%{_vClass}%::top}:
+			set {class-ks::%victim's uuid%::%{_vClass}%::top} to {class-ks::%victim's uuid%::%{_vClass}%::count}
+	# killstreak counters still reset on every death, test or not — a real streak shouldn't inherit kills earned in a test duel
+	set {ks::%victim's uuid%::count} to 0
+	set {class-ks::%victim's uuid%::%{_vClass}%::count} to 0
+
+	# ---- CURRENT-MATCH STATS (read by 10-match-manager.sk / 14-stats.sk at match end) ----
+	add 1 to {matchdeaths::%victim's uuid%}
+	add 1 to {matchdeaths::%victim's uuid%::%{_vClass}%}
+	recordPvpDeath(victim, {_vClass}) # 19-balance-stats.sk — time-to-first-death, perk/consumable K/D
+
+	if {_attacker} is a player:
+		if {_attacker} isn't victim:
+			if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
+				add 1 to {kill::%{_attacker}'s uuid%}
+				add 1 to {class-kill::%{_attacker}'s uuid%::%{_aClass}%}
+			add 1 to {classPvpKills::%{_attacker}'s uuid%::%{_aClass}%} # 04-leveling.sk — in-match player-kills-only count, shown in the class menu
+			add 1 to {ks::%{_attacker}'s uuid%::count}
+			add 1 to {class-ks::%{_attacker}'s uuid%::%{_aClass}%::count}
+			add 1 to {matchkills::%{_attacker}'s uuid%}
+			add 1 to {matchkills::%{_attacker}'s uuid%::%{_aClass}%}
+			recordPvpKill({_attacker}, {_aClass}, {_vClass}) # 19-balance-stats.sk — matchup win rate, time-to-first-kill, perk/consumable K/D (this function itself no-ops during a test duel)
+
+			addClassKill({_attacker}, {_aClass}, {config::pvpkill::xp-reward}) # 04-leveling.sk — XP toward the killer's active class
+			giveKillReward({_attacker}) # 07-consumables.sk — golden apple + selected consumable
+
+			if {firstBloodClaimed} isn't set: # 10-match-manager.sk resets this at match start
+				set {firstBloodClaimed} to true
+				if {testMatch} isn't set:
+					add 1 to {firstbloods::%{_attacker}'s uuid%}
+					add 1 to {class-firstbloods::%{_attacker}'s uuid%::%{_aClass}%}
+				broadcast "&c&lFIRST BLOOD! &6%{_attacker}%"
+
+			broadcast "&6%{_attacker}% &c%health of {_attacker}%❤ &e, defeated &6%victim%!"
+			make 50 of block particle using redstone block at block 1.5 above location of victim
+			play sound "BLOCK_STONE_BREAK" at volume 5 at pitch 1 to {_attacker}
+
+	set {_title} to "&c&lYOU DIED!"
+	set {_message} to "&eBetter Luck Next Time!"
+	send title "%{_title}%" with subtitle "%{_message}%" to victim for 2 seconds with fade out 1 second
+
+	wait 1 tick
+	if {_attacker} is a player:
+		heal {_attacker}
+		set {_sCurr} to {stamina::%{_attacker}'s uuid%::curr}
+		if {_sCurr} > 600:
+			set {stamina::%{_attacker}'s uuid%::curr} to 900
+		else:
+			add 300 to {stamina::%{_attacker}'s uuid%::curr}
+		actionBar({_attacker}) # 03-resources.sk
+
+	if victim is a player:
+		maxHealth(victim) # 04-leveling.sk
+	if {_attacker} is a player:
+		maxHealth({_attacker})
+
+	removeBadEffects({_attacker}, "attacker")
+	removeBadEffects(victim, "victim")
+
+	delete metadata value "attacker" of victim
+
+	# CLASS SPEC cleanup (visual/state leftovers)
+	set {wpShield::%victim's uuid%} to true
+
+	# ---- DEATH COOLDOWN (the class just died on gets locked) ----
+	triggerClassDeathCooldown(victim, {_vClass}) # 04-leveling.sk
+
+	# ---- LIFE POOL ----
+	remove 1 from {lifepool::%victim's uuid%}
+
+	# ---- LEAD TRACKING (comeback stats) — checked live, right here, after every life-pool change ----
+	# A significant lead can happen mid-match and then get completely reversed
+	# by the time the match ends (e.g. one player builds an 8-kill lead, then
+	# loses anyway) — checking only the FINAL life totals at match end (the
+	# old approach) misses that entirely, since by definition the loser always
+	# ends at 0 lives and the final margin often doesn't cross the threshold
+	# even though a real lead existed earlier. So this checks after every
+	# single death instead, and once a player is flagged they stay flagged for
+	# the rest of the match even if the gap later closes.
+	set {_opp} to {matchOpponent::%victim's uuid%}
+	if {_opp} is set:
+		set {_margin} to {lifepool::%{_opp}'s uuid%} - {lifepool::%victim's uuid%}
+		if {_margin} >= {config::lead::threshold-lives}:
+			set {hadLead::%{_opp}'s uuid%} to true
+			set {wasBehind::%victim's uuid%} to true
+		else if {_margin} <= (0 - {config::lead::threshold-lives}):
+			set {hadLead::%victim's uuid%} to true
+			set {wasBehind::%{_opp}'s uuid%} to true
+
+	updateMatchSidebar(victim) # 10-match-manager.sk — both boards refresh the instant lives change, rather than waiting on the full respawn flow
+	if {matchOpponent::%victim's uuid%} is set:
+		updateMatchSidebar({matchOpponent::%victim's uuid%})
+	if {lifepool::%victim's uuid%} <= 0:
+		set {lifepool::%victim's uuid%} to 0
+		if {_attacker} is a player:
+			endMatch(victim, {_attacker}) # 10-match-manager.sk
+		stop
+
+	handleRespawnFlow(victim) # last effect in this trigger — see the function below for why
+
+function handleRespawnFlow(p: player):
+	# Frozen (invisible, can't move or take damage, can still look around) at a
+	# fixed spot (center-top of the map — see {config::arena::deathmode-spawn})
+	# regardless of where they actually died, while forced to choose a class.
+	# Auto-assigns after 10 seconds if a class is available, or the moment one
+	# comes off cooldown if all 3 were on cooldown when the timer ran out.
+	set {_uuid} to {_p}'s uuid
+	set {respawning::%{_uuid}%} to true
+	delete {pendingPerkChoice::%{_uuid}%} # defensive — a fresh respawn cycle never inherits an in-progress perk/consumable pick from a previous one
+	delete {pendingConsumableChoice::%{_uuid}%}
+	clear {_p}'s inventory
+	teleport {_p} to {config::arena::deathmode-spawn}
+	add potion effect of invisibility without particles for 999 seconds to potion effects of {_p}
+	{_p}.setArrowsInBody(0) # clears any arrows still visually stuck from the killing blow — invisibility alone doesn't reliably hide these
+	{_p}.setAllowFlight(true) # stops constant-fall jitter — without this, gravity keeps trying to move them down every tick and the movement-freeze handler cancels it, causing visible rubber-banding
+	{_p}.setFlying(true)
+
+	wait {config::respawn::menu-delay} # 00-config.sk
+	if {_p} isn't online: # they disconnected during this delay — 10-match-manager.sk's on-quit handling covers the match itself; just avoid leaving stale state behind
+		delete {respawning::%{_uuid}%}
+		stop
+	if {inMatch::%{_uuid}%} isn't set: # the match ended out from under this respawn flow entirely (opponent disconnected, admin force-ended it, etc.) — stop here rather than acting on now-stale match state later (this was the root cause of a player getting stuck in a later draft: this flow kept running, re-created {pendingClassSelect::} after match-end cleanup had already run, and that stale entry got picked up on their NEXT match)
+		delete {respawning::%{_uuid}%}
+		stop
+
+	send title "&c&lYOU DIED!" with subtitle "&eChoose a class..." to {_p} for 2 seconds with fade out 1 second
+	openClassMenu({_p}) # 05-class-menu.sk — shows cooldowns; its click handler sets {startingRespawnClass::} instead of swapping immediately while {respawning::} is set
+
+	set {_timeKeep} to now
+	set {_timeoutSpan} to 10 seconds
+	set {_chosen} to false
+
+	while {_chosen} is false:
+		if {_p} isn't online:
+			delete {respawning::%{_uuid}%} # so reconnecting doesn't leave them permanently frozen from a stale flag
+			clearCooldownBars({_p}) # 04-leveling.sk
+			stop
+		if {inMatch::%{_uuid}%} isn't set: # same as above — the match can end mid-loop too
+			delete {respawning::%{_uuid}%}
+			clearCooldownBars({_p}) # 04-leveling.sk
+			stop
+		if {startingRespawnClass::%{_uuid}%} is set:
+			set {_chosen} to true
+			stop loop
+		set {_time} to difference between now and {_timeKeep}
+		if {_time} >= {_timeoutSpan}:
+			firstAvailableClassWorker({_p}) # 04-leveling.sk — calling the void worker directly here, not the wrapper: this loop has already run several waits, and calling a function that itself uses "return" from an already-delayed context risks the same class of bug as wait+return in one function
+			set {_available} to {availableClassResult}
+			if {_available} is not "":
+				set {startingRespawnClass::%{_uuid}%} to {_available}
+				# Auto-respawned past an in-progress perk/consumable pick that never got
+				# applied to a class — per design, it's simply discarded, never applied.
+				delete {pendingPerkChoice::%{_uuid}%}
+				delete {pendingConsumableChoice::%{_uuid}%}
+				set {_chosen} to true
+				stop loop
+		updateCooldownBars({_p}) # 04-leveling.sk — live-updates a bossbar per on-cooldown class
+		wait 5 ticks
+
+	clearCooldownBars({_p}) # 04-leveling.sk
+	delete {respawning::%{_uuid}%} # must happen before the close below, or whichever menu is currently open (Consumables/General Perks) sees this still set in its own close-handler and reopens the class menu
+	close {_p}'s inventory
+	remove invisibility from active potion effects of {_p}
+	{_p}.setFlying(false)
+	{_p}.setAllowFlight(false)
+	set {_class} to {startingRespawnClass::%{_uuid}%}
+	delete {startingRespawnClass::%{_uuid}%}
+
+	if {inMatch::%{_uuid}%} isn't set: # final check — the match could have ended in the brief window between the loop exiting and here
+		stop
+
+	teleport {_p} to {playerSpawn::%{_uuid}%}
+	set {spawn-protection::%{_uuid}%} to true
+	set {pendingClassSelect::%{_uuid}%} to {_class} # picked up by the watcher below on a fresh, untainted execution — classSelect() (and updateMatchSidebar(), which it also triggers) internally call functions with "return", and calling them directly here risks the same class of bug this whole function already worked around once
+
+	wait 2 seconds
+	delete {spawn-protection::%{_uuid}%}
+
+every 5 ticks: # fires as its own fresh, non-delayed execution each time — safe to call classSelect()/updateMatchSidebar() (and anything else with a "return") from here
+	loop all players:
+		if {pendingClassSelect::%loop-player's uuid%} is set:
+			if {inMatch::%loop-player's uuid%} is set: # belt-and-suspenders: discard rather than act on a stale entry left behind by a match that already ended mid-respawn
+				set {_class} to {pendingClassSelect::%loop-player's uuid%}
+				delete {pendingClassSelect::%loop-player's uuid%}
+				classSelect(loop-player, {_class}) # 05-class-menu.sk — also gives the weapon + consumables
+
+				# Respawn mana refund: +50 mana, capped at max. Internal storage is
+				# scaled x10 (see 03-resources.sk), so +50 displayed mana = +500 here —
+				# same scaling the Mana Potion consumable already uses.
+				add 500 to {mana::%loop-player's uuid%::curr}
+				if {mana::%loop-player's uuid%::curr} > {mana::%loop-player's uuid%::max}:
+					set {mana::%loop-player's uuid%::curr} to {mana::%loop-player's uuid%::max}
+				actionBar(loop-player) # 03-resources.sk
+
+				updateMatchSidebar(loop-player) # 10-match-manager.sk
+				set {_opponent} to {matchOpponent::%loop-player's uuid%}
+				if {_opponent} is set:
+					updateMatchSidebar({_opponent})
+			else:
+				delete {pendingClassSelect::%loop-player's uuid%}
+
+on player move: # freezes position while choosing a respawn class, but still allows free look
+	if {respawning::%player's uuid%} is set:
+		set {_moved} to false
+		if x-coord of past event-location != x-coord of event-location:
+			set {_moved} to true
+		if y-coord of past event-location != y-coord of event-location:
+			set {_moved} to true
+		if z-coord of past event-location != z-coord of event-location:
+			set {_moved} to true
+		if {_moved} is true:
+			cancel event
+
+on damage of player: # spawn protection — attacker can't deal damage while it's active on them; separately, the protected player also can't take damage during the same window
+	if {spawn-protection::%attacker's uuid%} is set:
+		cancel event
+	if {spawn-protection::%victim's uuid%} is set: # invincible for the same 2-second window set in handleRespawnFlow()
+		cancel event
+	if {respawning::%victim's uuid%} is set: # frozen/invisible while choosing a respawn class — see handleRespawnFlow() above
+		cancel event
+	if potion effects of victim contains slow falling:
+		remove slow falling from active potion effects of victim
