@@ -1,0 +1,201 @@
+# ============================================
+# CLASS MENU
+# In-base menu for swapping between drafted classes mid-match. Pre-match
+# class selection now happens via the pregame draft (17-draft.sk), which sets
+# {loadout::*} directly — this file used to also have a simple pick-3 GUI for
+# that, removed since the draft fully replaces it.
+# classSelect() here is the direct successor of the original class-select.sk
+# function, trimmed to the 10 kept classes and updated for level-gated ultimates
+# and the death-cooldown system.
+# ============================================
+
+on load:
+	set {class-bottom::back} to spectral arrow named "&7Back"
+	set {menu::classlist::*} to "VBA", "DS", "FH", "GD", "BS", "MH", "NS", "PGS", "RB", "RS", "ZT", "CB", "TS", "EA"
+
+# ---- IN-BASE CLASS MENU (mid-match swap) ----
+
+function openClassMenu(p: player):
+	set metadata tag "class menu" of {_p} to chest inventory with 5 rows named "Your Classes"
+	set slot (integers between 0 and 44) of metadata tag "class menu" of {_p} to black stained glass pane named " "
+	set slot (integers between 9 and 35) of metadata tag "class menu" of {_p} to gray stained glass pane named " "
+
+	loop integers between 1 and 3:
+		set {_class} to {loadout::%{_p}'s uuid%::%loop-value%}
+		if {_class} is set:
+			set {_slot} to 19 + ((loop-value - 1) * 3)
+			set {_lvl} to classLevel({_p}, {_class})
+			set {_pvpKills} to classPvpKills({_p}, {_class}) # 04-leveling.sk — player kills only; jungle/boss kills still count toward classLevel()'s XP threshold, just aren't shown here
+			if {_lvl} >= 3:
+				set {_lore::*} to "" and "&7Level: &e3/3 &7(MAX)"
+			else:
+				set {_lore::*} to "" and "&7Level: &e%{_lvl}%/3"
+			add "&7Kills: &e%{_pvpKills}%" to {_lore::*}
+			add "" to {_lore::*}
+			add lore of {class-display::%{_class}%} to {_lore::*}
+			if {_lvl} < 1:
+				add "" and "&8Ultimate locked - reach level 1" to {_lore::*}
+			add "" to {_lore::*}
+			if {class::%{_p}'s uuid%} = {_class}:
+				add "&aCURRENTLY ACTIVE" to {_lore::*}
+			else if isClassOnCooldown({_p}, {_class}) is true:
+				add "&cOn cooldown: %classCooldownRemaining({_p}, {_class})% seconds" to {_lore::*}
+			else:
+				add "&7Click to swap" to {_lore::*}
+			set slot {_slot} of metadata tag "class menu" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set slot 36 of metadata tag "class menu" of {_p} to (potion of healing named "&c&lConsumables" with lore "" and "&7[CLICK] Select your spawn item" and "") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # opens consumable select from here too
+	set slot 44 of metadata tag "class menu" of {_p} to (glowstone dust named "&e&lGeneral Perks" with lore "" and "&7[CLICK] Select your passive perk" and "") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # opens general perk select from here too
+	open (metadata tag "class menu" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "class menu" of player):
+		cancel event
+		if index of event-slot is 36:
+			set {navigatingToConsumables::%player's uuid%} to true # tells the close-handler below not to reopen this menu
+			consumableSelect(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if index of event-slot is 44:
+			set {navigatingToGeneralPerks::%player's uuid%} to true
+			openGeneralPerkMenu(player) # 06-perks-general.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else:
+			loop integers between 1 and 3:
+				set {_slot} to 19 + ((loop-value - 1) * 3)
+				if index of event-slot is {_slot}:
+					set {_class} to {loadout::%player's uuid%::%loop-value%}
+			if {_class} is set:
+				if isClassOnCooldown(player, {_class}) is true:
+					send "&cThat class is on cooldown for %classCooldownRemaining(player, {_class})% seconds!" to player
+					play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
+				else if {respawning::%player's uuid%} is set: # 09-death-match.sk's handleRespawnFlow() is waiting on this — it calls classSelect() itself once chosen
+					set {startingRespawnClass::%player's uuid%} to {_class}
+					# Picking a class is also the moment any pending in-match perk/consumable
+					# choice (06-perks-general.sk / 07-consumables.sk's ambiguous pickers) gets
+					# applied — as an override for THIS class only, for the rest of the match.
+					# Whether or not either was actually set, both are cleared here, so a picker
+					# opened but never followed through on a class-pick never lingers.
+					if {pendingConsumableChoice::%player's uuid%} is set:
+						set {match-override-consumable::%player's uuid%::%{_class}%} to {pendingConsumableChoice::%player's uuid%}
+						delete {pendingConsumableChoice::%player's uuid%}
+					if {pendingPerkChoice::%player's uuid%} is set:
+						set {match-override-generalperk::%player's uuid%::%{_class}%} to {pendingPerkChoice::%player's uuid%}
+						delete {pendingPerkChoice::%player's uuid%}
+					close player's inventory
+					play sound "block.enchantment_table.use" at volume 1 and pitch 1.25 to player
+				else if {class::%player's uuid%} = {_class}:
+					send "&cYou're already playing that class!" to player
+				else:
+					close player's inventory
+					classSelect(player, {_class})
+					play sound "block.enchantment_table.use" at volume 1 and pitch 1.25 to player
+
+on inventory close: # reopens the menu if closed without a choice while a respawn class-pick is pending (accidental close, e.g. pressing Escape) — but not if they intentionally navigated to the consumable or general perk menu
+	if event-inventory = (metadata tag "class menu" of player):
+		if {navigatingToConsumables::%player's uuid%} is set:
+			delete {navigatingToConsumables::%player's uuid%}
+		else if {navigatingToGeneralPerks::%player's uuid%} is set:
+			delete {navigatingToGeneralPerks::%player's uuid%}
+		else if {respawning::%player's uuid%} is set:
+			if {startingRespawnClass::%player's uuid%} isn't set:
+				wait 2 ticks
+				openClassMenu(player)
+
+# ---- CLASS SELECT (equips the class — the actual swap logic) ----
+
+function classSelect(p: player, class: text):
+	if {class-SwitchCooldown::%{_p}'s uuid%} is set:
+		if difference between now and {class-SwitchCooldown::%{_p}'s uuid%} < 5 seconds:
+			send "&cYou are switching classes too quickly!" to {_p}
+			stop
+	if {_p} isn't op:
+		set {class-SwitchCooldown::%{_p}'s uuid%} to now
+
+	clear {_p}'s inventory
+	set {_uuid} to {_p}'s uuid
+
+	# ---- RESOLVE EFFECTIVE GENERAL PERK + CONSUMABLE FOR THIS CLASS ----
+	# An in-match override (set only if the player picked a perk/consumable and
+	# then applied it to this specific class this game, via the ambiguous
+	# in-match pickers in 06-perks-general.sk / 07-consumables.sk) takes
+	# priority over the per-class default saved on the Class Info page
+	# (18-class-browser.sk). Both get written into the existing "current"
+	# variables so every perk-effect / consumable-delivery function elsewhere
+	# (dash reduction, stamina recovery, nimble feet, spell caster, enchanted
+	# apple, quick fuse, classHeals(), giveKillReward(), etc.) keeps working
+	# unchanged — they just always reflect whichever class is now active.
+	if {match-override-generalperk::%{_uuid}%::%{_class}%} is set:
+		set {general-perk::%{_uuid}%::selected} to {match-override-generalperk::%{_uuid}%::%{_class}%}
+	else if {class-default-generalperk::%{_uuid}%::%{_class}%} is set:
+		set {general-perk::%{_uuid}%::selected} to {class-default-generalperk::%{_uuid}%::%{_class}%}
+	else:
+		set {general-perk::%{_uuid}%::selected} to "healthyboy"
+
+	if {match-override-consumable::%{_uuid}%::%{_class}%} is set:
+		set {health-item::%{_uuid}%::item} to {health-item::%{match-override-consumable::%{_uuid}%::%{_class}%}%}
+	else if {class-default-consumable::%{_uuid}%::%{_class}%} is set:
+		set {health-item::%{_uuid}%::item} to {health-item::%{class-default-consumable::%{_uuid}%::%{_class}%}%}
+	else:
+		set {health-item::%{_uuid}%::item} to {health-item::GA}
+
+	set {_id} to "%unix timestamp of now%"
+	set {class-ID::%{_uuid}%} to {_id}
+
+	if {class::%{_uuid}%} is set:
+		clearCurrClass({_p})
+	set {class::%{_uuid}%} to {_class}
+
+	set {_weapon} to {class::weapon::%{_class}%}
+	if {_class} = "RB": # Rapid starts in dagger form, swaps to bow only during its ultimate
+		set {_weapon} to {class::weapon::RD}
+	give {_p} {_weapon}
+
+	classHeals({_p}) # 07-consumables.sk
+	nadeCount({_p}, {_id}) # 07-consumables.sk
+	maxHealth({_p}) # 04-leveling.sk
+
+	set {mana::%{_uuid}%::max} to 1000
+	set {stamina::%{_uuid}%::max} to 900
+	set {currWeapon::%{_uuid}%} to {_class}
+
+	if {_class} = "NS": # baseline passive "Improved Stamina" — increased max stamina, no longer level-gated
+		set {stamina::%{_uuid}%::max} to 1200
+	else if {_class} = "BS":
+		set {shieldStrength::%{_uuid}%} to {weapons::BS::SS}
+		set level progress of {_p} to 0.99
+	else if {_class} = "CB": # cyberpunk.sk — starts the background ultimate-charge recharge loop for this life; the loop checks {class-ID::%uuid%} against {_id} every cycle and stops itself the moment the player dies/switches away from CB, so it never needs to be manually cancelled here. {cb-ULT-count::*} is NOT reset here — just like other classes' ult cooldown persists across death, a player who already banked 1 or 2 charges keeps them into their next life (cbULT() itself only initializes it to 0 the very first time this player ever plays CB)
+		cbULT({_p}, {_id})
+	else if {_class} = "TS": # tempest.sk — clears the one-time self-push flag Tornado uses, so a leftover flag from a previous life doesn't suppress the self-push the next time this player casts Tornado
+		delete {tornadoMovement::%{_uuid}%}
+
+	set {stamina::%{_uuid}%::curr} to {stamina::%{_uuid}%::max} # always full on respawn — also clears any stale overflow if the previous life's class had a different max (e.g. swapping away from NS's Perk 1 bonus)
+
+	send "&eYou selected the &6%{class-name::%{_class}%}% &eclass!" to {_p}
+	updateNametag({_p}) # 04-leveling.sk
+	updateLevelSidebar({_p}) # 04-leveling.sk
+
+	# Ultimate cooldown persists across death. If this class already has a
+	# cooldown ticking down from a previous life, resume tracking the REMAINING
+	# time (purely so the "ready" sound still fires at the right moment) — but
+	# if it's not currently on cooldown at all (never used yet, or already
+	# fully recharged), leave it alone entirely: the ultimate is simply ready,
+	# and nothing here should impose an artificial fresh wait on top of that.
+	# EXCLUDES "CB" — Cyberpunk's 2-charge ultimate is entirely managed by its
+	# own cbULT() background loop (started above), which reads/writes this same
+	# {godlike-ULT-CD::*::CB} variable on its own schedule. Letting this generic
+	# block ALSO wait on and delete that variable races with cbULT() and was
+	# corrupting CB's charge timing/display — this is the actual fix for
+	# "Cyberpunk ult cooldowns and timer" being wrong.
+	if {_class} isn't "CB":
+		if classLevel({_p}, {_class}) >= 1:
+			if {godlike-ULT-CD::%{_uuid}%::%{_class}%} is set:
+				set {_wait} to {weapons::%{_class}%::ULT-CD}
+				set {_elapsed} to difference between now and {godlike-ULT-CD::%{_uuid}%::%{_class}%}
+				set {_remaining} to {_wait} - {_elapsed}
+				if {_remaining} > 0 seconds:
+					wait {_remaining}
+					delete {godlike-ULT-CD::%{_uuid}%::%{_class}%} # always clear it once truly expired, regardless of what class is currently active — this is what lets charge finish "in the background" even while playing a different class
+					if {class::%{_uuid}%} = {_class}: # only play the ready sound if they're still actually on this class when it happens, to avoid a confusing out-of-context cue
+						play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+				else:
+					delete {godlike-ULT-CD::%{_uuid}%::%{_class}%} # already recharged by wall-clock time while they were dead/choosing

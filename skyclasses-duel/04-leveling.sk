@@ -1,0 +1,291 @@
+# ============================================
+# CLASS LEVELING
+# Per-class XP/level tracking (resets each match, persists through death),
+# the per-class death cooldown formula, and the nametag/sidebar level display.
+# This is the function every class file calls via classLevel().
+# ============================================
+
+# ---- LEVEL LOOKUP ----
+
+function classKills(p: player, class: text) :: number:
+	if {classxp::%{_p}'s uuid%::%{_class}%::kills} is set:
+		return {classxp::%{_p}'s uuid%::%{_class}%::kills}
+	else:
+		return 0
+
+function classPvpKills(p: player, class: text) :: number: # in-match, player-kills-only count (resets each match) — used by 05-class-menu.sk's "Kills:" line. classKills() above still mixes in jungle/boss kills since those legitimately count toward the level-XP threshold; this one exists purely so the menu can show "kills" without including them.
+	if {classPvpKills::%{_p}'s uuid%::%{_class}%} is set:
+		return {classPvpKills::%{_p}'s uuid%::%{_class}%}
+	else:
+		return 0
+
+function classLevel(p: player, class: text) :: number:
+	set {_kills} to classKills({_p}, {_class})
+	if {_kills} >= {config::xp-threshold::3}:
+		return 3
+	else if {_kills} >= {config::xp-threshold::2}:
+		return 2
+	else if {_kills} >= {config::xp-threshold::1}:
+		return 1
+	else:
+		return 0
+
+function nextLevelThreshold(level: number) :: number: # returns 0 if already max level
+	if {_level} = 0:
+		return {config::xp-threshold::1}
+	else if {_level} = 1:
+		return {config::xp-threshold::2}
+	else if {_level} = 2:
+		return {config::xp-threshold::3}
+	else:
+		return 0
+
+# ---- GAINING XP (call this from 09-death-match.sk whenever a player gets a kill) ----
+
+function addClassKill(p: player, class: text, amount: number):
+	set {_uuid} to {_p}'s uuid
+	set {_oldLevel} to classLevel({_p}, {_class})
+	add {_amount} to {classxp::%{_uuid}%::%{_class}%::kills}
+	set {_newLevel} to classLevel({_p}, {_class})
+
+	if {matchStartTime} is set: # Early/Mid/Late-Game XP — bucketed by elapsed wall-clock time since match start
+		if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
+			set {_elapsed} to (unix timestamp of now) - {matchStartTime}
+			if {_elapsed} < {config::xpphase::early-end}:
+				add {_amount} to {xpearly::%{_uuid}%}
+				add {_amount} to {class-xpearly::%{_uuid}%::%{_class}%}
+			else if {_elapsed} < {config::xpphase::mid-end}:
+				add {_amount} to {xpmid::%{_uuid}%}
+				add {_amount} to {class-xpmid::%{_uuid}%::%{_class}%}
+			else:
+				add {_amount} to {xplate::%{_uuid}%}
+				add {_amount} to {class-xplate::%{_uuid}%::%{_class}%}
+
+	if {_newLevel} > {_oldLevel}:
+		recordLevelUpLives({_class}, {_newLevel}, {lifepool::%{_uuid}%}) # 19-balance-stats.sk — average lives left when a class reaches each level
+		play sound "entity_player_levelup" at volume 1 and pitch 1 to {_p}
+		if {_newLevel} = 1:
+			send "&a&lLEVEL UP! &f%{class-name::%{_class}%}% &7Lvl 1 — Ultimate unlocked!" to {_p}
+		else if {_newLevel} = 2:
+			send "&a&lLEVEL UP! &f%{class-name::%{_class}%}% &7Lvl 2 — Perk 1 unlocked!" to {_p}
+		else if {_newLevel} = 3:
+			send "&a&lLEVEL UP! &f%{class-name::%{_class}%}% &7Lvl 3 (MAX) — Perk 2 unlocked!" to {_p}
+		if {class::%{_uuid}%} = {_class}: # active class changed level — refresh visible displays
+			updateNametag({_p})
+			maxHealth({_p})
+	updateLevelSidebar({_p})
+
+function resetPlayerLeveling(p: player): # called by 09-death-match.sk / match-manager.sk at the start of a match
+	delete {classxp::%{_p}'s uuid%::*}
+	delete {classDeathCD::%{_p}'s uuid%::*}
+	delete {classDeathCDLength::%{_p}'s uuid%::*}
+	delete {classPvpKills::%{_p}'s uuid%::*}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::*} # ultimate charge now persists across mid-match class switches (see clearCurrClass()) — this is the one place left that needs to wipe it clean, so a cooldown from a previous match can't carry into a new one
+	delete {match-override-generalperk::%{_p}'s uuid%::*} # in-match perk/consumable overrides (18-class-browser.sk default selectors are the persistent ones) never survive past the match they were set in — this function runs both at the start of every match and whenever one is force-ended, so it's the single place that guarantees a clean slate
+	delete {match-override-consumable::%{_p}'s uuid%::*}
+	delete {pendingPerkChoice::%{_p}'s uuid%} # an in-progress in-match pick that never got applied to a class
+	delete {pendingConsumableChoice::%{_p}'s uuid%}
+
+# ---- MAX HEALTH (class-level-based bonuses + the general perk of the same theme) ----
+
+function maxHealth(p: player):
+	set {_uuid} to {_p}'s uuid
+	set {_class} to {class::%{_uuid}%}
+	set {_health} to 0
+	if {_class} = "FH":
+		if classLevel({_p}, "FH") >= 2: # Perk 1 (The Biggest Boy)
+			add 1 to {_health}
+	if classCategory({_class}) is "JUGGERNAUT": # 02-class-data.sk — Juggernaut's level 0 category buff. FH's old standalone "+1 baseline Big Boy" heart is folded into this (FH is a Juggernaut), rather than stacking a second +1 on top of it
+		add 1 to {_health}
+	# FIX: this used to check a stale {general-perk::%uuid%::owned::*} list left
+	# over from the old multi-perk boss-reward system — never populated since
+	# the redesign to a single {general-perk::%uuid%::selected} value, so this
+	# perk silently did nothing. Now reads the same "currently effective" value
+	# everything else reads (06-perks-general.sk).
+	if {general-perk::%{_uuid}%::selected} is "healthyboy": # general perk pool's "Healthy Boy" — extra heart
+		add 1 to {_health}
+	set {_max} to 9 + {_health}
+	set max health of {_p} to {_max}
+	set {maxHealth::%{_uuid}%} to {_max}
+	heal {_p} by {_health}
+
+# ---- DEATH COOLDOWN (per-class swap lockout) ----
+# Formula: base + (class level * per-level) + (major bosses claimed * per-objective), capped at max.
+
+function calcDeathCooldown(p: player, class: text) :: number: # seconds
+	if {majorbosses-claimed} isn't set:
+		set {majorbosses-claimed} to 0
+	set {_level} to classLevel({_p}, {_class})
+	set {_cooldown} to {config::deathcd::base} + ({_level} * {config::deathcd::per-level}) + ({majorbosses-claimed} * {config::deathcd::per-objective})
+	if {_cooldown} > {config::deathcd::max}:
+		set {_cooldown} to {config::deathcd::max}
+	return {_cooldown}
+
+function triggerClassDeathCooldown(p: player, class: text): # called from 09-death-match.sk on death
+	set {classDeathCD::%{_p}'s uuid%::%{_class}%} to unix timestamp of now
+	set {classDeathCDLength::%{_p}'s uuid%::%{_class}%} to calcDeathCooldown({_p}, {_class})
+
+function isClassOnCooldown(p: player, class: text) :: boolean:
+	if {classDeathCD::%{_p}'s uuid%::%{_class}%} is set:
+		set {_elapsed} to (unix timestamp of now) - {classDeathCD::%{_p}'s uuid%::%{_class}%}
+		if {_elapsed} < {classDeathCDLength::%{_p}'s uuid%::%{_class}%}:
+			return true
+	return false
+
+function classCooldownRemaining(p: player, class: text) :: number: # seconds
+	if {classDeathCD::%{_p}'s uuid%::%{_class}%} is set:
+		set {_elapsed} to (unix timestamp of now) - {classDeathCD::%{_p}'s uuid%::%{_class}%}
+		set {_length} to {classDeathCDLength::%{_p}'s uuid%::%{_class}%}
+		if {_elapsed} < {_length}:
+			return {_length} - {_elapsed}
+	return 0
+
+# ---- LIVE COOLDOWN BOSSBARS (shown while a player is choosing a respawn class — 09-death-match.sk) ----
+# Both void with no internal calls to anything that returns a value, so safe
+# to call repeatedly from within handleRespawnFlow()'s already-delayed loop.
+
+function updateCooldownBars(p: player):
+	loop integers between 1 and 3:
+		set {_barClass} to {loadout::%{_p}'s uuid%::%loop-value%}
+		if {_barClass} is set:
+			set {_barId} to "%{_p}'s uuid%-cdbar-%loop-value%"
+			set {_onCD} to false
+			set {_remaining} to 0
+			set {_total} to 1
+			if {classDeathCD::%{_p}'s uuid%::%{_barClass}%} is set:
+				set {_elapsed} to (unix timestamp of now) - {classDeathCD::%{_p}'s uuid%::%{_barClass}%}
+				set {_total} to {classDeathCDLength::%{_p}'s uuid%::%{_barClass}%}
+				if {_elapsed} < {_total}:
+					set {_onCD} to true
+					set {_remaining} to {_total} - {_elapsed}
+			if {_onCD} is true:
+				set {_bar} to boss bar with id {_barId} with title "&c%{class-name::%{_barClass}%}% &7- %{_remaining}%s" with color red
+				set bar style of {_bar} to segmented 10
+				add {_p} to {_bar}
+				set {_progress} to ({_remaining} / {_total}) * 100
+				set bar progress of {_bar} to {_progress}
+			else:
+				remove {_p} from boss bar with id {_barId}
+				delete boss bar with id {_barId}
+
+function clearCooldownBars(p: player): # called at every exit point of the respawn-wait flow
+	loop integers between 1 and 3:
+		set {_barClass} to {loadout::%{_p}'s uuid%::%loop-value%}
+		if {_barClass} is set:
+			set {_barId} to "%{_p}'s uuid%-cdbar-%loop-value%"
+			remove {_p} from boss bar with id {_barId}
+			delete boss bar with id {_barId}
+
+function firstAvailableClass(p: player) :: text: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
+	firstAvailableClassWorker({_p})
+	return {availableClassResult}
+
+function firstAvailableClassWorker(p: player): # returns "" if all 3 of the player's loadout classes are on cooldown
+	set {availableClassResult} to ""
+	loop integers between 1 and 3:
+		set {_class} to {loadout::%{_p}'s uuid%::%loop-value%}
+		if {_class} is set:
+			set {_onCooldown} to false # inlined from isClassOnCooldown() rather than calling it — this function gets called from an already-delayed context (see 09-death-match.sk), and calling anything with "return" from there breaks, even transitively through a nested call
+			if {classDeathCD::%{_p}'s uuid%::%{_class}%} is set:
+				set {_elapsed} to (unix timestamp of now) - {classDeathCD::%{_p}'s uuid%::%{_class}%}
+				if {_elapsed} < {classDeathCDLength::%{_p}'s uuid%::%{_class}%}:
+					set {_onCooldown} to true
+			if {_onCooldown} is false:
+				set {availableClassResult} to {_class}
+				stop
+
+# ---- DISPLAY ----
+# Nametag: shows the level of the player's currently active class. Vanilla
+# Skript has no built-in scoreboard team support (that needs an addon we
+# don't have), so instead this uses an invisible marker armor stand riding
+# above the player's head — the same floating-text technique already used
+# elsewhere in this codebase (01-utils.sk's showDMG, Frankenstein/Paladin's
+# shield indicators).
+# Sidebar: full per-class level + kill progress for all 3 loadout classes.
+# NOTE: the sidebar only writes specific lines — the overall board layout
+# (including life pool, etc.) is assembled by 10-match-manager.sk.
+
+function killLevelTag(p: player): # shared cleanup — kills the current riding passenger (normal case) AND the tracked direct reference (covers disconnects, where the entity can be force-dismounted by the server before this runs, so the passenger list is already empty)
+	loop passengers of {_p}:
+		if metadata value "levelTag" of loop-value is set:
+			kill loop-value
+	if {levelTag::%{_p}'s uuid%} is set:
+		if {levelTag::%{_p}'s uuid%} is alive:
+			kill {levelTag::%{_p}'s uuid%}
+		delete {levelTag::%{_p}'s uuid%}
+
+function setLevelTagNameVisible(p: player, visible: boolean): # used by ghost.sk — the stand's body is already permanently NBT-flagged invisible, but the floating name text is a separate toggle (Entity#setCustomNameVisible), which is what actually needs hiding while the player themselves is invisible
+	if {levelTag::%{_p}'s uuid%} is set:
+		if {levelTag::%{_p}'s uuid%} is alive:
+			{levelTag::%{_p}'s uuid%}.setCustomNameVisible({_visible})
+
+# ---- SNEAK-TO-HIDE NAMETAG ----
+# Sneaking in a match for more than a second hides the floating level/class
+# nametag until the player unsneaks — a separate "on sneak toggle" handler from
+# 03-resources.sk's dash one (Skript fires every matching handler on an event, so
+# this doesn't interfere with that logic at all).
+on sneak toggle:
+	if {top::%player's uuid%} is set: # only while actually in a match
+		if player is sneaking:
+			set {_sneakStart} to now
+			set {levelTagSneakStart::%player's uuid%} to {_sneakStart}
+			wait 20 ticks # 1 second
+			if {levelTagSneakStart::%player's uuid%} = {_sneakStart}: # nothing newer (an unsneak+resneak) has overwritten it — still the same, uninterrupted sneak
+				if player is sneaking: # they could have unsneaked exactly during this wait without a fresh toggle event re-running this check
+					setLevelTagNameVisible(player, false)
+		else:
+			delete {levelTagSneakStart::%player's uuid%}
+			if {godlike-ULT-USE::%player's uuid%::GD} isn't set: # don't fight Ghost's own invisibility-based nametag hide (ghost.sk) — unsneaking mid-ult shouldn't force the tag visible while still invisible; ghost.sk's own ult-end code restores it
+				setLevelTagNameVisible(player, true)
+
+function updateNametag(p: player):
+	set {_class} to {class::%{_p}'s uuid%}
+	set {_level} to classLevel({_p}, {_class})
+
+	killLevelTag({_p}) # remove any existing level tag before adding the new one
+
+	if {config::nametags-enabled} is true: # 00-config.sk — nametags are turned OFF by default now (20-combat.sk's bossbar replaces them). Everything below is the original code, kept intact so flipping the setting back to true restores them.
+		spawn 1 armor stand at location of {_p}
+		set {_tag} to last spawned armor stand
+		add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,Marker:1b}" to nbt compound of {_tag}
+		set name of {_tag} to "&7[Lvl %{_level}%] &f%{class-name::%{_class}%}%"
+		set metadata value "levelTag" of {_tag} to true
+		set {levelTag::%{_p}'s uuid%} to {_tag} # direct reference, so killLevelTag() can find it even if it's already been dismounted
+		make {_tag} ride {_p}
+
+on damage of an armor stand: # extra safety net beyond the Marker NBT flag (which should already make it non-hittable/non-colliding) — guarantees it can never be damaged or knocked around
+	if metadata value "levelTag" of victim is set:
+		cancel event
+
+on projectile hit: # stops arrows/tridents from registering a hit on the level tag and being consumed by it
+	if victim is an armor stand:
+		if metadata value "levelTag" of victim is set:
+			cancel event
+
+on quit: # a disconnected player will never trigger another updateNametag() call to clean up
+	killLevelTag(player)
+
+function updateLevelSidebar(p: player):
+	loop integers between 1 and 3:
+		set {_class} to {loadout::%{_p}'s uuid%::%loop-value%}
+		if {_class} is set:
+			set {_lvl} to classLevel({_p}, {_class})
+			set {_kills} to classKills({_p}, {_class})
+			set {_next} to nextLevelThreshold({_lvl})
+			if {_next} > 0:
+				set line (4+loop-value) of {_p}'s fastboard to "&e%{class-name::%{_class}%}%&7: Lvl %{_lvl}% (%{_kills}%/%{_next}%)"
+			else:
+				set line (4+loop-value) of {_p}'s fastboard to "&e%{class-name::%{_class}%}%&7: Lvl %{_lvl}% (MAX)"
+	set line 8 of {_p}'s fastboard to ""
+
+# ---- SKIRMISHER CATEGORY BUFF (level 2+) ----
+# Every Skirmisher class (GD, NS, RS, CB, TS) deals +0.25 damage with its direct-hit tactical from level 2 on. The class files add
+# skirmisherTacBonus() to their own tactical damage; Cyberpunk's dart and Ninja's shuriken go through 08-damage.sk's arrow pipeline.
+
+function skirmisherTacBonus(p: entity) :: number: # 0.25 for a level 2+ Skirmisher player, else 0
+	if {_p} is a player:
+		set {_c} to {class::%{_p}'s uuid%}
+		if classCategory({_c}) is "SKIRMISHER":
+			if classLevel({_p}, {_c}) >= 2:
+				return 0.25
+	return 0

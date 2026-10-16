@@ -1,0 +1,360 @@
+# ============================================
+# CONSUMABLES
+# Selected at base via GUI, no auto-give timer. Every respawn/class-select
+# always gives 2 golden apples as a fixed baseline, plus 1 of the player's
+# selected consumable on top (if they selected golden apple, that's 3 total).
+# Killing an opponent always grants a golden apple plus the killer's selected
+# consumable. Also includes Mighty's grenade utility item (unrelated to the
+# selectable consumables, but lived in the same original file).
+# Cleaned from the original consume.sk — removed the 45-second auto-give loop
+# (healCount()) entirely per design decision.
+# ============================================
+
+on load:
+	# ---- Grenades (Mighty's utility item) ----
+	set {nade::grenade} to unbreakable fire charge of unbreaking 1 named "&6Grenade" with lore "" and "&6&lUTILITY ITEM" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- Selectable consumables ----
+	set {health-item::GA} to golden apple named "&cGolden Apple" with lore "" and "&c&lHEALTH ITEM"
+	set {health-item::HP} to potion of health named "&cHealth Potion" with lore "" and "&c&lHEALTH ITEM"
+	set {health-item::GP} to golden carrot named "&cGolden Pepper" with lore "" and "&c&lHEALTH ITEM"
+	set {health-item::GM} to glistering melon slice named "&cGolden Melon" with lore "" and "&c&lHEALTH ITEM"
+	set {health-item::CF} to chorus fruit named "&cChorus Fruit" with lore "" and "&c&lHEALTH ITEM"
+	set {health-item::MP} to water bottle named "&9Mana Potion" with lore "" and "&9&lUTILITY ITEM"
+	set {health-item::SP} to honey bottle named "&eStamina Potion" with lore "" and "&e&lUTILITY ITEM"
+
+	loop {health-item::*}:
+		set {_v} to loop-value
+		set {_i} to loop-index
+		set {health-item::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set {manualStackItems::*} to name of {health-item::HP}, name of {health-item::MP}, name of {health-item::SP}, name of {health-item::GA}, "&6Grenade"
+
+	# ---- Selection GUI display items ----
+	set {hi-caption} to apple of unbreaking 1 named "&c&lSelect Your Consumable" with lore "" and "&8&oChoose the item you'll spawn with on" and "&8&orespawn, and receive an extra copy of" and "&8&owhen you kill your opponent." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set {hi-display::GA} to golden apple named "&c&lGolden Apple" with lore "" and "&f&lCONSUME" and "&60/10 Doctors Recommend &7[RIGHT]" and "&8&oInstantly heal for 1 heart and heal" and "&8&o2 hearts over 5 seconds." and "" and ""
+	set {hi-display::HP} to potion of health named "&c&lHealth Potion" with lore "" and "&f&lCONSUME" and "&dMed Kit &7[RIGHT]" and "&8&oInstantly heal for 3 hearts." and "" and ""
+	set {hi-display::GP} to golden carrot named "&c&lGolden Pepper" with lore "" and "&f&lCONSUME" and "&cBlazin Hot! &7[RIGHT]" and "&8&oGain extra speed for 5 seconds and" and "&8&oheal 2 hearts over 5 seconds." and "" and ""
+	set {hi-display::GM} to glistering melon slice named "&c&lGolden Melon" with lore "" and "&f&lCONSUME" and "&aCleanse &7[RIGHT]" and "&8&oRemove all negative effects and heal" and "&8&o2 hearts over 5 seconds." and "" and ""
+	set {hi-display::CF} to chorus fruit named "&c&lChorus Fruit" with lore "" and "&f&lCONSUME" and "&5Exotic Fruit &7[RIGHT]" and "&8&oGain invisibility, teleport to a random" and "&8&onearby location and heal 2.5 hearts" and "&8&oover 5 seconds." and "" and ""
+	set {hi-display::MP} to water bottle named "&9&lMana Potion" with lore "" and "&f&lCONSUME" and "&bSlurp Juice &7[RIGHT]" and "&8&oInstantly regenerate 50 mana." and "" and ""
+	set {hi-display::SP} to honey bottle named "&e&lStamina Potion" with lore "" and "&f&lCONSUME" and "&eRecharge &7[RIGHT]" and "&8&oInstantly regenerate all stamina." and "" and ""
+
+on join:
+	loop {menu::classlist::*}: # 05-class-menu.sk — VBA, DS, FH, GD, BS, MH, NS, PGS, RB, RS, ZT, CB, TS
+		if {class-default-consumable::%player's uuid%::%loop-value%} isn't set:
+			set {class-default-consumable::%player's uuid%::%loop-value%} to "GA" # new player default, per class, until changed on that class's Class Info page
+	if {health-item::%player's uuid%::item} isn't set: # defensive fallback for the "currently effective" cache — classSelect() (05-class-menu.sk) is what actually keeps this current once a class is equipped
+		set {health-item::%player's uuid%::item} to {health-item::GA}
+
+# ---- IN-MATCH SELECTION GUI (ambiguous — see 06-perks-general.sk's file header for the reasoning, same pattern here) ----
+# Only ever reached via 05-class-menu.sk's "Your Classes" -> Consumables, itself
+# only shown during the death-respawn flow, so this never shows anything as
+# "selected" — it doesn't yet know which class it'll apply to. Picking an item
+# just records {pendingConsumableChoice::%uuid%} and sends the player back to
+# the class menu to pick a class; that click handler is what actually turns it
+# into a {match-override-consumable::} for the chosen class.
+
+function consumableSelect(p: player):
+	set metadata tag "consumable select" of {_p} to chest inventory with 5 rows named "Select Consumable"
+	set slot (integers between 9 and 35) of metadata tag "consumable select" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "consumable select" of {_p} to red stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "consumable select" of {_p} to red stained glass pane named " "
+
+	set slot 4 of metadata tag "consumable select" of {_p} to {hi-caption}
+
+	set {_display::19} to {hi-display::MP}
+	set {_display::20} to {hi-display::SP}
+	set {_display::21} to {hi-display::HP}
+	set {_display::22} to {hi-display::GA}
+	set {_display::23} to {hi-display::CF}
+	set {_display::24} to {hi-display::GP}
+	set {_display::25} to {hi-display::GM}
+
+	loop {_display::*}:
+		set {_index} to loop-index parsed as a integer
+		set {_value} to loop-value
+		set slot {_index} of metadata tag "consumable select" of {_p} to {_value} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set {_size} to size of lore of loop-value
+		set line {_size} of lore of slot {_index} of metadata tag "consumable select" of {_p} to "&7Click to select, then choose a class"
+
+	set slot 36 of metadata tag "consumable select" of {_p} to {class-bottom::back}
+
+	open (metadata tag "consumable select" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "consumable select" of player):
+		cancel event
+		if index of event-slot is 19:
+			set {_hi} to "MP"
+		else if index of event-slot is 20:
+			set {_hi} to "SP"
+		else if index of event-slot is 21:
+			set {_hi} to "HP"
+		else if index of event-slot is 22:
+			set {_hi} to "GA"
+		else if index of event-slot is 23:
+			set {_hi} to "CF"
+		else if index of event-slot is 24:
+			set {_hi} to "GP"
+		else if index of event-slot is 25:
+			set {_hi} to "GM"
+		if {_hi} is set:
+			set {pendingConsumableChoice::%player's uuid%} to {_hi}
+			send "&aConsumable &f%name of {health-item::%{_hi}%}%&a selected — now choose a class to apply it to!" to player
+			set {navigatingFromConsumables::%player's uuid%} to true # returning to the class menu also fires a close event on this one — don't let that bounce back here
+			openClassMenu(player) # 05-class-menu.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 36:
+			set {navigatingFromConsumables::%player's uuid%} to true
+			openClassMenu(player) # 05-class-menu.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+on inventory close: # while respawning, closing the consumable menu (for any reason) returns to the class menu
+	if event-inventory = (metadata tag "consumable select" of player):
+		if {navigatingFromConsumables::%player's uuid%} is set:
+			delete {navigatingFromConsumables::%player's uuid%}
+		else if {respawning::%player's uuid%} is set:
+			wait 2 ticks
+			openClassMenu(player) # 05-class-menu.sk
+
+# ---- DELIVERY (respawn + class-select + kill reward) ----
+
+function classHeals(p: player): # called on respawn and on class-select
+	loop {health-item::*}:
+		set {_name} to name of loop-value
+		loop {_p}'s inventory:
+			if name of loop-value-2 is {_name}:
+				remove loop-value-2 from inventory of {_p}
+	give {_p} 2 of {health-item::GA} # always given as a baseline, regardless of selected consumable
+	give {_p} 1 of {health-item::%{_p}'s uuid%::item} # the player's selected consumable, additional on top
+	stackItem({_p}, "all")
+
+function giveKillReward(p: player): # called from 09-death-match.sk when {_p} gets a kill
+	give {_p} 1 of {health-item::GA} # baseline — always given on every kill regardless of inventory, separate from the "no duplicate consumables" rule below
+	set {_selected} to {health-item::%{_p}'s uuid%::item}
+	set {_selectedName} to name of {_selected}
+	if {_selectedName} is name of {health-item::GA}: # selected consumable is also golden apple — give the second copy unconditionally too, so a kill always nets 2 total
+		give {_p} 1 of {health-item::GA}
+	else:
+		set {_hasSelected} to false
+		loop {_p}'s inventory:
+			if name of loop-value is {_selectedName}:
+				set {_hasSelected} to true
+		if {_hasSelected} is false:
+			give {_p} 1 of {_selected}
+	stackItem({_p}, "all")
+
+function enchantedConsumablesCheck(p: player): # 06-perks-general.sk — Enchanted Consumables: every one of the 7 consumables below calls this right after recordConsumableUse(), so the bonus applies uniformly whether or not that item already heals on its own
+	if {general-perk::%{_p}'s uuid%::selected} is "enchantedconsumables":
+		heal {_p} by 0.5 heart
+
+on consume:
+	if name of event-item is "&cGolden Apple":
+		cancel event
+		remove 1 golden apple from player
+		recordConsumableUse(player, "GA") # 19-balance-stats.sk
+		enchantedConsumablesCheck(player)
+		heal player by 1 heart
+		add potion effect of regeneration 2 for 5 seconds to potion effects of player
+	else if name of event-item is "&cHealth Potion":
+		cancel event
+		remove 1 potion of health from player
+		recordConsumableUse(player, "HP") # 19-balance-stats.sk
+		enchantedConsumablesCheck(player)
+		heal player by 3 heart
+	else if name of event-item is "&cChorus Fruit":
+		recordConsumableUse(player, "CF") # 19-balance-stats.sk
+		enchantedConsumablesCheck(player)
+		heal player by 0.5 heart
+		player.setArrowsInBody(0)
+		add potion effect of invisibility 1 without particles for 2 seconds to potion effects of player
+		add potion effect of regeneration 2 without particles for 5 seconds to potion effects of player
+		setLevelTagNameVisible(player, false) # 04-leveling.sk — the nametag armor stand isn't affected by the player's own invisibility, so it needs hiding separately (same pattern as ghost.sk's ultimate)
+		wait 2 seconds
+		if player is not invisible: # covers overlap with another invisibility source (e.g. Ghost's ultimate, or a second Chorus Fruit) still running — don't prematurely reveal the tag while still actually invisible
+			if player is not sneaking: # 04-leveling.sk's sneak-to-hide feature owns the tag while sneaking — don't override it here either
+				setLevelTagNameVisible(player, true)
+	else if name of event-item is "&9Mana Potion":
+		cancel event
+		remove 1 water bottle from player
+		recordConsumableUse(player, "MP") # 19-balance-stats.sk
+		enchantedConsumablesCheck(player) # Mana Potion has no healing of its own — this is the "just 0.5" case
+		set {_mana} to {mana::%player's uuid%::curr}
+		add 500 to {_mana}
+		if {_mana} > {mana::%player's uuid%::max}:
+			set {mana::%player's uuid%::curr} to {mana::%player's uuid%::max}
+		else:
+			add 500 to {mana::%player's uuid%::curr}
+	else if name of event-item is "&eStamina Potion":
+		cancel event
+		remove 1 honey bottle from player
+		recordConsumableUse(player, "SP") # 19-balance-stats.sk
+		enchantedConsumablesCheck(player) # Stamina Potion has no healing of its own — this is the "just 0.5" case
+		set {stamina::%player's uuid%::curr} to {stamina::%player's uuid%::max}
+
+on right click with golden carrot: # Golden Pepper
+	if name of player's held item is "&cGolden Pepper":
+		if {consume-cooldown::%player's uuid%} is set:
+			send "&cYou can't consume another item yet!" to player
+		else:
+			set {consume-cooldown::%player's uuid%} to true
+			remove 1 golden carrot from player
+			recordConsumableUse(player, "GP") # 19-balance-stats.sk
+			enchantedConsumablesCheck(player)
+			add potion effect of speed 2 for 5 seconds to potion effects of player
+			add potion effect of regeneration 2 for 5 seconds to potion effects of player
+			play sound "ENTITY_GENERIC_EAT" at volume 1 at pitch 1 at player
+			wait 1 second
+			delete {consume-cooldown::%player's uuid%}
+
+on rightclick with glistering melon slice: # Golden Melon
+	if {consume-cooldown::%player's uuid%} is set:
+		send "&cYou can't consume another item yet!" to player
+	else:
+		set {consume-cooldown::%player's uuid%} to true
+		remove 1 glistering melon slice from player
+		recordConsumableUse(player, "GM") # 19-balance-stats.sk
+		enchantedConsumablesCheck(player)
+		cleanseEffect(player)
+		add potion effect of regeneration 2 for 5 seconds to potion effects of player
+		play sound "ENTITY_GENERIC_EAT" at volume 1 at pitch 1 at player
+		wait 1 second
+		delete {consume-cooldown::%player's uuid%}
+
+function cleanseEffect(p: player):
+	loop 20 times:
+		if {_p}.getFireTicks() > 0:
+			set {_cleanse} to true
+		else:
+			set {_potions::*} to active potion effects of {_p}
+			if {_potions::*} is set:
+				loop {_potions::*}:
+					set {_effect} to "%loop-value-2%"
+					if {_effect} contains "poison" or "wither" or "weakness" or "mining fatigue":
+						set {_cleanse} to true
+		if {_cleanse} is true:
+			loop 10 times:
+				removeBadEffects({_p}, "victim")
+				wait 5 ticks
+			stop loop
+		wait 5 ticks
+
+function stackItem(p: player, name: string):
+	if {_name} = "all":
+		loop {manualStackItems::*}:
+			stackItem({_p}, loop-value)
+	else:
+		loop {_p}'s inventory:
+			if name of loop-value is {_name}:
+				set {_i} to index of loop-value
+				add {_i} to {_slotList::*}
+				set {_amount} to item amount of slot {_i} of {_p}'s inventory
+				add {_amount} to {_total}
+		if size of {_slotList::*} > 1:
+			set {_itemToStack} to 1 of (slot {_slotList::1} of {_p}'s inventory)
+			set slot {_slotList::1} of {_p}'s inventory to {_total} of {_itemToStack}
+			set {_n} to 2
+			loop (size of {_slotList::*}) times:
+				set slot {_slotList::%{_n}%} of {_p}'s inventory to air
+				add 1 to {_n}
+
+command /stack:
+	trigger:
+		stackItem(player, "all")
+
+# ---- GRENADES (universal utility item — every class gets these, not just Mighty) ----
+
+function nadeCount(p: player, id: string):
+	set {nadeCount::%{_p}'s uuid%} to 0
+	while {class-ID::%{_p}'s uuid%} = {_id}:
+		if {inMatch::%{_p}'s uuid%} isn't set: # match ended (or was force-ended) — class-ID never changes on its own in that case, so this loop needs its own exit
+			stop loop
+		if {nadeCount::%{_p}'s uuid%} < 3:
+			if {respawning::%{_p}'s uuid%} isn't set: # don't give items while dead/choosing a respawn class
+				if {inMatch::%{_p}'s uuid%} is set: # extra guard right at the give itself, on top of the loop-exit check above
+					add 1 to {nadeCount::%{_p}'s uuid%}
+					give {_p} 1 of {nade::grenade}
+					stackItem({_p}, "all")
+		set {_cd} to 30 seconds # "More Explosions!" faster-recharge perk removed — Mighty's level 2 perk slot is now Grenade Protection (damage reduction, gated below in grenadeExplosion())
+		wait {_cd}
+
+function grenadeExplosion(e: entity, radius: number):
+	set {_r} to ceil({_radius} - 1)
+	if {_radius} > 3:
+		set {_s} to 2
+	else:
+		set {_s} to 1
+	create a fake explosion at {_e}
+	draw {_radius} of explosion at {_e} with offset vector({_s}, {_s}, {_s}) with extra 0
+	draw 10 of large_smoke at {_e} with extra 0.5
+	draw 50 of dust_color_transition using dustTransition(orange, white, {_s}) at {_e} with offset vector({_r}, {_r}, {_r}) with extra 0.5
+
+on right click:
+	if name of player's held item is "&6Grenade":
+		cancel event
+		remove 1 of item from player's inventory
+		remove 1 from {nadeCount::%player's uuid%}
+
+		set {_fuseTicks} to 40 # 2 seconds
+		if {general-perk::%player's uuid%::selected} is "quickfuse":
+			set {_fuseTicks} to 25 # 1.25 seconds
+
+		make player shoot a dropped fire charge with speed 1
+		set item of last shot entity to fire charge of unbreaking 1 named "%unix timestamp of now%"
+		set {_e} to last shot entity
+		{_e}.setPickupDelay(32767) # prevents the thrown grenade from being picked back up mid-flight/on the ground before it explodes
+		set {_radius} to 3
+		play sound "entity.tnt.primed" at volume 10 at pitch 1 at player
+
+		loop {_fuseTicks} times:
+			if {_e}.isOnGround() is true:
+				draw 1 of large_smoke at {_e} with extra 0.1
+			wait 1 tick
+		grenadeExplosion({_e}, {_radius})
+
+		loop all living entities in radius {_radius} around {_e}:
+			if loop-entity is not player:
+				updateAttacker(player, loop-entity)
+				directAttack(loop-entity)
+			set {_dis} to distance between {_e} and loop-entity
+			set {_d} to abs({_dis} - 3.5)
+			if {_d} > 2.5:
+				set {_d} to 3.5
+			else:
+				set {_d} to 3
+			if {class::%loop-entity's uuid%} = "MH":
+				if loop-entity is a player:
+					if classLevel(loop-entity, "MH") >= 2: # Perk 1 (Grenade Protection) — used to be an unconditional baseline passive, now gated to level 2 like every other class's Perk 1
+						set {_d} to ({_d} - 2)
+			if {class::%player's uuid%} is "EA": # Executioner's Mark — nade is one of the passive's four trigger sources; this bypasses dmgUpdate() entirely, so register it here directly (the global 1-second ticker in executioner.sk does the actual health check off the victim's real current health)
+				eaMarkCheck(player, loop-entity) # executioner.sk
+			set {_v} to vector between {_e} and loop-entity
+			if {general-perk::%player's uuid%::selected} is "quickfuse":
+				set {_level} to classLevel(player, {class::%player's uuid%}) # thrower's level in their currently equipped class
+				if metadata value "minibossLoc" of loop-entity is set: # jungle mobs — x1.5 (level 0) / x2 (level 1) / x3 (level 2) / x4 (level 3)
+					if {_level} >= 3:
+						set {_d} to {_d} * 4
+					else if {_level} >= 2:
+						set {_d} to {_d} * 3
+					else if {_level} >= 1:
+						set {_d} to {_d} * 2
+					else:
+						set {_d} to {_d} * 1.5
+				else if metadata value "isMajorBoss" of loop-entity is set: # boss — x1.25 (level 0) / x1.5 (level 1) / x1.75 (level 2) / x2 (level 3)
+					if {_level} >= 3:
+						set {_d} to {_d} * 2
+					else if {_level} >= 2:
+						set {_d} to {_d} * 1.75
+					else if {_level} >= 1:
+						set {_d} to {_d} * 1.5
+					else:
+						set {_d} to {_d} * 1.25
+			wait 1 tick
+			damage loop-entity by {_d}
+			set velocity of loop-entity to vector(0, 0, 0)
+			push loop-entity upward at speed 0.5
+			push loop-entity {_v} at speed 1
+			dmgStats(player, loop-entity, {_d}, "nade")
+		kill {_e}

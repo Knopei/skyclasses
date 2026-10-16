@@ -1,0 +1,189 @@
+# ============================================
+# GENERAL PERKS (Universal Passives)
+# No longer a boss reward, and no longer a single global account preference
+# either — each of a player's 11 classes has its own persistent DEFAULT perk,
+# set from that class's Class Info page (18-class-browser.sk), defaulting to
+# Healthy Boy until changed. {general-perk::%uuid%::selected} is now a
+# per-class-resolved "currently effective" cache, refreshed by classSelect()
+# (05-class-menu.sk) every time a class is equipped — every perk-effect
+# function below just reads that cache and doesn't need to know about classes
+# or defaults at all.
+#
+# The menu in this file is the IN-MATCH picker only (only ever reached via
+# 05-class-menu.sk's "Your Classes" -> General Perks, itself only shown during
+# the death-respawn flow). Since it's opened before the player has necessarily
+# picked which of their classes they're about to respawn as, it can't show or
+# set a "selected" perk directly — see openGeneralPerkMenu() below for the
+# resulting flow.
+#
+# The major boss's only reward now is an extra life (see 12-major-boss.sk) —
+# these perks used to also come from boss kills (random, stackable, no
+# duplicates) before an earlier redesign, then briefly became a single global
+# selection before this per-class-default redesign.
+# ============================================
+
+on load:
+	set {gp-dmgReduction} to 40 # Reinforced Dash: %% damage reduction while dashing
+	set {gp-ultManaReduction} to 15 # Spell Caster: flat mana reduction on ultimates (applied in 03-resources.sk)
+	set {gp-ultCDReduction} to 10 # Spell Caster: percent cooldown reduction on ultimates whose BASE cooldown is 50 seconds or more (applied via ultCooldownFor() below, called from every class file's ultimate trigger) — e.g. 70s -> 63s, 80s -> 72s, 90s -> 81s
+	set {gp-staminaRecoveryBonus} to 1.5 # Stamina Recovery: flat bonus added to the base 7.5/tick regen every 5 ticks (20%% of 7.5)
+
+	# ---- Selection GUI display items (also reused by 18-class-browser.sk's read-only info page) ----
+	set {gp-caption} to glowstone dust of unbreaking 1 named "&e&lGeneral Perks" with lore "" and "&8&oChoose a passive perk that best" and "&8&omatches your playstyle." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set {gp-display::healthyboy} to apple named "&c&lHealthy Boy" with lore "" and "&f&lPASSIVE" and "&8&oGain an extra heart." and ""
+	set {gp-display::staminarecovery} to feather named "&e&lStamina Recovery" with lore "" and "&f&lPASSIVE" and "&8&oStamina regenerates 20%% quicker," and "&8&oand grants speed 2 while your" and "&8&ostamina is completely full." and ""
+	set {gp-display::reinforceddash} to golden helmet named "&6&lReinforced Dash" with lore "" and "&f&lPASSIVE" and "&8&oTake 40%% less damage while dashing." and ""
+	set {gp-display::spellcaster} to water bottle named "&9&lSpell Caster" with lore "" and "&f&lPASSIVE" and "&8&oUltimate mana cost reduced by 15," and "&8&oand ultimate cooldown reduced by 10%%" and "&8&o(cooldowns of 50s or more only)." and ""
+	set {gp-display::enchantedconsumables} to golden apple named "&6&lEnchanted Consumables" with lore "" and "&f&lPASSIVE" and "&8&oAll consumables heal an extra" and "&8&o+0.5 hearts of health." and ""
+	set {gp-display::nimblefeet} to rabbit foot named "&b&lNimble Feet" with lore "" and "&f&lPASSIVE" and "&8&oTake zero fall stun and gain" and "&8&ospeed 2 briefly." and ""
+	set {gp-display::quickfuse} to fire charge named "&2&lQuick Fuse" with lore "" and "&f&lPASSIVE" and "&8&oGrenades explode quicker + deal" and "&8&obonus damage that scales with class" and "&8&olevel: jungle mobs x1.5/x2/x3/x4," and "&8&obosses x1.25/x1.5/x1.75/x2" and "&8&o(levels 0-3)." and ""
+
+	loop {gp-display::*}:
+		set {_v} to loop-value
+		set {_i} to loop-index
+		set {gp-display::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	add nbt compound of "{""minecraft:tooltip_display"":{hidden_components:[""minecraft:attribute_modifiers"",""minecraft:enchantments"",""minecraft:stored_enchantments"",""minecraft:unbreakable"",""minecraft:can_break"",""minecraft:can_place_on"",""minecraft:dyed_color"",""minecraft:trim"",""minecraft:potion_contents"",""minecraft:jukebox_playable"",""minecraft:banner_patterns"",""minecraft:firework_explosion"",""minecraft:fireworks"",""minecraft:map_id"",""minecraft:bundle_contents"",""minecraft:lodestone_tracker"",""minecraft:instrument"",""minecraft:suspicious_stew_effects"",""minecraft:writable_book_content"",""minecraft:written_book_content"",""minecraft:charged_projectiles"",""minecraft:container""]}}" to nbt of {gp-display::reinforceddash} # golden helmet's inherent armor/toughness attributes survive the item flag alone
+
+function generalPerkPool() :: strings:
+	return "healthyboy", "staminarecovery", "reinforceddash", "spellcaster", "enchantedconsumables", "nimblefeet", "quickfuse"
+
+on join:
+	loop {menu::classlist::*}: # 05-class-menu.sk — VBA, DS, FH, GD, BS, MH, NS, PGS, RB, RS, ZT, CB, TS
+		if {class-default-generalperk::%player's uuid%::%loop-value%} isn't set:
+			set {class-default-generalperk::%player's uuid%::%loop-value%} to "healthyboy" # new player default, per class, until changed on that class's Class Info page
+	if {general-perk::%player's uuid%::selected} isn't set: # defensive fallback for the "currently effective" cache — classSelect() (05-class-menu.sk) is what actually keeps this current once a class is equipped
+		set {general-perk::%player's uuid%::selected} to "healthyboy"
+
+# ---- IN-MATCH SELECTION GUI (ambiguous — see file header) ----
+# Opening this never shows anything as "selected", since it doesn't yet know
+# which of the player's 3 classes it will apply to. Clicking a perk just
+# records it as {pendingPerkChoice::%uuid%} and sends the player back to the
+# class menu to pick which class it applies to — 05-class-menu.sk's click
+# handler is what actually turns that into a {match-override-generalperk::}
+# for the chosen class (and clears this pending choice either way, whether or
+# not a class ends up being picked before an auto-respawn timeout — see
+# 09-death-match.sk's firstAvailableClassWorker() branch).
+
+function openGeneralPerkMenu(p: player):
+	set metadata tag "general perk select" of {_p} to chest inventory with 5 rows named "General Perks"
+	set slot (integers between 9 and 35) of metadata tag "general perk select" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "general perk select" of {_p} to yellow stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "general perk select" of {_p} to yellow stained glass pane named " "
+
+	set slot 4 of metadata tag "general perk select" of {_p} to {gp-caption}
+
+	set {_display::19} to {gp-display::nimblefeet}
+	set {_display::20} to {gp-display::staminarecovery}
+	set {_display::21} to {gp-display::reinforceddash}
+	set {_display::22} to {gp-display::healthyboy}
+	set {_display::23} to {gp-display::enchantedconsumables}
+	set {_display::24} to {gp-display::spellcaster}
+	set {_display::25} to {gp-display::quickfuse}
+
+	loop {_display::*}:
+		set {_index} to loop-index parsed as a integer
+		set {_lore::*} to lore of loop-value # base lore: "", PASSIVE, description, "" — already ends with a blank after the description
+		add "&7Click to select, then choose a class" to {_lore::*}
+		add "" to {_lore::*}
+		set slot {_index} of metadata tag "general perk select" of {_p} to (loop-value with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set slot 36 of metadata tag "general perk select" of {_p} to {class-bottom::back} # 05-class-menu.sk
+
+	open (metadata tag "general perk select" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "general perk select" of player):
+		cancel event
+		set {_gp} to ""
+		if index of event-slot is 19:
+			set {_gp} to "nimblefeet"
+		else if index of event-slot is 20:
+			set {_gp} to "staminarecovery"
+		else if index of event-slot is 21:
+			set {_gp} to "reinforceddash"
+		else if index of event-slot is 22:
+			set {_gp} to "healthyboy"
+		else if index of event-slot is 23:
+			set {_gp} to "enchantedconsumables"
+		else if index of event-slot is 24:
+			set {_gp} to "spellcaster"
+		else if index of event-slot is 25:
+			set {_gp} to "quickfuse"
+		if {_gp} is not "":
+			set {pendingPerkChoice::%player's uuid%} to {_gp}
+			send "&aGeneral perk &f%name of {gp-display::%{_gp}%}%&a selected — now choose a class to apply it to!" to player
+			set {navigatingFromGeneralPerks::%player's uuid%} to true # returning to the class menu also fires a close event on this one — don't let that bounce back here
+			openClassMenu(player) # 05-class-menu.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+		else if index of event-slot is 36:
+			set {navigatingFromGeneralPerks::%player's uuid%} to true
+			openClassMenu(player) # 05-class-menu.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+on inventory close: # while respawning, closing this menu (for any reason) returns to the class menu
+	if event-inventory = (metadata tag "general perk select" of player):
+		if {navigatingFromGeneralPerks::%player's uuid%} is set:
+			delete {navigatingFromGeneralPerks::%player's uuid%}
+		else if {respawning::%player's uuid%} is set:
+			wait 2 ticks
+			openClassMenu(player) # 05-class-menu.sk
+
+# ---- PERK EFFECTS ----
+
+# Reinforced Dash — called from 03-resources.sk's shared stamina-dash trigger
+function perkDashReduction(p: player):
+	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
+		loop 10 times:
+			add 1 to {_n}
+			if {_p} isn't on ground:
+				set {playerDefense::%{_p}'s uuid%} to {gp-dmgReduction}
+			else if {_n} < 3:
+				set {playerDefense::%{_p}'s uuid%} to {gp-dmgReduction}
+			else:
+				stop loop
+			wait 5 ticks
+		delete {playerDefense::%{_p}'s uuid%}
+
+# Stamina Recovery — supplements the base regen tick in 03-resources.sk with a 20%% bonus, and grants a small speed burst whenever stamina is topped off
+every 5 ticks:
+	loop all players:
+		if {general-perk::%loop-player's uuid%::selected} is "staminarecovery":
+			if {stamina::%loop-player's uuid%::max} > {stamina::%loop-player's uuid%::curr}:
+				add {gp-staminaRecoveryBonus} to {stamina::%loop-player's uuid%::curr} # 20%% of the base 7.5/tick
+				if {stamina::%loop-player's uuid%::curr} > {stamina::%loop-player's uuid%::max}: # this bonus stacking with the base regen tick (03-resources.sk) could overshoot past max instead of landing exactly on it, which broke the "completely full" check below (curr was never exactly equal to max again)
+					set {stamina::%loop-player's uuid%::curr} to {stamina::%loop-player's uuid%::max}
+			if {stamina::%loop-player's uuid%::curr} >= {stamina::%loop-player's uuid%::max}: # a separate "if", not "else if" — so a tick that just topped off above still grants the speed burst immediately instead of waiting a tick; refreshed every 5 ticks so it stays live for as long as stamina stays full, and fades naturally the moment it isn't
+				add potion effect of speed 2 without particles for 0.5 seconds to potion effects of loop-player
+
+# Nimble Feet — cancels fall damage stun (visual/mechanical fall-stun cancel; the
+# actual fall-damage-to-zero rule already applies to everyone in 08-damage.sk)
+on damage of player:
+	if event-damagecause is fall:
+		if {general-perk::%victim's uuid%::selected} is "nimblefeet":
+			cancel event
+			add potion effect of speed 2 without particles for 1 seconds to potion effects of victim
+
+# Skirmisher category buff (level 0, 02-class-data.sk) — same fall-stun cancel
+# as Nimble Feet above, but WITHOUT the speed burst, and baseline for every
+# Skirmisher class regardless of which general perk they have selected. Stacks
+# fine with Nimble Feet itself (a Skirmisher can still select it for the speed
+# burst on top of this) since "cancel event" is harmless to repeat.
+on damage of player:
+	if event-damagecause is fall:
+		if classCategory({class::%victim's uuid%}) is "SKIRMISHER":
+			cancel event
+
+# Spell Caster — the mana-cost side is applied in 03-resources.sk's ultCHECK();
+# this is the cooldown side, called from every class file in place of reading
+# {weapons::%CLASS%::ULT-CD} directly, e.g.:
+#   set {_ultCooldown} to ultCooldownFor(player, {weapons::PGS::ULT-CD})
+function ultCooldownFor(p: player, base: timespan) :: timespan:
+	set {_cd} to {_base}
+	if {general-perk::%{_p}'s uuid%::selected} is "spellcaster":
+		if {_cd} >= 50 seconds:
+			set {_cd} to {_cd} * ((100 - {gp-ultCDReduction}) / 100)
+	return {_cd}
+
+# Enchanted Consumables and Quick Fuse are applied directly in 07-consumables.sk,
+# where the heal amounts and grenade fuse timer are defined.
