@@ -1,0 +1,483 @@
+# ============================================
+# WORLD RULES
+# Environment locks, chat formatting, the {top::} block-protection system, and
+# misc utilities (launch pad, secret door). Extracted from the original
+# gamerule.sk — this was described in the initial file analysis but never
+# actually carried over into any of the other 26 files. Fixing that gap here.
+#
+# getDisplayName() is updated from the original: it used the old division
+# system (getClassDiv()), which no longer exists. Now uses the class's
+# mastery tier from 13-mastery.sk instead.
+# ============================================
+
+function getDisplayName(p: player) :: string: # "<mastery color>&l[<mastery name> <class name>] <mastery color><player name>" — the second color re-colors the player's name plain (no &l), since &l doesn't turn itself off
+	set {_class} to {class::%{_p}'s uuid%}
+	if {_class} is set:
+		set {_color} to getMasteryColor({_p}, {_class}) # 13-mastery.sk
+		set {_tierName} to getMasteryName({_p}, {_class}) # 13-mastery.sk
+		set {_className} to {class-name::%{_class}%}
+		return "%{_color}%&l[%{_tierName}% %{_className}%] %{_color}%%{_p}%"
+	else:
+		return "%{_p}%"
+
+on chat:
+	cancel event
+	set {_displayName} to getDisplayName(player)
+	broadcast formatted "%{_displayName}%&f: %message%"
+
+# ---- ENVIRONMENT LOCKS ----
+
+on projectile hit:
+	if projectile is an arrow:
+		delete event-projectile
+	if event-block is decorated pot:
+		cancel event
+
+on spawn:
+	if "%spawn reason%" is "natural" or "mount" or "jockey" or "built wither" or "reinforcements":
+		cancel event
+
+on weather change to rain:
+	if {weatherChange} is set:
+		while {weatherChange} > 0:
+			remove 1 from {weatherChange}
+			wait 1 second
+		delete {weatherChange}
+		set {_world} to "%event-world%"
+		set weather in world {_world} to clear
+	else:
+		cancel event
+
+on weather change to thunder:
+	cancel event
+
+on food bar change:
+	cancel event
+
+on join:
+	set player's food level to 10
+	set unsaturated regen rate of player to 100 ticks
+	if {topDisabled::%player's uuid%} isn't set:
+		set {top::%player's uuid%} to true
+		set gamemode of player to adventure
+
+on world change: # some world configs (e.g. Multiverse per-world gamemode) can silently reset gamemode/protection on world entry — this re-asserts our defaults right after
+	if {topDisabled::%player's uuid%} isn't set:
+		set {top::%player's uuid%} to true
+		wait 2 ticks # let whatever the world-change itself triggers (e.g. Multiverse's own gamemode enforcement) finish first, so ours applies last and wins
+		set gamemode of player to adventure
+
+on block trample:
+	cancel event
+
+on death of living entity: # applies to players, mini-bosses, and the major boss alike — no natural loot clutter
+	clear drops
+
+on entity drop:
+	cancel event
+
+# ---- BLOCK PROTECTION ({top::} flag) ----
+# Set true on both players by 10-match-manager.sk's startMatch(), deleted on
+# endMatch() — locks down block interaction in the arena for the duration of
+# a match. The /top command below is now a general builder-mode toggle — see
+# the "on join" / "on world change" enforcement below for why this matters:
+# block protection + adventure mode are the persistent default everywhere,
+# not just during matches, and /top is how an authorized player opts out of
+# that to go build/edit.
+
+command /top:
+	permission: op
+	trigger:
+		if {topDisabled::%player's uuid%} is set:
+			delete {topDisabled::%player's uuid%}
+			set {top::%player's uuid%} to true
+			set gamemode of player to adventure
+			send "&aBlock protection ENABLED. &7Back to adventure mode." to player
+		else:
+			set {topDisabled::%player's uuid%} to true
+			delete {top::%player's uuid%}
+			set gamemode of player to creative
+			send "&cBlock protection DISABLED. &7You're now in creative mode." to player
+
+on break:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on place:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on player drop with priority low:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+# NOTE: pickup is deliberately NOT gated by {top::} — unlike block/drop
+# restrictions, nothing in this game relies on preventing pickup, and gating
+# it here was blocking legitimate item retrieval (e.g. grenades) during a
+# match for the entire match duration.
+
+on swap hand items:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on player move:
+	if {top::%player's uuid%} is set:
+		if "%off hand item%" does not contain "air":
+			add off hand item to player's inventory
+			set off hand item to air
+
+on right click on anvil, chipped anvil, or damaged anvil:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on enchanting table:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click:
+	if "%event-block%" contains "trapdoor":
+		if {top::%player's uuid%} is set:
+			cancel event
+
+on right click on candle:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on flower pot:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on decorated pot:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on potted azure bluet:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click on chiseled bookshelf:
+	if {top::%player's uuid%} is set:
+		cancel event
+
+on right click:
+	if "%event-block%" contains "sign":
+		if {top::%player's uuid%} is set:
+			cancel event
+
+on right click:
+	if "%event-block%" contains "fence gate":
+		if {top::%player's uuid%} is set:
+			cancel event
+
+# ---- TRAPDOOR/FENCE GATE/CANDLE STATE FIX (supports the secret door below) ----
+
+import:
+	org.bukkit.event.Event
+	org.bukkit.event.block.BlockEvent
+	org.bukkit.event.block.BlockPhysicsEvent
+	org.bukkit.event.block.BlockIgniteEvent
+
+on BlockPhysicsEvent:
+	if {disableTrapdoor} isn't set: # command below
+		set {_block} to event.getSourceBlock()
+		set {_loc} to location of {_block}
+		if {stopPhysics::%{_loc}%} isn't set: # fixes inf loop
+			if "%{_block}%" contains "trapdoor":
+				if block data tag "open" of {_block} is true: # makes closed trapdoors stay closed
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to false
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+				else if block data tag "open" of {_block} is false: # makes open trapdoors stay open
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to true
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+			else if "%{_block}%" contains "fence gate":
+				if block data tag "open" of {_block} is true: # makes closed fence gate stay closed
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to false
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+				else if block data tag "open" of {_block} is false: # makes open fence gate stay open
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "open" of {_update} to true
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+			else if {_block} is a candle:
+				if block data tag "lit" of {_block} is false: # makes lit candles stay lit
+					set {stopPhysics::%{_loc}%} to true
+					set {_update} to {_block}
+					set block data tag "lit" of {_update} to true
+					wait 1 tick
+					delete {stopPhysics::%{_loc}%}
+
+command /disabletrapdoor:
+	permission: op
+	trigger:
+		if {disableTrapdoor} isn't set:
+			set {disableTrapdoor} to true
+		else:
+			delete {disableTrapdoor}
+
+# No vanilla gamerule exists specifically for "lightning shouldn't start
+# fires" — the closest one (fire_spread_radius_around_player) only governs
+# how far EXISTING fire keeps ticking/spreading, not new ignitions. Natural
+# thunderstorms are already fully disabled above ("on weather change to
+# thunder"), so in practice the only source of lightning here is Zeus's own
+# tactical/ultimate. Cancelling SPREAD too is a hard guarantee against fire
+# spreading at all, on top of (not instead of) the fire_spread_radius_around_player
+# gamerule set in 15-arena-manager.sk.
+on BlockIgniteEvent:
+	if "%event.getCause()%" is "LIGHTNING" or "SPREAD":
+		event.setCancelled(true)
+
+on load:
+	delete {disableTrapdoor}
+
+# ---- LAUNCH PAD ----
+
+on walking on slime block:
+	push player upward at speed 1
+	play sound "ENTITY_SLIME_JUMP" at volume 1 at pitch 0.75 at event-location
+
+# ---- SECRET DOOR (tripwire hook activated) ----
+# Force-opens every secret door on the map at match start, regardless of
+# which axis it's built on or which flank its open-state hook sits on —
+# so it doesn't need to branch on yaw at all like the click-handler below.
+#
+# {config::arena::secretdoor::1-4} (00-config.sk) are each door's OPEN-state
+# tripwire hook location (the single hook that remains once open). Given
+# just that one location, this works out the rest of the geometry by testing
+# all 4 possible orientations and accepting only the one that actually
+# matches a closed door's real signature: a wall-center block 1 away from
+# the given hook, with a genuine tripwire hook 1 block to either side of
+# that center on the perpendicular axis (the original closed-state pair).
+#
+# FIX: an earlier version picked the orientation from the first neighbor
+# that was merely "not air", with no check that it was actually part of a
+# door — for the door at config::arena::secretdoor::4 (-3.5,-43.5,14.5),
+# that matched some unrelated solid block next to the hook, so it cleared
+# the wrong blocks and placed a 3rd hook in the wrong spot instead of
+# actually opening the door. Requiring both original hooks to genuinely be
+# tripwire hooks before acting rules that out.
+#
+# The direction from the given hook to the wall-center is also the hook's
+# facing once open (it always points from the flank back toward the wall's
+# center), matching the facing rule already used below.
+function forceOpenSecretDoor(hookLoc: location):
+	if block at {_hookLoc} is a tripwire hook:
+		stop # already open — nothing to do
+
+	set {_found} to false
+
+	set {_center} to block 1 east of {_hookLoc}
+	set {_hookA} to block 1 north of {_center}
+	set {_hookB} to block 1 south of {_center}
+	if {_hookA} is a tripwire hook: # FIX: Skript couldn't parse a compound "X is a tripwire hook and Y is a tripwire hook" condition on one line — split into nested ifs instead
+		if {_hookB} is a tripwire hook:
+			set {_facing} to "east"
+			set {_otherFlank} to block 1 east of {_center}
+			set {_found} to true
+
+	if {_found} is false:
+		set {_center} to block 1 west of {_hookLoc}
+		set {_hookA} to block 1 north of {_center}
+		set {_hookB} to block 1 south of {_center}
+		if {_hookA} is a tripwire hook:
+			if {_hookB} is a tripwire hook:
+				set {_facing} to "west"
+				set {_otherFlank} to block 1 west of {_center}
+				set {_found} to true
+
+	if {_found} is false:
+		set {_center} to block 1 north of {_hookLoc}
+		set {_hookA} to block 1 east of {_center}
+		set {_hookB} to block 1 west of {_center}
+		if {_hookA} is a tripwire hook:
+			if {_hookB} is a tripwire hook:
+				set {_facing} to "north"
+				set {_otherFlank} to block 1 north of {_center}
+				set {_found} to true
+
+	if {_found} is false:
+		set {_center} to block 1 south of {_hookLoc}
+		set {_hookA} to block 1 east of {_center}
+		set {_hookB} to block 1 west of {_center}
+		if {_hookA} is a tripwire hook:
+			if {_hookB} is a tripwire hook:
+				set {_facing} to "south"
+				set {_otherFlank} to block 1 south of {_center}
+				set {_found} to true
+
+	if {_found} is false:
+		stop # no orientation matched a genuine closed-door signature — bail out safely rather than guess
+
+	# FIX: a tripwire hook that's still attached to a wall block breaks and
+	# drops as an item if that wall block is cleared out from under it first —
+	# clearing the two original hooks to air BEFORE touching the wall (same
+	# order the existing click-handler below already uses) avoids that.
+	set block at {_hookA} to air
+	set block at {_hookB} to air
+
+	set {_wallLocs::1} to {_hookLoc}
+	set {_wallLocs::2} to {_center}
+	set {_wallLocs::3} to {_otherFlank}
+	loop {_wallLocs::*}:
+		set block at loop-value to air
+		set block 1 above loop-value to air
+		set block 2 above loop-value to air
+		set block 1 below loop-value to air
+
+	if {_facing} is "east":
+		set block at {_hookLoc} to tripwire_hook[facing=east]
+	else if {_facing} is "west":
+		set block at {_hookLoc} to tripwire_hook[facing=west]
+	else if {_facing} is "north":
+		set block at {_hookLoc} to tripwire_hook[facing=north]
+	else:
+		set block at {_hookLoc} to tripwire_hook[facing=south]
+
+function resetSecretDoors(): # called by 15-arena-manager.sk's setupArena() at the start of every match
+	loop integers between 1 and 4:
+		forceOpenSecretDoor({config::arena::secretdoor::%loop-value%})
+
+on right click on tripwire hook:
+	set {_loc} to location of event-block
+	set {_yaw} to yaw of {_loc}
+	if {_yaw} is 0:
+		set {_check} to block 2 north of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 east of {_loc}
+			set {_loc::1} to block 1 north of {_loc}
+			set {_loc::2} to block 1 west of {_loc::1}
+			set {_loc::3} to block 1 east of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::3} to tripwire_hook[facing=west]
+			else:
+				set block at {_loc::2} to tripwire_hook[facing=east]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 south of {_loc}
+			set {_loc::3} to block 2 south of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block east of {_loc::2} to tripwire_hook[facing=east]
+			set block west of {_loc::2} to tripwire_hook[facing=west]
+	else if {_yaw} is 90:
+		set {_check} to block 2 east of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 south of {_loc}
+			set {_loc::1} to block 1 east of {_loc}
+			set {_loc::2} to block 1 north of {_loc::1}
+			set {_loc::3} to block 1 south of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::3} to tripwire_hook[facing=north]
+			else:
+				set block at {_loc::2} to tripwire_hook[facing=south]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 west of {_loc}
+			set {_loc::3} to block 2 west of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block north of {_loc::2} to tripwire_hook[facing=north]
+			set block south of {_loc::2} to tripwire_hook[facing=south]
+	else if {_yaw} is 180:
+		set {_check} to block 2 south of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 west of {_loc}
+			set {_loc::1} to block 1 south of {_loc}
+			set {_loc::2} to block 1 west of {_loc::1}
+			set {_loc::3} to block 1 east of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::2} to tripwire_hook[facing=east]
+			else:
+				set block at {_loc::3} to tripwire_hook[facing=west]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 north of {_loc}
+			set {_loc::3} to block 2 north of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block east of {_loc::2} to tripwire_hook[facing=east]
+			set block west of {_loc::2} to tripwire_hook[facing=west]
+	else if {_yaw} is 270:
+		set {_check} to block 2 west of event-block
+		if {_check} is a tripwire hook:
+			set block at {_loc} to air
+			set block at {_check} to air
+			set {_dir} to block 1 north of {_loc}
+			set {_loc::1} to block 1 west of {_loc}
+			set {_loc::2} to block 1 north of {_loc::1}
+			set {_loc::3} to block 1 south of {_loc::1}
+			loop {_loc::*}:
+				set block at loop-value to air
+				set block 1 above loop-value to air
+				set block 2 above loop-value to air
+				set block 1 below loop-value to air
+			play sound "BLOCK_PISTON_CONTRACT" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			if {_dir} is air:
+				set block at {_loc::2} to tripwire_hook[facing=south]
+			else:
+				set block at {_loc::3} to tripwire_hook[facing=north]
+		else if {_check} is not air:
+			set {_loc::1} to {_loc}
+			set {_loc::2} to block 1 east of {_loc}
+			set {_loc::3} to block 2 east of {_loc}
+			loop {_loc::*}:
+				set block at loop-value to spruce wood
+				set block 1 above loop-value to spruce wood
+				set block 2 above loop-value to spruce wood
+				set block 1 below loop-value to spruce wood
+			play sound "BLOCK_PISTON_EXTEND" at volume 1 at pitch 1.25 at {_loc}
+			wait 3 second
+			set block north of {_loc::2} to tripwire_hook[facing=north]
+			set block south of {_loc::2} to tripwire_hook[facing=south]

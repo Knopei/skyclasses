@@ -1,0 +1,188 @@
+# ============================================
+# CHAMPION MASTERY
+# Score blends win rate and K/D (both per-class, lifetime). Reaching a tier
+# requires BOTH a high enough score AND enough games played on that class —
+# the games requirement exists so a small sample size can't spike a tier
+# purely off luck. See 10-match-manager.sk's processEndMatchStats() for the
+# anti-boost rule that gates class-wins specifically (not games or losses)
+# behind actually playing the class for 3+ combined kills/deaths that match.
+#
+# Mastery is displayed inside the class browser's ClassInfo page
+# (18-class-browser.sk) rather than its own standalone menu — /mastery and
+# its dedicated GUI were removed.
+# ============================================
+
+on load:
+	set {mastery-tier::1} to "&8&lTrash"
+	set {mastery-tier::2} to "&7&lRookie"
+	set {mastery-tier::3} to "<#6E4D25>&lBronze"
+	set {mastery-tier::4} to "&f&lSilver"
+	set {mastery-tier::5} to "&6&lGold"
+	set {mastery-tier::6} to "&b&lDiamond"
+	set {mastery-tier::7} to "&2&lMaster"
+	set {mastery-tier::8} to "&5&lGrandmaster"
+	set {mastery-tier::9} to "&4&lPredator"
+
+	# Color and plain name split out separately (16-world-rules.sk's match-chat
+	# format needs the bare color code on its own, without &l, to re-color the
+	# player's name after the bold "[Tier Class]" tag).
+	set {mastery-color::1} to "&8"
+	set {mastery-color::2} to "&7"
+	set {mastery-color::3} to "<#6E4D25>"
+	set {mastery-color::4} to "&f"
+	set {mastery-color::5} to "&6"
+	set {mastery-color::6} to "&b"
+	set {mastery-color::7} to "&2"
+	set {mastery-color::8} to "&5"
+	set {mastery-color::9} to "&4"
+
+	set {mastery-name::1} to "Trash"
+	set {mastery-name::2} to "Rookie"
+	set {mastery-name::3} to "Bronze"
+	set {mastery-name::4} to "Silver"
+	set {mastery-name::5} to "Gold"
+	set {mastery-name::6} to "Diamond"
+	set {mastery-name::7} to "Master"
+	set {mastery-name::8} to "Grandmaster"
+	set {mastery-name::9} to "Predator"
+
+	# Minimum mastery SCORE to enter this tier.
+	set {mastery-threshold::1} to 0
+	set {mastery-threshold::2} to 350
+	set {mastery-threshold::3} to 375
+	set {mastery-threshold::4} to 400
+	set {mastery-threshold::5} to 450
+	set {mastery-threshold::6} to 525
+	set {mastery-threshold::7} to 600
+	set {mastery-threshold::8} to 650
+	set {mastery-threshold::9} to 675
+
+	# Minimum GAMES PLAYED (class-games) on the class before this tier is reachable at all.
+	set {mastery-min-games::1} to 0
+	set {mastery-min-games::2} to 1
+	set {mastery-min-games::3} to 3
+	set {mastery-min-games::4} to 3
+	set {mastery-min-games::5} to 3
+	set {mastery-min-games::6} to 5
+	set {mastery-min-games::7} to 10
+	set {mastery-min-games::8} to 15
+	set {mastery-min-games::9} to 20
+
+	# Display-ready score ranges, for the ClassInfo GUI (18-class-browser.sk).
+	set {mastery-range::1} to "0-349"
+	set {mastery-range::2} to "350-374"
+	set {mastery-range::3} to "375-399"
+	set {mastery-range::4} to "400-449"
+	set {mastery-range::5} to "450-524"
+	set {mastery-range::6} to "525-599"
+	set {mastery-range::7} to "600-649"
+	set {mastery-range::8} to "650-674"
+	set {mastery-range::9} to "675-1000"
+
+function calcMasteryScore(p: offline player, class: text) :: number: # Mastery = (Win Rate x 700) + (K/D x 150), K/D capped at 2.0
+	set {_uuid} to {_p}'s uuid
+	set {_games} to {class-games::%{_uuid}%::%{_class}%}
+	set {_wins} to {class-wins::%{_uuid}%::%{_class}%}
+	set {_kills} to {class-kill::%{_uuid}%::%{_class}%}
+	set {_deaths} to {class-death::%{_uuid}%::%{_class}%}
+	set {_winrate} to safeDivide({_wins}, {_games}) # 14-stats.sk — 0 to 1, not a percentage
+	if {_deaths} = 0:
+		set {_kd} to {_kills}
+	else:
+		set {_kd} to {_kills} / {_deaths}
+	if {_kd} > 2.0:
+		set {_kd} to 2.0
+	return ({_winrate} * 700) + ({_kd} * 150)
+
+function getMasteryTier(p: offline player, class: text) :: text: # returns the colored tier name, e.g. "&6&lGold"
+	return {mastery-tier::%getMasteryTierNumber({_p}, {_class})%}
+
+function getMasteryColor(p: offline player, class: text) :: text: # just the color code, e.g. "&6" — no &l, so it can re-color plain text after a bold tag
+	return {mastery-color::%getMasteryTierNumber({_p}, {_class})%}
+
+function getMasteryName(p: offline player, class: text) :: text: # just the plain tier name, e.g. "Gold" — no color/formatting codes at all
+	return {mastery-name::%getMasteryTierNumber({_p}, {_class})%}
+
+function getMasteryTierNumber(p: offline player, class: text) :: number: # the highest tier where BOTH the score and the games-played requirement are met
+	set {_score} to calcMasteryScore({_p}, {_class})
+	set {_games} to {class-games::%{_p}'s uuid%::%{_class}%}
+	set {_tier} to 1
+	loop integers between 1 and 9:
+		if {_score} >= {mastery-threshold::%loop-value%}:
+			if {_games} >= {mastery-min-games::%loop-value%}:
+				set {_tier} to loop-value # keeps overwriting with the highest tier that qualifies on both counts
+	return {_tier}
+
+# ---- BEST / WORST CLASS ----
+# Only classes at or above the configured mastery tier are eligible, so a
+# class you've barely played can't skew the result.
+
+function getClassPerformanceScore(p: offline player, class: text) :: number: # returns -1 if not eligible
+	if getMasteryTierNumber({_p}, {_class}) < {config::mastery::min-tier-for-ranking}:
+		return -1
+	return calcMasteryScore({_p}, {_class})
+
+function getBestClass(p: offline player) :: text: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
+	getBestClassWorker({_p})
+	return {bestClassResult}
+
+function getBestClassWorker(p: offline player): # returns "N/A" if no class meets the mastery eligibility bar yet
+	set {_best} to ""
+	set {_bestScore} to -999999
+	loop {menu::classlist::*}: # 05-class-menu.sk
+		set {_score} to getClassPerformanceScore({_p}, loop-value)
+		if {_score} >= 0: # only eligible classes — without this, an ineligible -1 score still beats the -999999 sentinel and "wins" as whichever class happens to be first in the list
+			if {_score} > {_bestScore}:
+				set {_bestScore} to {_score}
+				set {_best} to loop-value
+	if {_best} is "":
+		set {bestClassResult} to "N/A"
+		stop
+	set {bestClassResult} to {_best}
+
+function getWorstClass(p: offline player) :: text: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
+	getWorstClassWorker({_p})
+	return {worstClassResult}
+
+function getWorstClassWorker(p: offline player): # returns "N/A" if no class meets the mastery eligibility bar yet
+	set {_worst} to ""
+	set {_worstScore} to 999999
+	loop {menu::classlist::*}: # 05-class-menu.sk
+		set {_score} to getClassPerformanceScore({_p}, loop-value)
+		if {_score} >= 0: # only eligible classes
+			if {_score} < {_worstScore}:
+				set {_worstScore} to {_score}
+				set {_worst} to loop-value
+	if {_worst} is "":
+		set {worstClassResult} to "N/A"
+		stop
+	set {worstClassResult} to {_worst}
+
+# ---- STAFF TESTING ----
+
+command /testmastery <number> <number>: # /testmastery <win rate %> <k/d> — sets Paladin's stats directly so you can see what tier a given win rate + K/D combo lands on. /resetstats clears all of this afterward, same as any other stat.
+	permission: op
+	trigger:
+		set {_winratePercent} to arg 1
+		set {_kd} to arg 2
+		if {_winratePercent} > 100:
+			set {_winratePercent} to 100
+		else if {_winratePercent} < 0:
+			set {_winratePercent} to 0
+		if {_kd} < 0:
+			set {_kd} to 0
+
+		set {_uuid} to player's uuid
+		set {class-games::%{_uuid}%::PGS} to 100 # fixed at 100 so win rate maps to a clean whole-number win count, and clears every tier's min-games requirement (max is 25)
+		set {class-wins::%{_uuid}%::PGS} to round({_winratePercent})
+		set {class-losses::%{_uuid}%::PGS} to 100 - round({_winratePercent})
+		set {class-death::%{_uuid}%::PGS} to 100
+		set {class-kill::%{_uuid}%::PGS} to round({_kd} * 100)
+
+		set {_score} to calcMasteryScore(player, "PGS")
+		set {_tier} to getMasteryTier(player, "PGS")
+		send "&e&lMASTERY TEST &7(Paladin)" to player
+		send "&7Win Rate: &e%{_winratePercent}%%% &7| K/D: &e%{_kd}%" to player
+		send "&7Mastery Score: &e%{_score}%" to player
+		send "&7Resulting Tier: %{_tier}%" to player
+		send "&8Run /resetstats to clear this when you're done testing." to player

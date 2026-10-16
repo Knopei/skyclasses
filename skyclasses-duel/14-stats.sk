@@ -1,0 +1,372 @@
+# ============================================
+# STATS
+# Persistent overall + per-class account stats, the end-of-match summary GUI,
+# and /matchhistory. Cleaned/rebuilt from the original leaderboards.sk (dropped
+# the old leaderboard-sorting logic since divisions/leaderboard display were
+# cut — can be revisited alongside champion mastery).
+#
+# NOTE: formatNumber() is Skript's own built-in function (available since
+# Skript 2.10) — no custom definition needed here. It was originally a custom
+# function in the old leaderboards.sk, but redefining it caused a duplicate-
+# function error once both were loaded together.
+#
+# initializePlayerStats() is the single source of truth for every persistent
+# stat variable in the game — used both on first join and by /resetstats, so
+# there's only one place that needs updating if a new tracker is ever added.
+# ============================================
+
+function initializePlayerStats(p: offline player): # offline player, so /resetstats can target someone not currently online
+	set {_uuid} to {_p}'s uuid
+
+	# ---- OVERALL ----
+	set {games::%{_uuid}%} to 0
+	set {wins::%{_uuid}%} to 0
+	set {losses::%{_uuid}%} to 0
+	set {duration-total::%{_uuid}%} to 0
+	set {duration-win-total::%{_uuid}%} to 0
+	set {duration-loss-total::%{_uuid}%} to 0
+	set {kill::%{_uuid}%} to 0
+	set {death::%{_uuid}%} to 0
+	set {ks::%{_uuid}%::count} to 0
+	set {ks::%{_uuid}%::top} to 0
+	set {firstbloods::%{_uuid}%} to 0
+	set {damage::%{_uuid}%} to 0
+	set {playerdamage::%{_uuid}%} to 0
+	set {damagetaken::%{_uuid}%} to 0
+	set {jungleslain::%{_uuid}%} to 0
+	set {bossesslain::%{_uuid}%} to 0
+	set {bosssteals::%{_uuid}%} to 0
+	set {xpearly::%{_uuid}%} to 0
+	set {xpmid::%{_uuid}%} to 0
+	set {xplate::%{_uuid}%} to 0
+	set {phasegames-early::%{_uuid}%} to 0 # games that reached each phase — denominator for the Avg XP/Phase stats below
+	set {phasegames-mid::%{_uuid}%} to 0
+	set {phasegames-late::%{_uuid}%} to 0
+	set {leadgames::%{_uuid}%} to 0
+	set {leadlossgames::%{_uuid}%} to 0
+	set {behindwingames::%{_uuid}%} to 0
+	set {bestgame-damage::%{_uuid}%} to 0
+	set {bestgame-playerdamage::%{_uuid}%} to 0
+	set {bestgame-cs::%{_uuid}%} to 0
+	set {bestgame-kd::%{_uuid}%} to 0
+
+	# ---- PER-CLASS ----
+	loop {menu::classlist::*}: # 05-class-menu.sk
+		set {_c} to loop-value
+		set {class-games::%{_uuid}%::%{_c}%} to 0
+		set {class-wins::%{_uuid}%::%{_c}%} to 0
+		set {class-losses::%{_uuid}%::%{_c}%} to 0
+		set {class-duration-total::%{_uuid}%::%{_c}%} to 0
+		set {class-duration-win-total::%{_uuid}%::%{_c}%} to 0
+		set {class-duration-loss-total::%{_uuid}%::%{_c}%} to 0
+		set {class-kill::%{_uuid}%::%{_c}%} to 0
+		set {class-death::%{_uuid}%::%{_c}%} to 0
+		set {class-ks::%{_uuid}%::%{_c}%::count} to 0
+		set {class-ks::%{_uuid}%::%{_c}%::top} to 0
+		set {class-firstbloods::%{_uuid}%::%{_c}%} to 0
+		set {class-damage::%{_uuid}%::%{_c}%} to 0
+		set {class-playerdamage::%{_uuid}%::%{_c}%} to 0
+		set {class-damagetaken::%{_uuid}%::%{_c}%} to 0
+		set {class-jungleslain::%{_uuid}%::%{_c}%} to 0
+		set {class-bossesslain::%{_uuid}%::%{_c}%} to 0
+		set {class-bosssteals::%{_uuid}%::%{_c}%} to 0
+		set {class-xpearly::%{_uuid}%::%{_c}%} to 0
+		set {class-xpmid::%{_uuid}%::%{_c}%} to 0
+		set {class-xplate::%{_uuid}%::%{_c}%} to 0
+		set {class-leadgames::%{_uuid}%::%{_c}%} to 0
+		set {class-leadlossgames::%{_uuid}%::%{_c}%} to 0
+		set {class-behindwingames::%{_uuid}%::%{_c}%} to 0
+
+	delete {matchhistory::%{_uuid}%::*}
+
+function backfillClassStats(p: offline player, class: text): # fills in only the MISSING per-class stat keys for one class, defaulted to 0 — unlike initializePlayerStats() (a full, unconditional reset), this never touches a key that's already set. Exists so a player who joined before a new class (e.g. Cyberpunk/Tempest) existed doesn't show blank/broken values on that class's Class Info page — their other classes' real stats are left completely untouched
+	set {_uuid} to {_p}'s uuid
+	if {class-games::%{_uuid}%::%{_class}%} isn't set: # canary — every key below is always set alongside this one, so checking just this one is enough
+		set {class-games::%{_uuid}%::%{_class}%} to 0
+		set {class-wins::%{_uuid}%::%{_class}%} to 0
+		set {class-losses::%{_uuid}%::%{_class}%} to 0
+		set {class-duration-total::%{_uuid}%::%{_class}%} to 0
+		set {class-duration-win-total::%{_uuid}%::%{_class}%} to 0
+		set {class-duration-loss-total::%{_uuid}%::%{_class}%} to 0
+		set {class-kill::%{_uuid}%::%{_class}%} to 0
+		set {class-death::%{_uuid}%::%{_class}%} to 0
+		set {class-ks::%{_uuid}%::%{_class}%::count} to 0
+		set {class-ks::%{_uuid}%::%{_class}%::top} to 0
+		set {class-firstbloods::%{_uuid}%::%{_class}%} to 0
+		set {class-damage::%{_uuid}%::%{_class}%} to 0
+		set {class-playerdamage::%{_uuid}%::%{_class}%} to 0
+		set {class-damagetaken::%{_uuid}%::%{_class}%} to 0
+		set {class-jungleslain::%{_uuid}%::%{_class}%} to 0
+		set {class-bossesslain::%{_uuid}%::%{_class}%} to 0
+		set {class-bosssteals::%{_uuid}%::%{_class}%} to 0
+		set {class-xpearly::%{_uuid}%::%{_class}%} to 0
+		set {class-xpmid::%{_uuid}%::%{_class}%} to 0
+		set {class-xplate::%{_uuid}%::%{_class}%} to 0
+		set {class-leadgames::%{_uuid}%::%{_class}%} to 0
+		set {class-leadlossgames::%{_uuid}%::%{_class}%} to 0
+		set {class-behindwingames::%{_uuid}%::%{_class}%} to 0
+
+on join: # first-time-ever initialization — {kill::%uuid%} is the canary since it's set by every path that initializes stats
+	if {kill::%player's uuid%} isn't set:
+		initializePlayerStats(player)
+	else: # existing player — top up any class added to the roster since they last had a fresh initialization (e.g. Cyberpunk/Tempest)
+		loop {menu::classlist::*}: # 05-class-menu.sk
+			backfillClassStats(player, loop-value)
+
+command /resetstats [<offline player>]:
+	permission: op
+	trigger:
+		if arg 1 is set:
+			set {_target} to arg 1
+		else:
+			set {_target} to player
+		initializePlayerStats({_target})
+		send "&aAll stats reset for &e%{_target}%&a." to player
+
+# ---- PERSISTENT STATS GUI ----
+
+function safeDivide(a: number, b: number) :: number: # avoids divide-by-zero across all the derived stats below
+	if {_b} = 0:
+		return 0
+	return {_a} / {_b}
+
+function formatDuration(seconds: number) :: string: # e.g. 754 -> "12m 34s"
+	set {_m} to floor({_seconds} / 60)
+	set {_s} to mod({_seconds}, 60)
+	return "%{_m}%m %{_s}%s"
+
+function openStatsMenu(viewer: player, target: offline player):
+	set {_uuid} to {_target}'s uuid
+	set {_ownStats} to false
+	if {_viewer}'s uuid is {_uuid}:
+		set {_ownStats} to true
+
+	if {_ownStats} is true:
+		set metadata tag "stats menu" of {_viewer} to chest inventory with 6 rows named "Your Stats"
+		set {_borderEnd} to 53
+	else:
+		set metadata tag "stats menu" of {_viewer} to chest inventory with 5 rows named "%{_target}%'s Stats"
+		set {_borderEnd} to 44
+
+	set slot (integers between 0 and 8) of metadata tag "stats menu" of {_viewer} to black stained glass pane named " "
+	set slot (integers between 9 and 35) of metadata tag "stats menu" of {_viewer} to gray stained glass pane named " "
+	set slot (integers between 36 and {_borderEnd}) of metadata tag "stats menu" of {_viewer} to black stained glass pane named " "
+
+	# ---- Match Record ----
+	set {_winrate} to safeDivide({wins::%{_uuid}%}, {games::%{_uuid}%}) * 100
+	set {_lore::*} to "" and "&7Games Played: &e%{games::%{_uuid}%}%" and "&7Wins: &a%{wins::%{_uuid}%}%" and "&7Losses: &c%{losses::%{_uuid}%}%" and "&7Win Rate: &e%{_winrate}%%%" and ""
+	set slot 10 of metadata tag "stats menu" of {_viewer} to (nether star named "&e&lMatch Record" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- Combat ----
+	set {_kd} to safeDivide({kill::%{_uuid}%}, {death::%{_uuid}%})
+	set {_lore::*} to "" and "&7Kills: &e%formatNumber({kill::%{_uuid}%})%" and "&7Deaths: &e%formatNumber({death::%{_uuid}%})%" and "&7K/D Ratio: &e%{_kd}%" and "&7Best Killstreak: &e%{ks::%{_uuid}%::top}%" and "&7First Bloods: &e%{firstbloods::%{_uuid}%}%" and ""
+	set {_combatIcon} to (iron sword named "&c&lCombat" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	add nbt compound of "{""minecraft:tooltip_display"":{hidden_components:[""minecraft:attribute_modifiers"",""minecraft:enchantments"",""minecraft:stored_enchantments"",""minecraft:unbreakable"",""minecraft:can_break"",""minecraft:can_place_on"",""minecraft:dyed_color"",""minecraft:trim"",""minecraft:potion_contents"",""minecraft:jukebox_playable"",""minecraft:banner_patterns"",""minecraft:firework_explosion"",""minecraft:fireworks"",""minecraft:map_id"",""minecraft:bundle_contents"",""minecraft:lodestone_tracker"",""minecraft:instrument"",""minecraft:suspicious_stew_effects"",""minecraft:writable_book_content"",""minecraft:written_book_content"",""minecraft:charged_projectiles"",""minecraft:container""]}}" to nbt of {_combatIcon} # sword's inherent attack damage/speed survive the item flag alone
+	set slot 12 of metadata tag "stats menu" of {_viewer} to {_combatIcon}
+
+	# ---- Damage ----
+	set {_lore::*} to "" and "&7Overall Damage Dealt: &e%formatNumber({damage::%{_uuid}%})%" and "&7Player Damage Dealt: &e%formatNumber({playerdamage::%{_uuid}%})%" and "&7Damage Taken: &e%formatNumber({damagetaken::%{_uuid}%})%" and ""
+	set slot 14 of metadata tag "stats menu" of {_viewer} to (blaze powder named "&6&lDamage" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- Jungle & Bosses ----
+	set {_avgCS} to safeDivide({jungleslain::%{_uuid}%}, {games::%{_uuid}%})
+	set {_avgBosses} to safeDivide({bossesslain::%{_uuid}%}, {games::%{_uuid}%})
+	set {_lore::*} to "" and "&7Jungle Mobs Slain: &e%{jungleslain::%{_uuid}%}%" and "&7Avg Jungle CS/Game: &e%{_avgCS}%" and "&7Bosses Slain: &e%{bossesslain::%{_uuid}%}%" and "&7Avg Bosses/Game: &e%{_avgBosses}%" and "&7Boss Steals: &e%{bosssteals::%{_uuid}%}%" and ""
+	set slot 16 of metadata tag "stats menu" of {_viewer} to (zombie head named "&2&lJungle & Bosses" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- XP by Phase (average per game that reached that phase, not the lifetime total) ----
+	set {_avgXpEarly} to safeDivide({xpearly::%{_uuid}%}, {phasegames-early::%{_uuid}%})
+	set {_avgXpMid} to safeDivide({xpmid::%{_uuid}%}, {phasegames-mid::%{_uuid}%})
+	set {_avgXpLate} to safeDivide({xplate::%{_uuid}%}, {phasegames-late::%{_uuid}%})
+	set {_lore::*} to "" and "&7Avg Early-Game XP: &e%{_avgXpEarly}%" and "&7Avg Mid-Game XP: &e%{_avgXpMid}%" and "&7Avg Late-Game XP: &e%{_avgXpLate}%" and ""
+	set slot 28 of metadata tag "stats menu" of {_viewer} to (experience bottle named "&d&lXP by Phase" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- Personal Records (center of the third row) — icon is the target's own head ----
+	set {_lore::*} to "" and "&7Highest Damage Game: &e%formatNumber({bestgame-damage::%{_uuid}%})%" and "&7Highest Player Damage Game: &e%formatNumber({bestgame-playerdamage::%{_uuid}%})%" and "&7Best CS Game: &e%{bestgame-cs::%{_uuid}%}%" and "&7Best K/D Game: &e%{bestgame-kd::%{_uuid}%}%" and ""
+	set {_headIcon} to (player head named "&6&lPersonal Records" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set skull owner of {_headIcon} to {_target}
+	set slot 22 of metadata tag "stats menu" of {_viewer} to {_headIcon}
+
+	# ---- Comeback / Lead Stats ----
+	set {_leadconv} to safeDivide({leadlossgames::%{_uuid}%}, {leadgames::%{_uuid}%})
+	set {_leadconv} to (1 - {_leadconv}) * 100 # % of "significant lead" games that were actually won
+	set {_lore::*} to "" and "&7Games With Sig. Lead: &e%{leadgames::%{_uuid}%}%" and "&7Games Lost After Leading: &c%{leadlossgames::%{_uuid}%}%" and "&7Games Won While Behind: &a%{behindwingames::%{_uuid}%}%" and "&7Lead Conversion Rate: &e%{_leadconv}%%%" and ""
+	set slot 30 of metadata tag "stats menu" of {_viewer} to (golden apple named "&b&lComeback Stats" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- Durations ----
+	set {_avgDur} to formatDuration(safeDivide({duration-total::%{_uuid}%}, {games::%{_uuid}%}))
+	set {_avgWinDur} to formatDuration(safeDivide({duration-win-total::%{_uuid}%}, {wins::%{_uuid}%}))
+	set {_avgLossDur} to formatDuration(safeDivide({duration-loss-total::%{_uuid}%}, {losses::%{_uuid}%}))
+	set {_lore::*} to "" and "&7Avg Game Duration: &e%{_avgDur}%" and "&7Avg Winning Game: &a%{_avgWinDur}%" and "&7Avg Losing Game: &c%{_avgLossDur}%" and ""
+	set slot 32 of metadata tag "stats menu" of {_viewer} to (clock named "&f&lDurations" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- Best / Worst Class ----
+	set {_best} to getBestClass({_target}) # 13-mastery.sk
+	set {_worst} to getWorstClass({_target})
+	if {_best} = "N/A":
+		set {_bestName} to "N/A"
+	else:
+		set {_bestName} to {class-name::%{_best}%}
+	if {_worst} = "N/A":
+		set {_worstName} to "N/A"
+	else:
+		set {_worstName} to {class-name::%{_worst}%}
+	set {_lore::*} to "" and "&7Best Class: &a%{_bestName}%" and "&7Worst Class: &c%{_worstName}%" and "" and "&8&oRequires Silver+ mastery to rank." and ""
+	set slot 34 of metadata tag "stats menu" of {_viewer} to (diamond named "&5&lBest / Worst Class" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# ---- back to class browser (bottom center, own stats only) ----
+	if {_ownStats} is true:
+		set slot 49 of metadata tag "stats menu" of {_viewer} to (enchanted book of infinity 1 named "&6&lClass Browser" with lore " " and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	open (metadata tag "stats menu" of {_viewer}) to {_viewer}
+
+command /stats [<offline player>]:
+	trigger:
+		if arg 1 is set:
+			set {_target} to arg 1
+		else:
+			set {_target} to player
+		openStatsMenu(player, {_target})
+
+on inventory click:
+	if event-inventory = (metadata tag "stats menu" of player):
+		cancel event
+		if index of event-slot is 49:
+			openClassBrowser(player) # 18-class-browser.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "match summary" of player):
+		cancel event
+	else if event-inventory = (metadata tag "match history" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		if {_slot} >= 1:
+			if {_slot} <= 7:
+				if {matchhistory::%player's uuid%::%{_slot}%::cls1} is set: # only games saved with full detail can be opened (older, pre-snapshot entries have none)
+					play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+					openMatchSummary(player, {_slot})
+				else if {matchhistory::%player's uuid%::%{_slot}%::result} is set:
+					send "&7Detailed stats weren't saved for this older match." to player
+
+# ---- MATCH SNAPSHOTS + HISTORY ----
+# endMatch() (10-match-manager.sk) saves a full copy of each player's match
+# stats the moment the match ends (snapshotMatch, into slot 0), and for real
+# matches also pushes it into the rolling last-7 history (pushMatchHistory,
+# slots 1-7, 1 = newest). The summary GUI below always renders from a saved
+# slot — never from the live per-match variables — which is what lets the
+# exact same screen be reopened later from /matchhistory. Everything is stored
+# flat ({matchhistory::uuid::SLOT::field}) so shifting a slot is a plain
+# key-by-key copy.
+#
+# Fields per slot: result, opponent, date (text, Pacific time), duration
+# (seconds), kills/deaths/damage/objectives, okills/odeaths/odamage/oobjectives
+# (the opponent's totals), and per loadout class i = 1..3: cls<i>, k<i>, d<i>,
+# dmg<i> for the player and ocls<i>, ok<i>, od<i>, odmg<i> for the opponent.
+
+import:
+	java.time.ZonedDateTime
+	java.time.ZoneId
+	java.time.format.DateTimeFormatter
+
+function stampMatchEnd(): # sets {matchEndText} to the current time in Pacific time (shows PST or PDT depending on daylight saving) — done through Java because Skript's own date formatting only knows the server's timezone. A global instead of a return value, same reason as firstAvailableClass() in 04-leveling.sk
+	set {matchEndText} to ZonedDateTime.now(ZoneId.of("America/Los_Angeles")).format(DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a z"))
+
+function snapshotMatch(p: offline player, opponent: offline player, result: text, duration: number): # call stampMatchEnd() first; needs {loadout} and the per-match stats still intact
+	set {_u} to {_p}'s uuid
+	set {_o} to {_opponent}'s uuid
+	delete {matchhistory::%{_u}%::0::*}
+	set {matchhistory::%{_u}%::0::result} to {_result}
+	set {matchhistory::%{_u}%::0::opponent} to "%{_opponent}%"
+	set {matchhistory::%{_u}%::0::date} to {matchEndText}
+	set {matchhistory::%{_u}%::0::duration} to {_duration}
+	set {matchhistory::%{_u}%::0::kills} to {matchkills::%{_u}%}
+	set {matchhistory::%{_u}%::0::deaths} to {matchdeaths::%{_u}%}
+	set {matchhistory::%{_u}%::0::damage} to {matchdamage::%{_u}%}
+	set {matchhistory::%{_u}%::0::objectives} to {matchobjectives::%{_u}%}
+	set {matchhistory::%{_u}%::0::okills} to {matchkills::%{_o}%}
+	set {matchhistory::%{_u}%::0::odeaths} to {matchdeaths::%{_o}%}
+	set {matchhistory::%{_u}%::0::odamage} to {matchdamage::%{_o}%}
+	set {matchhistory::%{_u}%::0::oobjectives} to {matchobjectives::%{_o}%}
+	loop integers between 1 and 3:
+		set {_i} to loop-value
+		set {_class} to {loadout::%{_u}%::%{_i}%}
+		if {_class} is set:
+			set {matchhistory::%{_u}%::0::cls%{_i}%} to {_class}
+			set {matchhistory::%{_u}%::0::k%{_i}%} to {matchkills::%{_u}%::%{_class}%}
+			set {matchhistory::%{_u}%::0::d%{_i}%} to {matchdeaths::%{_u}%::%{_class}%}
+			set {matchhistory::%{_u}%::0::dmg%{_i}%} to {matchdamage::%{_u}%::%{_class}%}
+		set {_oclass} to {loadout::%{_o}%::%{_i}%}
+		if {_oclass} is set:
+			set {matchhistory::%{_u}%::0::ocls%{_i}%} to {_oclass}
+			set {matchhistory::%{_u}%::0::ok%{_i}%} to {matchkills::%{_o}%::%{_oclass}%}
+			set {matchhistory::%{_u}%::0::od%{_i}%} to {matchdeaths::%{_o}%::%{_oclass}%}
+			set {matchhistory::%{_u}%::0::odmg%{_i}%} to {matchdamage::%{_o}%::%{_oclass}%}
+
+function copyHistorySlot(p: offline player, from: number, to: number): # key-by-key copy of one saved match into another slot, replacing whatever was there
+	delete {matchhistory::%{_p}'s uuid%::%{_to}%::*}
+	loop {matchhistory::%{_p}'s uuid%::%{_from}%::*}:
+		set {matchhistory::%{_p}'s uuid%::%{_to}%::%loop-index%} to loop-value
+
+function pushMatchHistory(p: offline player): # adds the match in slot 0 as the newest history entry; the oldest of the 7 falls off the end
+	loop integers between 1 and 6:
+		copyHistorySlot({_p}, 7 - loop-value, 8 - loop-value) # 6->7, 5->6, ... 1->2
+	copyHistorySlot({_p}, 0, 1)
+
+# ---- END-OF-MATCH SUMMARY ----
+# Opened from 10-match-manager.sk's endMatch() (slot 0 = the match that just
+# ended) and from the /matchhistory GUI below (slots 1-7).
+
+function openMatchSummary(p: player, slot: number):
+	set metadata tag "match summary" of {_p} to chest inventory with 4 rows named "Match Summary"
+	set slot (integers between 0 and 35) of metadata tag "match summary" of {_p} to black stained glass pane named " "
+
+	if {matchhistory::%{_p}'s uuid%::%{_slot}%::result} = "WIN":
+		set slot 4 of metadata tag "match summary" of {_p} to lime dye named "&a&lVICTORY!"
+	else:
+		set slot 4 of metadata tag "match summary" of {_p} to red dye named "&c&lDEFEAT"
+
+	set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::kills}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::deaths}%" and "&7Damage Dealt: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::damage})%" and "&7Objectives Secured: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::objectives}%"
+	set slot 10 of metadata tag "match summary" of {_p} to paper named "&e&lYour Stats" with lore {_lore::*}
+
+	set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::okills}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::odeaths}%" and "&7Damage Dealt: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::odamage})%" and "&7Objectives Secured: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::oobjectives}%"
+	set slot 16 of metadata tag "match summary" of {_p} to paper named "&c&l%{matchhistory::%{_p}'s uuid%::%{_slot}%::opponent}%'s Stats" with lore {_lore::*}
+
+	loop integers between 1 and 3:
+		set {_i} to loop-value
+		set {_class} to {matchhistory::%{_p}'s uuid%::%{_slot}%::cls%{_i}%}
+		if {_class} is set:
+			set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::k%{_i}%}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::d%{_i}%}%" and "&7Damage: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::dmg%{_i}%})%"
+			set slot (18 + {_i}) of metadata tag "match summary" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set {_oclass} to {matchhistory::%{_p}'s uuid%::%{_slot}%::ocls%{_i}%}
+		if {_oclass} is set:
+			set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::ok%{_i}%}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::od%{_i}%}%" and "&7Damage: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::odmg%{_i}%})%"
+			set slot (22 + {_i}) of metadata tag "match summary" of {_p} to ({class::weapon::%{_oclass}%} named "&c%{class-name::%{_oclass}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	open (metadata tag "match summary" of {_p}) to {_p}
+
+# ---- MATCH HISTORY (last 7) ----
+# /matchhistory opens a 1-row GUI: slots 1-7 are the last 7 games, newest on
+# the left. Lime dye = win, red dye = loss; clicking a game opens the same
+# Match Summary screen shown at the end of the match.
+
+function openMatchHistory(p: player):
+	set metadata tag "match history" of {_p} to chest inventory with 1 rows named "Match History"
+	set slot (integers between 0 and 8) of metadata tag "match history" of {_p} to black stained glass pane named " "
+	loop integers between 1 and 7:
+		set {_n} to loop-value
+		if {matchhistory::%{_p}'s uuid%::%{_n}%::result} is set:
+			if {matchhistory::%{_p}'s uuid%::%{_n}%::result} = "WIN":
+				set {_icon} to lime dye named "&a&lVICTORY"
+			else:
+				set {_icon} to red dye named "&c&lDEFEAT"
+			if {matchhistory::%{_p}'s uuid%::%{_n}%::duration} is set:
+				set {_lore::*} to "" and "&7vs &f%{matchhistory::%{_p}'s uuid%::%{_n}%::opponent}%" and "&7Played: &f%{matchhistory::%{_p}'s uuid%::%{_n}%::date}%" and "&7Length: &f%formatDuration({matchhistory::%{_p}'s uuid%::%{_n}%::duration})%" and "" and "&e[CLICK] &7View match stats"
+			else: # an entry saved before full match snapshots existed — only the old summary line survives
+				set {_lore::*} to "" and "&7vs &f%{matchhistory::%{_p}'s uuid%::%{_n}%::opponent}%" and "" and "&8Older match - no details saved"
+			set slot {_n} of metadata tag "match history" of {_p} to {_icon} with lore {_lore::*}
+		else:
+			set slot {_n} of metadata tag "match history" of {_p} to gray dye named "&8No game recorded"
+	open (metadata tag "match history" of {_p}) to {_p}
+
+command /matchhistory:
+	trigger:
+		openMatchHistory(player)

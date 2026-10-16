@@ -1,0 +1,58 @@
+# ============================================
+# ARENA MANAGER
+# The map is pre-built and permanent in the "arena_1" world — never recreated,
+# pasted, or torn down. Since 10-match-manager.sk only supports one match at a
+# time, every match just reuses this same static arena.
+#
+# This replaces an earlier version that dynamically created a fresh void
+# world via Multiverse and pasted a schematic into it via WorldEdit each
+# match — no longer needed now that the map already exists and shouldn't be
+# altered.
+# ============================================
+
+on load: # gamerules only need to be set once, since the world is never recreated or reset
+	# Found two real problems with the old console-command approach:
+	# 1. Minecraft 1.21.11 renamed every gamerule to this snake_case
+	#    "minecraft:rule_name" form — the names here were already correct
+	#    post-rename, EXCEPT fire_spread_radius_around_player, which replaced
+	#    the old doFireTick/allowFireTicksAwayFromPlayer booleans and now
+	#    takes a NUMBER (a chunk radius), not true/false. Passing "false" to
+	#    it is a type mismatch and would fail.
+	# 2. Going through Multiverse's own "/mv gamerule" wrapper adds a second
+	#    point of failure — if Multiverse hasn't been updated to recognize
+	#    this very recent (Dec 2025) rename, it can silently no-op or error
+	#    regardless of whether the name/value passed to it is correct.
+	# Calling World#setGameRule() directly via skript-reflect sidesteps
+	# Multiverse's wrapper entirely and talks straight to the same Bukkit API
+	# already confirmed to use these renamed identifiers as of 1.21.11.
+	wait 3 seconds # small safety margin in case this world isn't fully registered yet at server-start (same reasoning as 16-world-rules.sk's on-world-change delay)
+	set {_world} to world {config::arena::world-name}
+	if {_world} is set:
+		{_world}.setGameRule("show_advancement_messages", "false")
+		{_world}.setGameRule("spread_vines", "false")
+		{_world}.setGameRule("fire_spread_radius_around_player", "0") # now a chunk-radius number, not a boolean — 0 is the closest equivalent to the old "off" behavior; worth confirming in-game that this reads as intended
+		{_world}.setGameRule("fire_damage", "true")
+		{_world}.setGameRule("projectiles_can_break_blocks", "false")
+		{_world}.setGameRule("locator_bar", "false")
+		{_world}.setGameRule("mob_griefing", "false") # mobs shouldn't be able to damage/change blocks — this one was simply missing from the list before
+
+function setupArena(): # called by 10-match-manager.sk's startMatch() — just a safety cleanup now, no world creation needed
+	clearLeftoverBossMobs()
+	clearMajorBossHole() # 12-major-boss.sk — the major boss spawn platform should always start open
+	resetSecretDoors() # 16-world-rules.sk — all secret doors should always start open
+
+function teardownArena(): # called by 10-match-manager.sk's endMatch()
+	fillMajorBossHoleWithBarriers() # 12-major-boss.sk — sealed off before anyone leaves, so nobody can wander into the open hole while both players are being sent back
+	resetSecretDoors() # 16-world-rules.sk — force every door back open at match end too, in case anyone closed one during the match
+	wait 1 second
+	loop all players in world {config::arena::world-name}:
+		teleport loop-player to {config::lobby-spawn}
+	clearLeftoverBossMobs()
+
+function clearLeftoverBossMobs(): # kills any mini-boss/major-boss mobs still alive from a previous match, just in case
+	loop all entities in world {config::arena::world-name}:
+		if loop-entity is a zombie, cave spider, or iron golem: # zombie/cave spider = mini-bosses (Marauder/Crawlers), iron golem = major boss
+			if metadata value "minibossLoc" of loop-entity is set:
+				kill loop-entity
+			else if metadata value "isMajorBoss" of loop-entity is set:
+				kill loop-entity
