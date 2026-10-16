@@ -1,0 +1,431 @@
+# ============================================
+# PREGAME DRAFT
+# Adapted from an older duel plugin the user built and no longer uses: both
+# players are teleported to a pre-built class-selection structure in the
+# "lobby" world, a few random classes are auto-banned, a coinflip decides who
+# picks first, then the two players draft classes in a snake order until each
+# has exactly 3. Finally, a short window lets each player choose which of
+# their 3 drafted classes to start as, plus their consumable, before entering
+# the arena.
+#
+# IMPORTANT: everything below is written as ONE continuous inline sequence,
+# deliberately NOT split into separate functions that contain "wait" and get
+# called repeatedly from within a loop. An earlier version called a separate
+# per-pick wait function from inside the snake-draft loop, and calling a
+# wait-containing function repeatedly from within a loop turned out to be
+# unreliable — picks, bossbars, and menu state all fell out of sync. Inlining
+# everything sequentially (matching the user's own proven reference pattern)
+# fixes this.
+#
+# runClassDraft() is void and calls enterArena() (10-match-manager.sk)
+# directly as its own last step on success, rather than returning a value for
+# startMatch() to check afterward — reading back a result after this long a
+# delayed call chain turned out to be unreliable (players were left stuck in
+# the lobby even though the draft itself completed correctly). On failure/
+# disconnect, forceEndMatch() already handles all cleanup independently, so
+# there's nothing further needed either way.
+# ============================================
+
+on load:
+	set {mysterySkull} to player head # a player head textured to look like a die, so the "Random Class" icon actually reads as a dice roll (minecraft-heads.com, custom head #63911 "Dice")
+	add nbt compound of "{display:{Name:""{\""text\"":\""&7\""}""},SkullOwner:{Id:[I;148286236,227494900,-1254922066,-730993526],Properties:{textures:[{Value:""eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTFiZDljOGNmZjQ1ZThjZDdjNjdiMzBhNzc5YjQwNWNmOWMyYzRlY2U5ZDEzMTRmOTdmY2EwYjRmZmM4YzFjNSJ9fX0=""}]}}}" to nbt compound of {mysterySkull}
+
+on load: # ONE-TIME deck rebuild — {draftDeck::*} persists across restarts and only refills when it runs empty, so a deck that was built before TS / EA were added to {menu::classlist::*} would never contain them until its next full cycle. This rebuilds it once from the full class list so every class is in the rotation.
+	if {draftDeckV2} isn't set:
+		set {draftDeckV2} to true
+		delete {draftDeck::*}
+		refillDraftDeck()
+
+# ---- BAN DECK ("shuffle bag" randomness) ----
+# Persists across matches (never reset at the top of runClassDraft()) so the
+# deck keeps depleting/refilling game after game. Each ban draws one class out
+# of {draftDeck::*} instead of Skript's plain "random integer" reroll, so every
+# class gets pulled exactly once before any class can repeat within a given
+# shuffle. {draftDeckHeld::*} holds whichever classes were banned in the game
+# that just finished, keeping them out of the deck entirely until AFTER the
+# next game's bans are drawn — that's what actually guarantees no class can be
+# banned two games in a row, since a plain shuffle bag alone can still deal
+# the same card again right across a reshuffle boundary (last card of one
+# shuffle, first card of the next).
+
+function refillDraftDeck(): # rebuilds an exhausted/uninitialized deck with one card per class, excluding whatever's currently held back from the previous game's bans
+	set {_pool::*} to {menu::classlist::*} # 05-class-menu.sk
+	loop {draftDeckHeld::*}:
+		remove loop-value from {_pool::*}
+	if {_pool::*} isn't set: # only possible with an extreme {config::draft::ban-count} that holds back every class at once — ignore the no-repeat rule this one time rather than softlocking the draft
+		set {_pool::*} to {menu::classlist::*}
+	while {_pool::*} is set:
+		set {_pick} to a random element out of {_pool::*}
+		add {_pick} to {draftDeck::*}
+		remove {_pick} from {_pool::*}
+
+function popFromDeck() :: text: # removes and returns one card from {draftDeck::*} — loops to the first existing entry instead of guessing an index, since Skript's list variables don't re-pack after a removal and can be left with gaps
+	loop {draftDeck::*}:
+		set {_pick} to loop-value
+		delete {draftDeck::%loop-index%}
+		return {_pick}
+	return "" # deck was empty — callers should call refillDraftDeck() first
+
+function draftDeckPostGame(thisGameBanned: strings): # called once after a game's bans are fully drawn — returns the PREVIOUS game's held-back classes to the deck and holds back THIS game's bans instead
+	loop {draftDeckHeld::*}:
+		add loop-value to {draftDeck::*}
+	delete {draftDeckHeld::*}
+	set {draftDeckHeld::*} to {_thisGameBanned::*}
+
+function draftCenterStand(loc: location, y: number) :: entity: # a marker armor stand at the draft center, offset vertically by y
+	set {_loc} to {_loc}
+	add {_y} to y coord of {_loc}
+	spawn 1 armor stand at {_loc}
+	set {_as} to last spawned armor stand
+	add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of {_as}
+	return {_as}
+
+function draftCenterClear(loc: location, type: string):
+	if {_type} = "clear":
+		loop all entities in radius 3 around {_loc}:
+			if loop-entity is a armor stand or dropped item:
+				kill loop-entity
+		set block at {_loc} to air
+	else if {_type} = "anvil":
+		set block at {_loc} to air
+
+# Checked at every checkpoint throughout the draft (including every ~0.5s
+# while waiting on a pick). Returns false — meaning "stop the draft" — if
+# either player disconnected (and triggers cleanup via forceEndMatch) OR if
+# the match was already torn down some other way (e.g. an admin ran
+# /endduel), in which case cleanup already happened and we just stop quietly.
+function draftCheckContinue(p1: player, p2: player) :: boolean:
+	if {_p1} isn't online:
+		forceEndMatch("Your opponent disconnected during class selection.") # 10-match-manager.sk
+		return false
+	if {_p2} isn't online:
+		forceEndMatch("Your opponent disconnected during class selection.")
+		return false
+	if {inMatch::%{_p1}'s uuid%} isn't set:
+		return false
+	if {inMatch::%{_p2}'s uuid%} isn't set:
+		return false
+	return true
+
+# ---- MAIN ENTRY POINT ----
+# A void function — no wrapper/return-value workaround needed here anymore.
+# On success this calls enterArena() (10-match-manager.sk) directly as its
+# very last step, rather than returning a value for startMatch() to check
+# afterward. On failure/disconnect, forceEndMatch() has already handled all
+# cleanup independently, so there's nothing further for the caller to do
+# either way — this sidesteps needing to reliably read back a result after
+# a very long, deeply-nested delayed call chain.
+
+function runClassDraft(p1: player, p2: player):
+	delete {draftBanned::*}
+	delete {draftPicked::*}
+	delete {loadout::%{_p1}'s uuid%::*}
+	delete {loadout::%{_p2}'s uuid%::*}
+	set {draftPickCount::%{_p1}'s uuid%} to 0
+	set {draftPickCount::%{_p2}'s uuid%} to 0
+
+	set {_loc} to {config::lobby::draft-center}
+	set {_asName} to draftCenterStand({_loc}, 0.75)
+	set {_asDisplay} to draftCenterStand({_loc}, -0.5)
+	# Give both stands a (blank) custom name the instant they spawn. CustomNameVisible
+	# is already set via NBT inside draftCenterStand(), so an armor stand with that flag
+	# but no custom name yet shows its raw type name ("Armor Stand") above its head —
+	# that's exactly what was showing up during a /testduel draft, because the ban
+	# phase below (which used to be the only place that ever named these stands) is
+	# skipped entirely for a test duel, leaving them nameless for the whole draft.
+	set name of {_asName} to " "
+	set name of {_asDisplay} to " "
+
+	# ---- AUTO-BAN ---- (skipped entirely for a /testduel — 10-match-manager.sk — bans only happen in official matches)
+	if {testMatch} isn't set:
+		set name of {_asName} to "&eBANNING CLASSES..."
+		wait 2 seconds
+
+		delete {_thisGameBanned::*}
+		loop {config::draft::ban-count} times:
+			if draftCheckContinue({_p1}, {_p2}) is false:
+				stop
+			if {draftDeck::*} isn't set:
+				refillDraftDeck()
+			set {_banned} to popFromDeck()
+			add {_banned} to {draftBanned::*}
+			add {_banned} to {_thisGameBanned::*}
+
+			drop {class::weapon::%{_banned}%} at {config::lobby::draft-center-temp} # spawns here first so it doesn't fall oddly at the real center
+			set {_tempName} to name of {class::weapon::%{_banned}%}
+			set {_tempItem} to last dropped item
+			set display name of {_tempItem} to {_tempName}
+			wait 1 seconds
+			teleport {_tempItem} to {_loc}
+			wait 1 second
+			set block 7 above {_loc} to anvil
+			wait 1 second
+			kill {_tempItem}
+			send title "%{_tempName}%" with subtitle "&cBANNED" to {_p1} for 0 seconds with fade out 1 second
+			send title "%{_tempName}%" with subtitle "&cBANNED" to {_p2} for 0 seconds with fade out 1 second
+			wait 3 seconds
+			draftCenterClear({_loc}, "anvil")
+		draftDeckPostGame({_thisGameBanned::*})
+
+	if draftCheckContinue({_p1}, {_p2}) is false:
+		stop
+
+	# ---- COINFLIP ----
+	set name of {_asName} to "&eCOINFLIPPING..."
+	set {_tick} to 4 ticks
+	set {_helmetCenter} to red wool
+	set {_pitch} to 1.6
+	loop 7 times: # takes ~3 seconds
+		if {_tick} > 10 ticks:
+			set {_tick} to 15 ticks
+		add 1 tick to {_tick}
+		remove 0.2 from {_pitch}
+		play sound "BLOCK_NOTE_BLOCK_PLING" at volume 1 at pitch {_pitch} at {_loc}
+		if {_helmetCenter} is red wool:
+			set {_helmetCenter} to blue wool
+		else:
+			set {_helmetCenter} to red wool
+		set helmet of {_asDisplay} to {_helmetCenter}
+		wait {_tick}
+	play sound "BLOCK_NOTE_BLOCK_PLING" at volume 1 at pitch {_pitch} at {_loc}
+
+	set {_r} to random integer between 1 and 2
+	if {_r} = 1:
+		set {_player::1} to {_p1}
+		set {_player::2} to {_p2}
+		set helmet of {_asDisplay} to red wool
+	else:
+		set {_player::1} to {_p2}
+		set {_player::2} to {_p1}
+		set helmet of {_asDisplay} to blue wool
+
+	set {_message} to "%{_player::1}% FIRST PICK"
+	set name of {_asName} to "&e%{_message}%"
+	send title "&6&l%{_message}%" with subtitle "&eClass Draft" to {_p1} for 1 seconds with fade out 1 second
+	send title "&6&l%{_message}%" with subtitle "&eClass Draft" to {_p2} for 1 seconds with fade out 1 second
+	wait 3 seconds
+	set helmet of {_asDisplay} to air # clears the coinflip wool before drafting starts, so it doesn't block the pick visuals
+
+	if draftCheckContinue({_p1}, {_p2}) is false:
+		stop
+
+	# ---- SNAKE DRAFT (3 picks each) — pick-waiting is fully inlined here, not a separate called function ----
+	set {_pickOrder::*} to 1, 2, 2, 1, 1, and 2
+	loop {_pickOrder::*}:
+		if draftCheckContinue({_p1}, {_p2}) is false:
+			stop
+
+		set {_n} to loop-value
+		set {_currPlayer} to {_player::%{_n}%}
+		if {_n} = 1:
+			set {_otherPlayer} to {_player::2}
+		else:
+			set {_otherPlayer} to {_player::1}
+		set {_currUUID} to {_currPlayer}'s uuid
+
+		set name of {_asName} to "&e%{_currPlayer}% is choosing..."
+		wait 1 second
+
+		delete {draftSelection::%{_currUUID}%}
+		set {draftMenuActive::%{_currUUID}%} to true # tells the "on inventory close" handler below to reopen if this closes without a pick
+		openDraftClassMenu({_currPlayer})
+
+		set {_bar} to boss bar with id "%{_currPlayer}%-draftbar" with title "&e&l%{_currPlayer}%'s PICK" with color yellow
+		set bar style of {_bar} to segmented 10
+		set bar progress of {_bar} to 100
+		add {_currPlayer} to {_bar}
+		add {_otherPlayer} to {_bar}
+		set {_prog} to 100
+		set {_step} to 100 / ({config::draft::pick-timeout} * 2) # polling every 10 ticks (0.5s) = 2 polls/second
+		set {_timeKeep} to now
+		set {_timeoutSpan} to "%{config::draft::pick-timeout}% seconds" parsed as a timespan
+
+		while {draftSelection::%{_currUUID}%} isn't set:
+			if draftCheckContinue({_p1}, {_p2}) is false:
+				remove {_currPlayer} from {_bar}
+				remove {_otherPlayer} from {_bar}
+				delete boss bar with id "%{_currPlayer}%-draftbar"
+				delete {draftMenuActive::%{_currUUID}%}
+				stop
+			set {_time} to difference between now and {_timeKeep}
+			if {_time} >= {_timeoutSpan}: # full duration elapsed with no pick — auto-assign
+				delete {draftMenuActive::%{_currUUID}%}
+				set {_available::*} to {menu::classlist::*}
+				loop {draftBanned::*}:
+					remove loop-value-2 from {_available::*}
+				loop {draftPicked::*}:
+					remove loop-value-2 from {_available::*}
+				if {_available::*} is set:
+					set {draftSelection::%{_currUUID}%} to a random element out of {_available::*}
+				close {_currPlayer}'s inventory
+				send "&7Time's up — a class was picked for you." to {_currPlayer}
+				stop loop
+			remove {_step} from {_prog}
+			if {_prog} < 0:
+				set {_prog} to 0
+			set bar progress of {_bar} to {_prog}
+			wait 10 ticks
+
+		delete {draftMenuActive::%{_currUUID}%}
+		remove {_currPlayer} from {_bar}
+		remove {_otherPlayer} from {_bar}
+		delete boss bar with id "%{_currPlayer}%-draftbar"
+
+		set {_picked} to {draftSelection::%{_currUUID}%}
+		recordDraftPick({_picked}) # 19-balance-stats.sk — draft select rate; must run before {draftPicked::*} below is updated, so "available" reflects this pick's actual pool
+		add 1 to {draftPickCount::%{_currUUID}%}
+		set {loadout::%{_currUUID}%::%{draftPickCount::%{_currUUID}%}%} to {_picked}
+		add {_picked} to {draftPicked::*}
+		delete {draftSelection::%{_currUUID}%}
+
+		set name of {_asName} to "&a%{_currPlayer}% picked!"
+		drop {class::weapon::%{_picked}%} at {config::lobby::draft-center-temp}
+		set {_tempName} to name of {class::weapon::%{_picked}%}
+		set {_tempItem} to last dropped item
+		set display name of {_tempItem} to {_tempName}
+		wait 1 seconds
+		teleport {_tempItem} to {_loc}
+		play sound "block.enchantment_table.use" at volume 5 at pitch 1.25 at {_loc}
+		wait 3 seconds
+		kill {_tempItem}
+		play sound "block.enchantment_table.use" at volume 5 at pitch 0.75 at {_loc}
+		wait 1 second
+
+	draftCenterClear({_loc}, "clear")
+	send "&a&lDraft complete!" to {_p1}
+	send "&a&lDraft complete!" to {_p2}
+
+	if draftCheckContinue({_p1}, {_p2}) is false:
+		stop
+
+	# ---- STARTING CLASS + CONSUMABLE (fixed 5 second window, then into the arena) ----
+	set {startingClassChoice::%{_p1}'s uuid%} to {loadout::%{_p1}'s uuid%::1} # default if they don't choose in time
+	set {startingClassChoice::%{_p2}'s uuid%} to {loadout::%{_p2}'s uuid%::1}
+
+	openStartingClassMenu({_p1})
+	openStartingClassMenu({_p2})
+
+	set {_bar} to boss bar with id "loadout-prep-bar" with title "&a&lChoose your starting class!" with color green
+	set bar style of {_bar} to segmented 10
+	set bar progress of {_bar} to 100
+	add {_p1} to {_bar}
+	add {_p2} to {_bar}
+	set {_prog} to 100
+	loop 10 times: # 10 x 10 ticks = 5 seconds
+		wait 10 ticks
+		remove 10 from {_prog}
+		set bar progress of {_bar} to {_prog}
+	remove {_p1} from {_bar}
+	remove {_p2} from {_bar}
+	delete boss bar with id "loadout-prep-bar"
+	close {_p1}'s inventory
+	close {_p2}'s inventory
+
+	enterArena({_p1}, {_p2}) # 10-match-manager.sk
+
+# ---- DRAFT CLASS MENU (banned = barrier, already picked = placeholder, mystery skull = random pick) ----
+
+function openDraftClassMenu(p: player):
+	set metadata tag "draft class menu" of {_p} to chest inventory with 6 rows named "Choose Your Class"
+	set slot (integers between 0 and 8) of metadata tag "draft class menu" of {_p} to white stained glass pane named " "
+	set slot (integers between 9 and 35) of metadata tag "draft class menu" of {_p} to light gray stained glass pane named " " # 3 rows, one per category — same grouping as the class browser (18-class-browser.sk)
+	set slot (integers between 36 and 53) of metadata tag "draft class menu" of {_p} to white stained glass pane named " "
+
+	delete {draftMenuSlotClass::%{_p}'s uuid%::*} # read by this menu's click handler below, rebuilt fresh every open
+	placeDraftCategoryRow({_p}, 9, "STRIKER")
+	placeDraftCategoryRow({_p}, 18, "JUGGERNAUT")
+	placeDraftCategoryRow({_p}, 27, "SKIRMISHER")
+
+	set slot 49 of metadata tag "draft class menu" of {_p} to ({mysterySkull} named "&d&lRandom Class" with lore "" and "&7Click to instantly pick a random" and "&7available class." and "")
+
+	open (metadata tag "draft class menu" of {_p}) to {_p}
+
+function placeDraftCategoryRow(p: player, rowStart: number, category: text): # first column = category icon (name/buff/description), then a 1-column light-gray gap, then that category's classes — same visual grouping as the class browser (18-class-browser.sk) — the actual banned/picked/pickable logic below is unchanged
+	set slot {_rowStart} of metadata tag "draft class menu" of {_p} to categoryIcon({_category}) # 02-class-data.sk
+	set {_slot} to {_rowStart} + 2 # +1 would sit right next to the icon — +2 leaves the gap column, matching the class browser
+	loop {category-classes::%{_category}%::*}: # 02-class-data.sk
+		set {_class} to loop-value
+		if {draftBanned::*} contains {_class}:
+			set slot {_slot} of metadata tag "draft class menu" of {_p} to (barrier named "&c%{class-name::%{_class}%}%" with lore "" and "&c&oCLASS BANNED" and "")
+		else if {draftPicked::*} contains {_class}:
+			set slot {_slot} of metadata tag "draft class menu" of {_p} to (structure void named "&7%{class-name::%{_class}%}%" with lore "" and "&7&oAlready picked" and "")
+		else:
+			set {_lore::*} to classRatingLore({_p}, {_class}) # 18-class-browser.sk — same difficulty/stat/mastery lore as the class browser, but no "[CLICK] Info" line here since clicking picks the class instead of opening an info page
+			add "" to {_lore::*}
+			set slot {_slot} of metadata tag "draft class menu" of {_p} to ({class::weapon::%{_class}%} named "&eClass: %{class-color::%{_class}%}%&l%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set {draftMenuSlotClass::%{_p}'s uuid%::%{_slot}%} to {_class}
+		add 1 to {_slot}
+
+on inventory click:
+	if event-inventory = (metadata tag "draft class menu" of player):
+		cancel event
+		if index of event-slot is 49: # mystery skull — random available pick
+			set {_available::*} to {menu::classlist::*}
+			loop {draftBanned::*}:
+				remove loop-value from {_available::*}
+			loop {draftPicked::*}:
+				remove loop-value from {_available::*}
+			if {_available::*} is set:
+				set {draftSelection::%player's uuid%} to a random element out of {_available::*}
+				close player's inventory
+				play sound "block.enchantment_table.use" at volume 5 at pitch 1.25 to player
+			else:
+				send "&cNo classes available!" to player
+		else if event-slot is a barrier or structure void:
+			play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
+		else:
+			set {_slot} to index of event-slot
+			set {_class} to {draftMenuSlotClass::%player's uuid%::%{_slot}%}
+			if {_class} is set:
+				set {draftSelection::%player's uuid%} to {_class}
+				close player's inventory
+				play sound "block.enchantment_table.use" at volume 5 at pitch 1.25 to player
+
+on inventory close: # reopens the menu if it was closed without a pick (accidental close, e.g. pressing Escape)
+	if event-inventory = (metadata tag "draft class menu" of player):
+		if {draftMenuActive::%player's uuid%} is set:
+			if {draftSelection::%player's uuid%} isn't set:
+				wait 2 ticks
+				openDraftClassMenu(player)
+
+# ---- STARTING CLASS + CONSUMABLE MENU (post-draft, pick 1 of your 3 drafted classes to start as) ----
+
+function openStartingClassMenu(p: player):
+	set metadata tag "starting class menu" of {_p} to chest inventory with 5 rows named "Choose Starting Class"
+	set slot (integers between 0 and 44) of metadata tag "starting class menu" of {_p} to black stained glass pane named " "
+	set slot (integers between 9 and 35) of metadata tag "starting class menu" of {_p} to gray stained glass pane named " "
+
+	loop integers between 1 and 3:
+		set {_class} to {loadout::%{_p}'s uuid%::%loop-value%}
+		if {_class} is set:
+			set {_slot} to 19 + ((loop-value - 1) * 3)
+			set {_lore::*} to lore of {class::weapon::%{_class}%}
+			if {startingClassChoice::%{_p}'s uuid%} = {_class}:
+				add "" and "&aSELECTED" to {_lore::*}
+			else:
+				add "" and "&7Click to start as this class" to {_lore::*}
+			set slot {_slot} of metadata tag "starting class menu" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	# Consumables/General Perks icons removed here — now that every class has
+	# its own persistent default consumable + general perk (set from that
+	# class's Class Info page, 18-class-browser.sk), whichever class is chosen
+	# to start as already resolves its own effective loadout automatically via
+	# classSelect() (05-class-menu.sk). A separate "pick your starting
+	# consumable" step here would just be redundant with that (and its old
+	# implementation reused 07-consumables.sk / 06-perks-general.sk's in-match
+	# pickers, which now always navigate back to the in-match class menu —
+	# not this one — so it would no longer even route correctly).
+
+	open (metadata tag "starting class menu" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "starting class menu" of player):
+		cancel event
+		loop integers between 1 and 3:
+			set {_slotCheck} to 19 + ((loop-value - 1) * 3)
+			if index of event-slot is {_slotCheck}:
+				set {_class} to {loadout::%player's uuid%::%loop-value%}
+		if {_class} is set:
+			set {startingClassChoice::%player's uuid%} to {_class}
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 5 at pitch 1 to player
+			openStartingClassMenu(player) # refresh to show the new selection
