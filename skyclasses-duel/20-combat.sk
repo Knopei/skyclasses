@@ -1,0 +1,181 @@
+# ============================================
+# COMBAT STATE
+# A player is "in combat" for a rolling 5 seconds (config::combat::duration)
+# after dealing or taking damage with their match opponent, or with the major
+# boss. Every such hit resets the timer; once it runs out they're out of
+# combat. Jungle mobs / mini-bosses never touch it.
+#
+# While a player is in combat, their OPPONENT sees a bossbar for them:
+# "[Lvl N] ClassName", with the bar filled to the player's current health.
+# The bar disappears for the opponent when the player drops out of combat.
+# This replaces the floating nametag (see {config::nametags-enabled} in
+# 00-config.sk — the nametag code is untouched in 04-leveling.sk and comes
+# back by flipping that setting).
+#
+# The vanilla name above a player's head is hidden unless they're in combat
+# (and not invisible). Skript can't change that per-player on its own, so it's
+# done with a scoreboard team ("nm_hidden", nametag visibility = never) that
+# players are moved into/out of through Bukkit's scoreboard API (skript-reflect)
+# — only when their state actually changes, not every tick. The API is used
+# instead of /team console commands because the commands print "Added X to
+# team..." / admin-command messages into chat every time; the API is silent.
+#
+# Design note: markCombat()/combatCheck() are called straight from
+# 08-damage.sk's dmgUpdate(), which has to return synchronously to the damage
+# event, so they're instant (no waits). All the expiring and bar refreshing is
+# done by the single global ticker below, same pattern as executioner.sk's
+# mark watcher.
+# ============================================
+
+import:
+	org.bukkit.Bukkit
+	org.bukkit.boss.BarStyle as JBarStyle
+	org.bukkit.boss.BarColor as JBarColor
+	org.bukkit.scoreboard.Team$Option as TeamOption
+	org.bukkit.scoreboard.Team$OptionStatus as TeamOptionStatus
+
+# Called from dmgUpdate() (08-damage.sk) for every pipelined hit. Decides
+# whether this hit counts, then stamps the player(s) involved.
+function combatCheck(a: living entity, v: living entity, dmg: number):
+	if {_dmg} > 0:
+		if {_a} is a player:
+			if {_v} is a player:
+				if {_a} is {matchOpponent::%{_v}'s uuid%}: # only the real match opponent counts — not a bystander in the arena
+					markCombat({_a})
+					markCombat({_v})
+			else if metadata value "isMajorBoss" of {_v} is set: # hitting the major boss
+				markCombat({_a})
+		else if {_v} is a player:
+			if metadata value "isMajorBoss" of {_a} is set: # the major boss's melee hitting a player
+				markCombat({_v})
+
+# Stamps "last combat event = now" for a player. Also called directly from
+# 12-major-boss.sk's special attacks, which damage players by hand and so never
+# pass through dmgUpdate() with the boss as the attacker.
+function markCombat(p: player):
+	if {inMatch::%{_p}'s uuid%} is set:
+		if {respawning::%{_p}'s uuid%} isn't set: # a dead/respawning player can't be in combat (stray fire/wither ticks landing after death shouldn't re-tag them)
+			set {combat::%{_p}'s uuid%} to now
+			if {combatBarShown::%{_p}'s uuid%} isn't set: # first hit of a new combat — show the bar right away instead of waiting for the next ticker pass
+				updateCombatBar({_p})
+				updateNameVisibility({_p})
+
+# Creates/refreshes the opponent-facing bar for a player in combat. Same
+# create-with-same-id-every-call pattern as updateCooldownBars() in 04-leveling.sk.
+function updateCombatBar(p: player):
+	set {_opp} to {matchOpponent::%{_p}'s uuid%}
+	set {_class} to {class::%{_p}'s uuid%}
+	if {_opp} is set:
+		if {_class} is set:
+			set {_level} to classLevel({_p}, {_class})
+			set {_pct} to ((health of {_p}) / (max health of {_p})) * 100
+			if {_pct} > 100:
+				set {_pct} to 100
+			if {_pct} < 0:
+				set {_pct} to 0
+			if {combatBarShown::%{_p}'s uuid%} isn't set:
+				delete boss bar with id "combat-%{_p}'s uuid%" # a brand-new combat always starts from a fresh bar, so a stale one (old style/viewers from an earlier match or script version) can never carry over
+			set {_bar} to boss bar with id "combat-%{_p}'s uuid%" with title "&7[Lvl %{_level}%] &f%{class-name::%{_class}%}%" with color white
+			set {_protected} to false # shielded or damage-resistant right now -> the bar turns yellow until that wears off
+			if (absorption amount of {_p}) > 0: # Paladin's tactical shield, Frankenstein's ultimate shield
+				set {_protected} to true
+			if {isShielding::%{_p}'s uuid%} is set: # Basher's shield
+				set {_protected} to true
+			if {playerDefense::%{_p}'s uuid%} is set: # Reinforced Dash, Executioner's ult resistance (the shared damage-reduction variable read by 08-damage.sk)
+				if {playerDefense::%{_p}'s uuid%} > 0:
+					set {_protected} to true
+			if {_protected} is true:
+				{_bar}.setColor(JBarColor.YELLOW)
+			else:
+				{_bar}.setColor(JBarColor.WHITE)
+			{_bar}.setStyle(JBarStyle.SOLID) # the addon's own "bar style" syntax has no "solid" (only the segmented ones), and a new bar doesn't default to solid, so this sets it straight through Bukkit's BossBar API
+			set bar progress of {_bar} to {_pct}
+			if {respawning::%{_opp}'s uuid%} is set: # the opponent is dead/choosing a respawn class — they shouldn't see this bar until they're back (the ticker re-adds them on the next pass after they respawn, if the fight is still on)
+				remove {_opp} from {_bar}
+			else:
+				add {_opp} to {_bar}
+			set {combatViewer::%{_p}'s uuid%} to {_opp} # remembered so the bar can still be taken off the right player even after matchOpponent has been deleted (match end)
+			set {combatBarShown::%{_p}'s uuid%} to true
+
+# Ends a player's combat state and removes their bar from the opponent.
+function clearCombat(p: player):
+	set {_viewer} to {combatViewer::%{_p}'s uuid%}
+	if {_viewer} is set:
+		remove {_viewer} from boss bar with id "combat-%{_p}'s uuid%"
+	delete boss bar with id "combat-%{_p}'s uuid%"
+	delete {combat::%{_p}'s uuid%}
+	delete {combatViewer::%{_p}'s uuid%}
+	delete {combatBarShown::%{_p}'s uuid%}
+
+# Shows the vanilla name above a player only while they're in combat, not
+# invisible (Ghost's ultimate / the invisibility consumable), and their
+# opponent isn't blinded (Reaper's ultimate) — a blinded player can't see the
+# opponent's name, though they still see the bossbar. The name team is shared
+# by every viewer, but in a 1v1 the opponent is the only one who'd be looking
+# at it anyway, so hiding it globally while they're blind is equivalent.
+# Out of combat, invisible, or not in a match at all (lobby, bystanders) -> see below.
+# In a match + hidden = in the "nm_hidden" team; everyone else keeps their
+# normal name.
+function updateNameVisibility(p: player):
+	set {_hide} to false
+	if {inMatch::%{_p}'s uuid%} is set:
+		set {_hide} to true
+		if {combat::%{_p}'s uuid%} is set:
+			set {_hide} to false
+			if "%active potion effects of {_p}%" contains "invisibility":
+				set {_hide} to true
+			set {_opp} to {matchOpponent::%{_p}'s uuid%}
+			if {_opp} is set:
+				if "%active potion effects of {_opp}%" contains "blindness":
+					set {_hide} to true
+	if {_hide} is true:
+		if {nameHidden::%{_p}'s uuid%} isn't set:
+			nameHide({_p})
+			set {nameHidden::%{_p}'s uuid%} to true
+	else:
+		if {nameHidden::%{_p}'s uuid%} is set:
+			nameShow({_p})
+			delete {nameHidden::%{_p}'s uuid%}
+
+function nameHide(p: player): # silent — puts the player in the nametag-hidden team through the API (no chat messages)
+	set {_team} to Bukkit.getScoreboardManager().getMainScoreboard().getTeam("nm_hidden")
+	if {_team} is set:
+		{_team}.addEntry(name of {_p})
+
+function nameShow(p: player): # silent — takes the player back out of it
+	set {_team} to Bukkit.getScoreboardManager().getMainScoreboard().getTeam("nm_hidden")
+	if {_team} is set:
+		{_team}.removeEntry(name of {_p})
+
+on load: # fresh team every load — also wipes anyone left in it from before a restart (the main scoreboard persists across restarts)
+	set {_sb} to Bukkit.getScoreboardManager().getMainScoreboard()
+	set {_old} to {_sb}.getTeam("nm_hidden")
+	if {_old} is set:
+		{_old}.unregister()
+	set {_team} to {_sb}.registerNewTeam("nm_hidden")
+	{_team}.setOption(TeamOption.NAME_TAG_VISIBILITY, TeamOptionStatus.NEVER)
+	{_team}.setCanSeeFriendlyInvisibles(false) # every hidden-name player is on this ONE team, and vanilla draws a teammate's invisibility as a see-through ghost to the rest of the team — so two players in a match saw each other's invisibility as transparent instead of fully gone
+	delete {nameHidden::*}
+
+on join: # nobody should start a session with a hidden name they didn't earn
+	nameShow(player)
+	delete {nameHidden::%player's uuid%}
+
+every 5 ticks: # expires combat timers and keeps every active bar's health/level/class current
+	loop all players:
+		set {_p} to loop-player
+		if {combat::%{_p}'s uuid%} is set:
+			if {inMatch::%{_p}'s uuid%} isn't set: # match ended / force-ended / they quit
+				clearCombat({_p})
+			else if {respawning::%{_p}'s uuid%} is set:
+				clearCombat({_p})
+			else if (difference between now and {combat::%{_p}'s uuid%}) >= {config::combat::duration}:
+				clearCombat({_p})
+			else:
+				updateCombatBar({_p})
+		updateNameVisibility({_p}) # runs for everyone, in combat or not: hides on combat end, re-hides on invisibility, and releases anyone no longer in a match
+
+on quit:
+	clearCombat(player)
+	nameShow(player)
+	delete {nameHidden::%player's uuid%}
