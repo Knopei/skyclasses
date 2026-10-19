@@ -1,6 +1,7 @@
 # ============================================
 # GHOST (GD) — Ghost Dagger
 # Tactical: always available. Ultimate: unlocks at class level 1.
+# Passive "Quick Feet": speed 2 for 1.5 s on every melee hit (player or mob) instead of permanent speed 2 (see the bottom of this file + 03-resources.sk).
 # Perk 1 (level 2) "Lunge Master": reduces the tactical's mana cost.
 # Perk 2 (level 3) "Supportive Ghost": adds cleanse + regen to the ultimate.
 # "Parried Lunge" (damage reduction while dashing) was cut per design decision —
@@ -73,7 +74,7 @@ on drop of golden sword with priority low: # ULTIMATE
 			if classLevel(player, "GD") >= 3: # Perk 2 (Supportive Ghost)
 				removeBadEffects(player, "victim")
 				add potion effect of regeneration 3 without particles for 5 seconds to potion effects of player
-			add potion effect of speed 4 without particles for 5 seconds to potion effects of player
+			add potion effect of speed 3 without particles for 5 seconds to potion effects of player
 			add potion effect of invisibility without particles for 5 seconds to potion effects of player
 			setLevelTagNameVisible(player, false) # 04-leveling.sk — the nametag armor stand isn't affected by the player's own invisibility, so it needs hiding separately
 			player.setArrowsInBody(0)
@@ -167,3 +168,15 @@ on damage of player: # marks the empowered hit as "consumed" once landed
 	if "%event-damagecause%" is "attack" or "projectile":
 		if {godlike-ULT-USE::%victim's uuid%::GD} is set:
 			set {godlike-ULT-USE::%victim's uuid%::GD} to false
+
+# Quick Feet (passive) — speed 2 for 1.5 seconds whenever a Ghost lands a melee hit on anything (player or mob). The 1-second baseline
+# speed ticker in 03-resources.sk skips re-applying speed 1 until {gd-speedUntil} passes, so this isn't overwritten.
+on damage of living entity:
+	if event-damagecause is attack:
+		if attacker is a player:
+			if {class::%attacker's uuid%} is "GD":
+				if {godlike-ULT-USE::%attacker's uuid%::GD} is set: # the ultimate's Speed 3 must not be downgraded by the on-hit speed 2
+					stop
+				add potion effect of speed 2 without particles for 1.5 seconds to potion effects of attacker
+				set {gd-speedUntil::%attacker's uuid%} to now
+				add 1.5 seconds to {gd-speedUntil::%attacker's uuid%}

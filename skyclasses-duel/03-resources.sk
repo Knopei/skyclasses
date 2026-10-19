@@ -146,8 +146,16 @@ on player pickup xp:
 every 1 seconds:
 	loop all players:
 		if {top::%loop-player's uuid%} is set:
-			if {class::%loop-player's uuid%} = "GD": # Ghost passive (Quick Feet) — permanent increased speed
-				add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+			if {class::%loop-player's uuid%} = "GD": # Ghost passive (Quick Feet) — not permanent: baseline speed 1 like everyone else, with a brief speed 2 on every hit (ghost.sk sets {gd-speedUntil}). The ticker leaves the ultimate's Speed 3 alone.
+				set {_hold} to false
+				if {gd-speedUntil::%loop-player's uuid%} is set:
+					if now < {gd-speedUntil::%loop-player's uuid%}:
+						set {_hold} to true
+				if {godlike-ULT-USE::%loop-player's uuid%::GD} isn't set:
+					if {_hold} is true:
+						add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+					else:
+						add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
 			else if {class::%loop-player's uuid%} = "VBA": # Viking passive (Little Rage) — more speed the lower current health is
 				if loop-player's health <= 5:
 					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player

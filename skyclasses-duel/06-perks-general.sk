@@ -36,7 +36,7 @@ on load:
 	set {gp-display::reinforceddash} to golden helmet named "&6&lReinforced Dash" with lore "" and "&f&lPASSIVE" and "&8&oTake 40%% less damage while dashing." and ""
 	set {gp-display::spellcaster} to water bottle named "&9&lSpell Caster" with lore "" and "&f&lPASSIVE" and "&8&oUltimate mana cost reduced by 15," and "&8&oand ultimate cooldown reduced by 10%%" and "&8&o(cooldowns of 50s or more only)." and ""
 	set {gp-display::enchantedconsumables} to golden apple named "&6&lEnchanted Consumables" with lore "" and "&f&lPASSIVE" and "&8&oAll consumables heal an extra" and "&8&o+0.5 hearts of health." and ""
-	set {gp-display::nimblefeet} to rabbit foot named "&b&lNimble Feet" with lore "" and "&f&lPASSIVE" and "&8&oTake zero fall stun and gain" and "&8&ospeed 2 briefly." and ""
+	set {gp-display::nimblefeet} to rabbit foot named "&b&lNimble Feet" with lore "" and "&f&lPASSIVE" and "&8&oTake zero fall stun and gain" and "&8&ospeed 2 briefly. (Skirmishers:" and "&8&ospeed lasts 100%% longer)" and ""
 	set {gp-display::quickfuse} to fire charge named "&2&lQuick Fuse" with lore "" and "&f&lPASSIVE" and "&8&oGrenades explode quicker + deal" and "&8&obonus damage that scales with class" and "&8&olevel: jungle mobs x1.5/x2/x3/x4," and "&8&obosses x1.25/x1.5/x1.75/x2" and "&8&o(levels 0-3)." and ""
 
 	loop {gp-display::*}:
@@ -156,23 +156,25 @@ every 5 ticks:
 			if {stamina::%loop-player's uuid%::curr} >= {stamina::%loop-player's uuid%::max}: # a separate "if", not "else if" — so a tick that just topped off above still grants the speed burst immediately instead of waiting a tick; refreshed every 5 ticks so it stays live for as long as stamina stays full, and fades naturally the moment it isn't
 				add potion effect of speed 2 without particles for 0.5 seconds to potion effects of loop-player
 
-# Nimble Feet — cancels fall damage stun (visual/mechanical fall-stun cancel; the
-# actual fall-damage-to-zero rule already applies to everyone in 08-damage.sk)
+# Fall stun / landing speed — one handler for both sources so the speed is never granted twice:
+#  - Nimble Feet (general perk): no fall stun + Speed 2 for 1 second on landing.
+#  - Skirmisher category buff (level 0, 02-class-data.sk): the SAME effect, baseline for every Skirmisher class.
+#  - A Skirmisher that also selects Nimble Feet gets the speed for 100% longer (2 seconds); they don't stack beyond that.
+# (The actual fall-damage-to-zero rule already applies to everyone in 08-damage.sk.)
 on damage of player:
 	if event-damagecause is fall:
+		set {_speedSecs} to 0
 		if {general-perk::%victim's uuid%::selected} is "nimblefeet":
-			cancel event
-			add potion effect of speed 2 without particles for 1 seconds to potion effects of victim
-
-# Skirmisher category buff (level 0, 02-class-data.sk) — same fall-stun cancel
-# as Nimble Feet above, but WITHOUT the speed burst, and baseline for every
-# Skirmisher class regardless of which general perk they have selected. Stacks
-# fine with Nimble Feet itself (a Skirmisher can still select it for the speed
-# burst on top of this) since "cancel event" is harmless to repeat.
-on damage of player:
-	if event-damagecause is fall:
+			set {_speedSecs} to 1
 		if classCategory({class::%victim's uuid%}) is "SKIRMISHER":
+			if {_speedSecs} > 0:
+				set {_speedSecs} to 2 # Skirmisher + Nimble Feet: +100% duration
+			else:
+				set {_speedSecs} to 1
+		if {_speedSecs} > 0:
 			cancel event
+			set {_dur} to "%{_speedSecs}% seconds" parsed as a timespan
+			add potion effect of speed 2 without particles for {_dur} to potion effects of victim
 
 # Spell Caster — the mana-cost side is applied in 03-resources.sk's ultCHECK();
 # this is the cooldown side, called from every class file in place of reading

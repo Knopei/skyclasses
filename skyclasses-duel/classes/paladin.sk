@@ -1,28 +1,38 @@
 # ============================================
 # PALADIN (PGS) — Paladin Great Sword
-# Tactical: always available. Ultimate: unlocks at class level 1.
+# Tactical: always available. Ultimate: unlocks at class level 1; activating it also grants the
+#   tactical's absorption shield for free (same strength/duration, via paladinShield()).
 # Perk 1 (level 2) "Elder Shield": increases the tactical absorption shield's
 #   duration from 2 seconds to 3 seconds.
 # Perk 2 (level 3) "Supreme Radiance": larger ultimate radius.
 # ============================================
 
+function paladinShield(p: player): # shared by the tactical and the ultimate — absorption shield + spinning ring visual. Contains a wait, so it returns to the caller immediately and runs on its own.
+	set {_duration} to 2 seconds
+	if classLevel({_p}, "PGS") >= 2: # Perk 1 (Elder Shield)
+		set {_duration} to 3 seconds
+	add potion effect of absorption 1 without particles for {_duration} to potion effects of {_p}
+	play sound "BLOCK_ANVIL_PLACE" with volume 1 and pitch 0.25 at {_p}
+	if {pgs-shieldFx::%{_p}'s uuid%} is set: # a ring is already spinning (e.g. tactical then ultimate) — the refreshed absorption just keeps that one going
+		stop
+	set {pgs-shieldFx::%{_p}'s uuid%} to true
+	set {_shapes::circle} to a circle with radius 1.25
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 0.75)
+	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+	while (absorption amount of {_p}) > 0:
+		if {_p} isn't online:
+			stop loop
+		set {_loc} to {_p}'s location
+		add 1 to y-coord of {_loc}
+		rotate shapes {_shapes::*} by {_rotation}
+		draw shapes {_shapes::*} at {_loc}
+		wait 2 tick
+	delete {pgs-shieldFx::%{_p}'s uuid%}
+
 on right click with iron sword: # TACTICAL
 	if name of player's held item is "%{wc}%Paladin Great Sword":
 		if tacCHECK(player, {weapons::PGS::TAC-COST}) is true:
-			set {_duration} to 2 seconds
-			if classLevel(player, "PGS") >= 2: # Perk 1 (Elder Shield)
-				set {_duration} to 3 seconds
-			add potion effect of absorption 1 without particles for {_duration} to potion effects of player
-			play sound "BLOCK_ANVIL_PLACE" with volume 1 and pitch 0.25 at player
-			set {_shapes::circle} to a circle with radius 1.25
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 0.75)
-			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
-			while (absorption amount of player) > 0:
-				set {_loc} to player's location
-				add 1 to y-coord of {_loc}
-				rotate shapes {_shapes::*} by {_rotation}
-				draw shapes {_shapes::*} at {_loc}
-				wait 2 tick
+			paladinShield(player)
 
 on damage of player: # visual cue while the tactical shield is absorbing hits
 	if (absorption amount of victim) > 0:
@@ -56,6 +66,7 @@ on drop of iron sword with priority low: # ULTIMATE
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::PGS::ULT-COST}) is true:
 			set {godlike-ULT-USE::%player's uuid%::PGS} to now
+			paladinShield(player) # Holy Radiance also grants the tactical's absorption shield (same strength and duration, Elder Shield included)
 			if classLevel(player, "PGS") >= 3: # Perk 2 (Supreme Radiance)
 				set {_shapes::outer-circle} to a circle of radius 7.5
 				set {_shapes::inner-circle} to a circle of radius 7.25
@@ -93,6 +104,7 @@ on drop of iron sword with priority low: # ULTIMATE
 							updateAttacker(player, loop-entity)
 							add potion effect of slowness 1 for 1 seconds to potion effects of loop-entity
 							damage loop-entity by 0.5
+							loop-entity.setNoDamageTicks(0) # the tick would otherwise start the vanilla 10-tick invulnerability window and swallow (or shrink) hits landing right after it
 							play sound "BLOCK_ANVIL_PLACE" with volume 0.5 and pitch 3 at {_loc}
 					delete {balance-abilitySource::%player's uuid%}
 				wait 5 tick
@@ -110,3 +122,6 @@ every 3 seconds: # baseline regen while wielding the sword (part of the class pa
 		if name of loop-player's held item is "%{wc}%Paladin Great Sword":
 			if health of loop-player < 5:
 				add potion effect of regeneration 1 without particles for 3 seconds to potion effects of loop-player
+
+on load: # a reload kills any running shield ring loop, so clear its guard flags
+	delete {pgs-shieldFx::*}

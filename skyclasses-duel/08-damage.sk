@@ -16,9 +16,9 @@
 function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text, other: text) :: number:
 	# Damage Addons
 	if {class::%{_a}'s uuid%} is "MH":
-		if {_cause} = "attack":
-			if {_dmg} > 4:
-				set {_dmg} to 4
+		if {_cause} = "attack": # hammer smash — melee damage cap
+			if {_dmg} > 3.75:
+				set {_dmg} to 3.75
 	else if {class::%{_a}'s uuid%} is "VBA":
 		if {_cause} = "attack": # VBA's TAC arrow is a projectile and already tagged via metadata (viking.sk) — only ordinary melee swings need the ult-active check here
 			if {godlike-ULT-USE::%{_a}'s uuid%::VBA} is set: # 19-balance-stats.sk — the ultimate is what's scaling this melee hit, so it counts as ULT damage rather than plain melee
@@ -45,9 +45,10 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 				if (distance between {_a} and {_v}) >= 7.5:
 					set {_dmg} to {_dmg}*1.5 # bridges 0.4 up to 0.6 (0.6 / 0.4 = 1.5x)
 	else if {class::%{_a}'s uuid%} is "CB":
-		if {_cause} = "projectile": # Malicious Dart — capped at 2 damage
-			if {_dmg} > 2:
-				set {_dmg} to 2
+		if {_cause} = "projectile": # Malicious Dart — capped at 2 damage (2.25 with the level 2 Skirmisher bonus; the cap used to sit below the bonus and silently erased it)
+			set {_cbCap} to 2 + skirmisherTacBonus({_a})
+			if {_dmg} > {_cbCap}:
+				set {_dmg} to {_cbCap}
 	else if {godlike-ULT-USE::%{_a}'s uuid%::RS} is set:
 		set {_temp} to rsCHECK({_a}, {_v}, {_cause})
 		if {_temp} is set: # 19-balance-stats.sk — Soul Collector's perk bonus only fires on some of RS's melee hits (blinded victim + perk owned); only those specific hits count as ULT, not every RS swing while the ult is merely active
@@ -56,8 +57,8 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 		set {_temp} to gdCHECK({_a}, {_v})
 	else if {class::%{_a}'s uuid%} is "FH": # attacker
 		if {_cause} = "attack":
-			if {_dmg} > 3.5:
-				set {_dmg} to 3.5
+			if {_dmg} > 3:
+				set {_dmg} to 3
 	else if {class::%{_v}'s uuid%} is "FH": # victim
 		if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
 			if {_cause} = "projectile":
@@ -95,8 +96,8 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 				set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk
 				delete {godlike-ULT-USE::%{_a}'s uuid%::EA}
 				delete {ea-chargeLevel::%{_a}'s uuid%}
-			else if {ea-tacBuff::%{_a}'s uuid%} is set: # Cleaving Rush's +55% next-hit buff
-				set {_dmg} to {_dmg}*1.55
+			else if {ea-tacBuff::%{_a}'s uuid%} is set: # Cleaving Rush's +40% next-hit buff
+				set {_dmg} to {_dmg}*1.4
 				set {balance-abilitySource::%{_a}'s uuid%} to "TAC"
 				delete {ea-tacBuff::%{_a}'s uuid%}
 				eaRedstoneEffect({_v}) # executioner.sk
