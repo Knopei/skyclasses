@@ -52,6 +52,7 @@ on right click with netherite axe: # TACTICAL — Cleaving Rush
 	if name of player's held item is "%{wc}%Executioner Axe":
 		if tacCHECK(player, {weapons::EA::TAC-COST}) is true:
 			push player horizontally forward at speed 0.6 # a shorter dash than the shared stamina dash (03-resources.sk), which double-pushes at 0.5 + 0.5
+			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_player_attack_sweep" with volume 1 and pitch 0.8 at player
 			draw 15 of crit particle at player with extra 0.3
 			set {ea-tacBuff::%player's uuid%} to true
@@ -214,7 +215,12 @@ every 1 second:
 			if {_threshold} isn't set:
 				set {_threshold} to 3
 			if (health of {_v}) <= {_threshold}: # 1 heart = 1 heart here, not 2 — no *2
-				add potion effect of slowness 2 without particles for 1 seconds to potion effects of {_v} # re-applied every second for as long as the entity stays watched, so the slow never lapses
+				set {_immune} to false
+				if {_v} is a player:
+					if {cleanseImmune::%{_v}'s uuid%} is set: # Golden Melon cleanse (07-consumables.sk) is active — the mark stays registered but its slow is withheld for the cleanse's 2.5 seconds
+						set {_immune} to true
+				if {_immune} is false:
+					add potion effect of slowness 2 without particles for 1 seconds to potion effects of {_v} # re-applied every second for as long as the entity stays watched, so the slow never lapses
 
 on death of living entity: # stops watching immediately rather than waiting for the next 1-second tick to poll a dead/removed entity
 	if metadata value "eaWatching" of victim is set:

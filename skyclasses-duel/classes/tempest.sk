@@ -58,6 +58,7 @@ on projectile hit with priority low: # Air Burst impact — handles BOTH the dir
 					loop all players in radius 2 around event-location:
 						if loop-player is {_shooter}:
 							tsAirborne({_shooter})
+							perkDashReduction({_shooter}) # 06-perks-general.sk — Reinforced Dash (self-launch with Air Burst)
 							stop loop
 
 on right click with iron hoe: # TAC (Air Burst)
@@ -116,6 +117,7 @@ function tornadoPHY(loc: location, ploc: location, a: player):
 					set {tornadoMovement::%{_a}'s uuid%} to true
 					play sound "entity.breeze.wind_burst" with volume 5 and pitch 0.75 at loop-entity
 					tsAirborne({_a}) # passive (Airborne) — speed burst from Tornado's own self-push
+					perkDashReduction({_a}) # 06-perks-general.sk — Reinforced Dash (Tornado's push moves the caster)
 			else:
 				updateAttacker({_a}, loop-entity)
 				directAttack(loop-entity)

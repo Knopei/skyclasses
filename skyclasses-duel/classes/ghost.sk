@@ -1,7 +1,8 @@
 # ============================================
 # GHOST (GD) — Ghost Dagger
 # Tactical: always available. Ultimate: unlocks at class level 1.
-# Passive "Quick Feet": speed 2 for 1.5 s on every melee hit (player or mob) instead of permanent speed 2 (see the bottom of this file + 03-resources.sk).
+# Passive "Spectral Lunge": while below half max health, the tactical (Lunge) turns the Ghost invisible (potion + hidden armor + hidden nametag,
+#   same look as the ultimate) for as long as the lunge is active; it is removed when the lunge ends. Not applied while the ultimate is active.
 # Perk 1 (level 2) "Lunge Master": reduces the tactical's mana cost.
 # Perk 2 (level 3) "Supportive Ghost": adds cleanse + regen to the ultimate.
 # "Parried Lunge" (damage reduction while dashing) was cut per design decision —
@@ -26,8 +27,13 @@ on right click with golden sword: # TACTICAL
 		else:
 			set {_mana} to {weapons::GD::TAC-COST}
 		if tacCHECK(player, {_mana}) is true:
+			set {_half} to (max health of player) / 2
+			if health of player < {_half}: # Passive (Spectral Lunge) — below half health the lunge makes the Ghost invisible
+				if {godlike-ULT-USE::%player's uuid%::GD} isn't set:
+					gdTacInvisOn(player)
 			set velocity of player to vector(0, 0, 0)
 			push player forward at speed 1.1
+			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at player
 
 			set {_gd} to 2 + skirmisherTacBonus(player) # Skirmisher category buff (level 2): +0.25
@@ -55,6 +61,7 @@ on right click with golden sword: # TACTICAL
 					stop loop
 				delete {balance-abilitySource::%player's uuid%}
 				wait 5 ticks
+			gdTacInvisOff(player) # no-op unless the passive turned the Ghost invisible for this lunge
 
 on drop of golden sword with priority low: # ULTIMATE
 	if name of event-item is "%{wc}%Ghost Dagger":
@@ -74,6 +81,8 @@ on drop of golden sword with priority low: # ULTIMATE
 			if classLevel(player, "GD") >= 3: # Perk 2 (Supportive Ghost)
 				removeBadEffects(player, "victim")
 				add potion effect of regeneration 3 without particles for 5 seconds to potion effects of player
+			if {gd-tacInvis::%player's uuid%} is set: # the passive's invisibility was still up from a lunge — put the armor back first so the ult captures it properly
+				gdTacInvisOff(player)
 			add potion effect of speed 3 without particles for 5 seconds to potion effects of player
 			add potion effect of invisibility without particles for 5 seconds to potion effects of player
 			setLevelTagNameVisible(player, false) # 04-leveling.sk — the nametag armor stand isn't affected by the player's own invisibility, so it needs hiding separately
@@ -129,6 +138,52 @@ on drop of golden sword with priority low: # ULTIMATE
 			if {class::%player's uuid%} = "GD":
 				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
 
+function gdTacInvisOn(p: player): # Passive (Spectral Lunge) — same look as the ultimate: invisibility potion, hidden nametag, armor stripped (stats preserved)
+	if {gd-tacInvis::%{_p}'s uuid%} is set:
+		stop
+	set {gd-tacInvis::%{_p}'s uuid%} to true
+	add potion effect of invisibility without particles for 5 seconds to potion effects of {_p}
+	setLevelTagNameVisible({_p}, false) # 04-leveling.sk
+	set {_ta} to {total-armor::%{_p}'s uuid%}
+	set {_pa} to {projectile-armor::%{_p}'s uuid%}
+	set {gd-tacInvisArmor::%{_p}'s uuid%::1} to {_p}'s helmet
+	set {gd-tacInvisArmor::%{_p}'s uuid%::2} to {_p}'s chestplate
+	set {gd-tacInvisArmor::%{_p}'s uuid%::3} to {_p}'s leggings
+	set {gd-tacInvisArmor::%{_p}'s uuid%::4} to {_p}'s boots
+	set {_p}'s helmet to air
+	set {_p}'s chestplate to air
+	set {_p}'s leggings to air
+	set {_p}'s boots to air
+	play sound "block_fire_extinguish" with volume 2 and pitch 1 at {_p}
+	draw 15 of large_smoke at {_p} with offset vector(0.5, 0.5, 0.5) with extra 0.1
+	wait 2 ticks
+	set {total-armor::%{_p}'s uuid%} to {_ta}
+	set {projectile-armor::%{_p}'s uuid%} to {_pa}
+
+function gdTacInvisOff(p: player): # ends the passive's invisibility — safe to call when it isn't active
+	if {gd-tacInvis::%{_p}'s uuid%} isn't set:
+		stop
+	set {_uuid} to {_p}'s uuid
+	if {godlike-ULT-USE::%{_uuid}%::GD} isn't set: # if the ultimate somehow took over, leave its invisibility alone
+		remove invisibility from active potion effects of {_p}
+	if {_p} is online:
+		if health of {_p} > 0:
+			if {class::%{_uuid}%} is "GD":
+				if {_p}'s chestplate is air: # only restore into empty slots (a respawn / class re-select may already have re-equipped armor)
+					set {_p}'s helmet to {gd-tacInvisArmor::%{_uuid}%::1}
+					set {_p}'s chestplate to {gd-tacInvisArmor::%{_uuid}%::2}
+					set {_p}'s leggings to {gd-tacInvisArmor::%{_uuid}%::3}
+					set {_p}'s boots to {gd-tacInvisArmor::%{_uuid}%::4}
+				if {godlike-ULT-USE::%{_uuid}%::GD} isn't set:
+					setLevelTagNameVisible({_p}, true) # 04-leveling.sk
+				play sound "block_fire_extinguish" with volume 2 and pitch 1 at {_p}
+	delete {gd-tacInvisArmor::%{_uuid}%::*}
+	delete {gd-tacInvis::%{_uuid}%}
+
+on load:
+	delete {gd-tacInvis::*}
+	delete {gd-tacInvisArmor::*}
+
 function gdCHECK(a: living entity, v: living entity) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
 	delete {gdCHECKResult}
 	gdCHECKWorker({_a}, {_v})
@@ -168,15 +223,3 @@ on damage of player: # marks the empowered hit as "consumed" once landed
 	if "%event-damagecause%" is "attack" or "projectile":
 		if {godlike-ULT-USE::%victim's uuid%::GD} is set:
 			set {godlike-ULT-USE::%victim's uuid%::GD} to false
-
-# Quick Feet (passive) — speed 2 for 1.5 seconds whenever a Ghost lands a melee hit on anything (player or mob). The 1-second baseline
-# speed ticker in 03-resources.sk skips re-applying speed 1 until {gd-speedUntil} passes, so this isn't overwritten.
-on damage of living entity:
-	if event-damagecause is attack:
-		if attacker is a player:
-			if {class::%attacker's uuid%} is "GD":
-				if {godlike-ULT-USE::%attacker's uuid%::GD} is set: # the ultimate's Speed 3 must not be downgraded by the on-hit speed 2
-					stop
-				add potion effect of speed 2 without particles for 1.5 seconds to potion effects of attacker
-				set {gd-speedUntil::%attacker's uuid%} to now
-				add 1.5 seconds to {gd-speedUntil::%attacker's uuid%}

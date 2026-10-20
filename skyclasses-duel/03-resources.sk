@@ -142,25 +142,32 @@ on xp spawn: # prevents vanilla XP orbs from interfering with the class-level di
 on player pickup xp:
 	cancel event
 
-# ---- BASELINE MOVEMENT SPEED (also covers GD's and VBA's speed-related passives) ----
+# ---- JUGGERNAUT KNOCKBACK RESISTANCE ----
+# Every Juggernaut class (BS, FH, PGS, DS) takes 40%% less vanilla knockback; everyone else is reset to 0. Re-applied each second so it follows class swaps
+# and respawns without needing a hook in the class-select code. Only vanilla damage knockback is affected — velocity set by scripts (push / set velocity) isn't.
+import:
+	org.bukkit.attribute.Attribute
+
+every 1 seconds:
+	loop all players:
+		set {_kb} to 0.0
+		if {top::%loop-player's uuid%} is set:
+			if classCategory({class::%loop-player's uuid%}) is "JUGGERNAUT":
+				set {_kb} to 0.4
+		loop-player.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue({_kb})
+
+# ---- BASELINE MOVEMENT SPEED (Viking's Little Rage no longer gives speed, so it uses the same baseline as everyone else; TESTING: every Skirmisher class has permanent speed 2) ----
 every 1 seconds:
 	loop all players:
 		if {top::%loop-player's uuid%} is set:
-			if {class::%loop-player's uuid%} = "GD": # Ghost passive (Quick Feet) — not permanent: baseline speed 1 like everyone else, with a brief speed 2 on every hit (ghost.sk sets {gd-speedUntil}). The ticker leaves the ultimate's Speed 3 alone.
-				set {_hold} to false
-				if {gd-speedUntil::%loop-player's uuid%} is set:
-					if now < {gd-speedUntil::%loop-player's uuid%}:
-						set {_hold} to true
+			if {class::%loop-player's uuid%} = "GD": # Skirmisher (TESTING: permanent speed 2). The ticker leaves Ghost's ultimate Speed 3 alone.
 				if {godlike-ULT-USE::%loop-player's uuid%::GD} isn't set:
-					if {_hold} is true:
-						add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
-					else:
-						add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
-			else if {class::%loop-player's uuid%} = "VBA": # Viking passive (Little Rage) — more speed the lower current health is
-				if loop-player's health <= 5:
 					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
-				else:
-					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
+			else if {class::%loop-player's uuid%} = "NS": # Skirmisher (TESTING: permanent speed 2) — skipped during Dragon Blade so its Speed 3 isn't downgraded
+				if {godlike-ULT-USE::%loop-player's uuid%::NS} isn't set:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+			else if classCategory({class::%loop-player's uuid%}) is "SKIRMISHER": # RS, CB, TS — Skirmisher (TESTING: permanent speed 2)
+				add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
 			else: # baseline speed for all other classes
 				add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
 

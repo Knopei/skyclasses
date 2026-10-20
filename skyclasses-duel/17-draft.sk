@@ -59,12 +59,12 @@ function refillDraftDeck(): # rebuilds an exhausted/uninitialized deck with one 
 		add {_pick} to {draftDeck::*}
 		remove {_pick} from {_pool::*}
 
-function popFromDeck() :: text: # removes and returns one card from {draftDeck::*} — loops to the first existing entry instead of guessing an index, since Skript's list variables don't re-pack after a removal and can be left with gaps
-	loop {draftDeck::*}:
-		set {_pick} to loop-value
-		delete {draftDeck::%loop-index%}
-		return {_pick}
-	return "" # deck was empty — callers should call refillDraftDeck() first
+function popFromDeck() :: text: # removes and returns one RANDOM card from {draftDeck::*}. (It used to take the first entry in the list — but Skript's "add" fills the lowest FREE index, not the end, so classes returned by draftDeckPostGame() landed back at the front and were drawn again immediately. That made the bans alternate between the same two sets of 3 classes forever and the other classes were never banned.)
+	if {draftDeck::*} isn't set:
+		return "" # deck was empty — callers should call refillDraftDeck() first
+	set {_pick} to a random element out of {draftDeck::*}
+	remove {_pick} from {draftDeck::*}
+	return {_pick}
 
 function draftDeckPostGame(thisGameBanned: strings): # called once after a game's bans are fully drawn — returns the PREVIOUS game's held-back classes to the deck and holds back THIS game's bans instead
 	loop {draftDeckHeld::*}:

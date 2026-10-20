@@ -202,6 +202,8 @@ function startMatch(p1: player, p2: player):
 	resetPlayerLeveling({_p2})
 	resetMatchStats({_p1})
 	resetMatchStats({_p2})
+	if {testMatch} isn't set:
+		balanceRecentStart() # 19-balance-stats.sk — claims the next slot of the recent-games window (matchups + level K/D)
 
 	broadcast "&e&l%{_p1}% &7vs &e&l%{_p2}% &7— match starting!"
 
@@ -333,6 +335,7 @@ function endMatch(loser: offline player, winner: player): # loser is "offline pl
 		processEndMatchStats({_loser}, "LOSS", {_duration})
 		recordClassCarry({_winner}) # 19-balance-stats.sk — kill/boss carry rate among each player's 3 loadout classes
 		recordClassCarry({_loser})
+		balanceRecentFinish() # 19-balance-stats.sk — marks this match as a completed one in the recent-games window
 
 	# ---- MATCH SNAPSHOT (always) + HISTORY (real matches only) — 14-stats.sk ----
 	# The snapshot is taken here, before cleanup, because it reads {loadout} and the per-match stats. It's saved even for a /testduel so the end-of-match summary screen below has something to render; only a real match is pushed into the last-7 /matchhistory list.

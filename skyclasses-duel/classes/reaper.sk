@@ -48,6 +48,7 @@ function rgMovement(p: player, loc: location):
 	set velocity of {_p} to vector(0, 0, 0)
 	push {_p} upward at speed {_h}
 	push {_p} {_v} at speed {_d}
+	perkDashReduction({_p}) # 06-perks-general.sk — Reinforced Dash
 
 	play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at {_p}
 
@@ -115,7 +116,7 @@ function reaperGrappleCHECKWorker(p: player, length: number):
 		set {_loc} to {rg::%{_uuid}%::%{_x}%}
 		set {_height} to 0
 		loop 3 times:
-			loop all living entities in radius 0.5 around {_loc}:
+			loop all living entities in radius 0.75 around {_loc}: # grapple hit check for entities (was 0.5); the block check below stays at 0.5
 				if loop-entity is not a armor stand:
 					if loop-entity is not {_p}:
 						if {_height} = 0:

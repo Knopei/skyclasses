@@ -8,7 +8,7 @@
 #   file. Used to be Mighty's baseline (level 0) passive; "More Explosions!"
 #   (faster grenade recharge) used to be the level 2 perk and has been removed.
 # Perk 2 (level 3) "Fire Pit": adds a fire ring on ultimate landing.
-# Tactical damage is 12.5% of the target's max health, floored at a 1.25 base, capped at 4.
+# Tactical damage is a 1.25 base, plus 0.25 for every heart of max health the target has OVER Mighty's own max health, capped at 4.
 # "Bouncy Explode" (tactical pushes you upward when looking down) was cut per
 # design decision — the original 3-perk kit is trimmed to 2 slots.
 # ============================================
@@ -35,11 +35,12 @@ on right click with mace: # TACTICAL
 						updateAttacker(player, loop-entity)
 						directAttack(loop-entity)
 						push loop-entity upward at speed 0.75
-						set {_tacDmg} to (max health of loop-entity) * 0.125 # 12.5% of the target's max health, floored at the 1.25 base, capped at 4
-						if {_tacDmg} > 4:
+						set {_tacDmg} to 1.25 # base
+						set {_hpDiff} to (max health of loop-entity) - (max health of player) # hearts of max health the target has over Mighty (a target with the same or less adds nothing)
+						if {_hpDiff} > 0:
+							set {_tacDmg} to 1.25 + ({_hpDiff} * 0.25)
+						if {_tacDmg} > 4: # cap carried over from the old max-health version — mainly stops jungle mobs / bosses from taking huge tactical hits
 							set {_tacDmg} to 4
-						else if {_tacDmg} < 1.25:
-							set {_tacDmg} to 1.25
 						damage loop-entity by {_tacDmg}
 			delete {balance-abilitySource::%player's uuid%}
 
@@ -48,6 +49,7 @@ on drop of mace with priority low: # ULTIMATE
 		cancel event
 		if {mighty-DASH::%player's uuid%} is set: # mid-air follow-up dash, doesn't need level gating (part of an already-active ultimate)
 			push player forward at speed 3
+			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
 			delete {mighty-DASH::%player's uuid%}
 			stop
@@ -68,6 +70,7 @@ on drop of mace with priority low: # ULTIMATE
 			create a fake explosion at player
 			set velocity of player to vector(0, 0, 0)
 			push player upward at speed 2.5
+			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			wait 10 ticks
 			set {mighty-DASH::%player's uuid%} to true
 

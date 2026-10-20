@@ -241,6 +241,7 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 		killLevelTag({_p}) # 04-leveling.sk
 		teleport {_p} to {_loc} # this should be a teleport, this is not used to set player velocity to 0
 		updateNametag({_p}) # 04-leveling.sk — respawns the tag at the player's new (post-teleport) location
+		perkPhaseReduction({_p}) # 06-perks-general.sk — Reinforced Dash: half a second of damage reduction from the moment the phase is used
 		add potion effect of speed 2 without particles for 2 seconds to potion effects of {_p}
 		cbUltParticle({_oldLoc}, {_loc})
 

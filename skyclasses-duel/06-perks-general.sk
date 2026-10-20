@@ -23,9 +23,9 @@
 # ============================================
 
 on load:
-	set {gp-dmgReduction} to 40 # Reinforced Dash: %% damage reduction while dashing
+	set {gp-dmgReduction} to 40 # Reinforced Movement: %% damage reduction while airborne from a movement ability (see perkDashReduction() below)
 	set {gp-ultManaReduction} to 15 # Spell Caster: flat mana reduction on ultimates (applied in 03-resources.sk)
-	set {gp-ultCDReduction} to 10 # Spell Caster: percent cooldown reduction on ultimates whose BASE cooldown is 50 seconds or more (applied via ultCooldownFor() below, called from every class file's ultimate trigger) — e.g. 70s -> 63s, 80s -> 72s, 90s -> 81s
+	set {gp-ultCDReduction} to 15 # Spell Caster: percent cooldown reduction on ultimates (applied via ultCooldownFor() below, called from every class file's ultimate trigger). The reduction is rounded to the nearest whole second first — e.g. 70s: 10.5 -> 11s off -> 59s; 60s: 9s off -> 51s; 80s: 12s off -> 68s; 90s: 13.5 -> 14s off -> 76s
 	set {gp-staminaRecoveryBonus} to 1.5 # Stamina Recovery: flat bonus added to the base 7.5/tick regen every 5 ticks (20%% of 7.5)
 
 	# ---- Selection GUI display items (also reused by 18-class-browser.sk's read-only info page) ----
@@ -33,11 +33,11 @@ on load:
 
 	set {gp-display::healthyboy} to apple named "&c&lHealthy Boy" with lore "" and "&f&lPASSIVE" and "&8&oGain an extra heart." and ""
 	set {gp-display::staminarecovery} to feather named "&e&lStamina Recovery" with lore "" and "&f&lPASSIVE" and "&8&oStamina regenerates 20%% quicker," and "&8&oand grants speed 2 while your" and "&8&ostamina is completely full." and ""
-	set {gp-display::reinforceddash} to golden helmet named "&6&lReinforced Dash" with lore "" and "&f&lPASSIVE" and "&8&oTake 40%% less damage while dashing." and ""
-	set {gp-display::spellcaster} to water bottle named "&9&lSpell Caster" with lore "" and "&f&lPASSIVE" and "&8&oUltimate mana cost reduced by 15," and "&8&oand ultimate cooldown reduced by 10%%" and "&8&o(cooldowns of 50s or more only)." and ""
-	set {gp-display::enchantedconsumables} to golden apple named "&6&lEnchanted Consumables" with lore "" and "&f&lPASSIVE" and "&8&oAll consumables heal an extra" and "&8&o+0.5 hearts of health." and ""
+	set {gp-display::reinforceddash} to golden helmet named "&6&lReinforced Movement" with lore "" and "&f&lPASSIVE" and "&8&oTake 40%% less damage while airborne" and "&8&ofrom stamina and movement abilities." and ""
+	set {gp-display::spellcaster} to water bottle named "&9&lSpell Caster" with lore "" and "&f&lPASSIVE" and "&8&oUltimate mana cost reduced by 15," and "&8&oand ultimate cooldown reduced by 15%%." and ""
+	set {gp-display::enchantedconsumables} to golden apple named "&6&lEnchanted Consumables" with lore "" and "&f&lPASSIVE" and "&8&oAll consumables heal an extra" and "&8&o+0.75 hearts of health." and ""
 	set {gp-display::nimblefeet} to rabbit foot named "&b&lNimble Feet" with lore "" and "&f&lPASSIVE" and "&8&oTake zero fall stun and gain" and "&8&ospeed 2 briefly. (Skirmishers:" and "&8&ospeed lasts 100%% longer)" and ""
-	set {gp-display::quickfuse} to fire charge named "&2&lQuick Fuse" with lore "" and "&f&lPASSIVE" and "&8&oGrenades explode quicker + deal" and "&8&obonus damage that scales with class" and "&8&olevel: jungle mobs x1.5/x2/x3/x4," and "&8&obosses x1.25/x1.5/x1.75/x2" and "&8&o(levels 0-3)." and ""
+	set {gp-display::quickfuse} to fire charge named "&2&lQuick Fuse" with lore "" and "&f&lPASSIVE" and "&8&oGrenades explode quicker and" and "&8&orecharge 50%% faster." and ""
 
 	loop {gp-display::*}:
 		set {_v} to loop-value
@@ -131,19 +131,52 @@ on inventory close: # while respawning, closing this menu (for any reason) retur
 
 # ---- PERK EFFECTS ----
 
-# Reinforced Dash — called from 03-resources.sk's shared stamina-dash trigger
+# Reinforced Movement — take {gp-dmgReduction}%% less damage while airborne from any MOVEMENT ability (speed effects don't count). The reduction starts the moment the
+# movement happens and is removed when the player touches the ground again (after a short grace window, since an ability that launches you off the ground takes
+# a moment to actually leave it). Called from every movement source:
+#   stamina dash (03-resources.sk), Mighty ult leap + mid-air dash (mighty.sk), Executioner Cleaving Rush (executioner.sk), Ghost Lunge (ghost.sk),
+#   Reaper grapple movement (reaper.sk), Frankenstein Leap (frankenstein.sk), Tempest Air Burst self-launch + Tornado push (tempest.sk).
+# Cyberpunk's phase is instant, so it uses perkPhaseReduction() below instead (a flat half second, no airborne check).
+# Calling it again while it's already running just restarts the grace window — the one running loop keeps going until landing.
 function perkDashReduction(p: player):
 	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
-		loop 10 times:
-			add 1 to {_n}
-			if {_p} isn't on ground:
-				set {playerDefense::%{_p}'s uuid%} to {gp-dmgReduction}
-			else if {_n} < 3:
-				set {playerDefense::%{_p}'s uuid%} to {gp-dmgReduction}
-			else:
+		set {_uuid} to {_p}'s uuid
+		set {rd-hold::%{_uuid}%} to now # (re)starts the grace window in which being on the ground doesn't end the reduction yet
+		if {rd-active::%{_uuid}%} is set: # a loop from an earlier movement is already running
+			stop
+		set {rd-active::%{_uuid}%} to true
+		set {playerDefense::%{_uuid}%} to {gp-dmgReduction}
+		loop 150 times: # hard cap of 15 seconds, in case a landing is somehow never detected
+			wait 2 ticks
+			if {_p} isn't online:
 				stop loop
-			wait 5 ticks
-		delete {playerDefense::%{_p}'s uuid%}
+			if health of {_p} <= 0:
+				stop loop
+			if {respawning::%{_uuid}%} is set:
+				stop loop
+			if {_p} is on ground:
+				if difference between now and {rd-hold::%{_uuid}%} >= 8 ticks:
+					stop loop
+		if {playerDefense::%{_uuid}%} = {gp-dmgReduction}: # only clear our own value — Executioner's ult (20) manages its own and restores itself on its next tick
+			delete {playerDefense::%{_uuid}%}
+		delete {rd-active::%{_uuid}%}
+		delete {rd-hold::%{_uuid}%}
+
+# Reinforced Movement for Cyberpunk's phase (cyberpunk.sk): half a second of reduction from the moment the ultimate is used, no airborne check.
+function perkPhaseReduction(p: player):
+	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
+		set {_uuid} to {_p}'s uuid
+		if {rd-active::%{_uuid}%} is set: # an airborne-reduction loop is already covering this
+			stop
+		set {playerDefense::%{_uuid}%} to {gp-dmgReduction}
+		wait 10 ticks
+		if {rd-active::%{_uuid}%} isn't set:
+			if {playerDefense::%{_uuid}%} = {gp-dmgReduction}:
+				delete {playerDefense::%{_uuid}%}
+
+on load:
+	delete {rd-active::*}
+	delete {rd-hold::*}
 
 # Stamina Recovery — supplements the base regen tick in 03-resources.sk with a 20%% bonus, and grants a small speed burst whenever stamina is topped off
 every 5 ticks:
@@ -176,15 +209,16 @@ on damage of player:
 			set {_dur} to "%{_speedSecs}% seconds" parsed as a timespan
 			add potion effect of speed 2 without particles for {_dur} to potion effects of victim
 
-# Spell Caster — the mana-cost side is applied in 03-resources.sk's ultCHECK();
+# Spell Caster (-15 mana, -15%% cooldown) — the mana-cost side is applied in 03-resources.sk's ultCHECK();
 # this is the cooldown side, called from every class file in place of reading
 # {weapons::%CLASS%::ULT-CD} directly, e.g.:
 #   set {_ultCooldown} to ultCooldownFor(player, {weapons::PGS::ULT-CD})
 function ultCooldownFor(p: player, base: timespan) :: timespan:
 	set {_cd} to {_base}
 	if {general-perk::%{_p}'s uuid%::selected} is "spellcaster":
-		if {_cd} >= 50 seconds:
-			set {_cd} to {_cd} * ((100 - {gp-ultCDReduction}) / 100)
+		set {_secs} to {_base} / 1 second
+		set {_off} to round(({_secs} * {gp-ultCDReduction}) / 100) # 15%% of the cooldown, rounded to the nearest whole second BEFORE it is taken off (e.g. 10.5s -> 11s off)
+		set {_cd} to {_base} - ("%{_off}% seconds" parsed as a timespan)
 	return {_cd}
 
 # Enchanted Consumables and Quick Fuse are applied directly in 07-consumables.sk,

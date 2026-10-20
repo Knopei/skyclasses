@@ -14,7 +14,7 @@ on right click with nether star or diamond sword: # TACTICAL
 			loop 3 times:
 				set {_l} to location 0.5 in front of player # only used to compute the jittered aim direction below now — spawning the arrow FROM this location (instead of from the player) was the actual cause of the north-facing visual bug: the client can't render a fresh projectile's rotation correctly unless it's spawned from a living entity
 				add 1.5 to y-coord of {_l}
-				set {_y} to a random number between -3 and 3
+				set {_y} to a random number between -1.5 and 1.5
 				set {_p} to a random number between -0.5 and 0.5
 				add {_y} to yaw of {_l}
 				add {_p} to pitch of {_l}

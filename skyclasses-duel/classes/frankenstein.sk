@@ -13,6 +13,7 @@ on right click with mace: # TACTICAL
 	if name of player's held item is "%{wc}%Frankenstein Hammer":
 		if tacCHECK(player, {weapons::FH::TAC-COST}) is true:
 			push player upwards at speed 0.85
+			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
 
 			wait 5 ticks

@@ -1,9 +1,11 @@
 # ============================================
 # CONSUMABLES
 # Selected at base via GUI, no auto-give timer. Every respawn/class-select
-# always gives 2 golden apples as a fixed baseline, plus 1 of the player's
-# selected consumable on top (if they selected golden apple, that's 3 total).
-# Killing an opponent always grants a golden apple plus the killer's selected
+# gives 1 golden apple as a fixed baseline, plus 1 of the player's selected
+# consumable on top — except golden apple, which as the selected consumable is
+# worth +2 apples (3 total). Killing an opponent grants the same: a baseline
+# golden apple plus the killer's selected consumable (+2 apples if that's the
+# golden apple, 3 total per kill).
 # consumable. Also includes Mighty's grenade utility item (unrelated to the
 # selectable consumables, but lived in the same original file).
 # Cleaned from the original consume.sk — removed the 45-second auto-give loop
@@ -34,7 +36,7 @@ on load:
 	set {hi-caption} to apple of unbreaking 1 named "&c&lSelect Your Consumable" with lore "" and "&8&oChoose the item you'll spawn with on" and "&8&orespawn, and receive an extra copy of" and "&8&owhen you kill your opponent." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set {hi-display::GA} to golden apple named "&c&lGolden Apple" with lore "" and "&f&lCONSUME" and "&60/10 Doctors Recommend &7[RIGHT]" and "&8&oInstantly heal for 1 heart and heal" and "&8&o2 hearts over 5 seconds." and "" and ""
-	set {hi-display::HP} to potion of health named "&c&lHealth Potion" with lore "" and "&f&lCONSUME" and "&dMed Kit &7[RIGHT]" and "&8&oInstantly heal for 3 hearts." and "" and ""
+	set {hi-display::HP} to potion of health named "&c&lHealth Potion" with lore "" and "&f&lCONSUME" and "&dMed Kit &7[RIGHT]" and "&8&oInstantly heal 2.5 hearts, up to 4" and "&8&ohearts the lower your health is." and "" and ""
 	set {hi-display::GP} to golden carrot named "&c&lGolden Pepper" with lore "" and "&f&lCONSUME" and "&cBlazin Hot! &7[RIGHT]" and "&8&oGain extra speed for 5 seconds and" and "&8&oheal 2 hearts over 5 seconds." and "" and ""
 	set {hi-display::GM} to glistering melon slice named "&c&lGolden Melon" with lore "" and "&f&lCONSUME" and "&aCleanse &7[RIGHT]" and "&8&oRemove all negative effects and heal" and "&8&o2 hearts over 5 seconds." and "" and ""
 	set {hi-display::CF} to chorus fruit named "&c&lChorus Fruit" with lore "" and "&f&lCONSUME" and "&5Exotic Fruit &7[RIGHT]" and "&8&oGain invisibility, teleport to a random" and "&8&onearby location and heal 2.5 hearts" and "&8&oover 5 seconds." and "" and ""
@@ -127,16 +129,19 @@ function classHeals(p: player): # called on respawn and on class-select
 		loop {_p}'s inventory:
 			if name of loop-value-2 is {_name}:
 				remove loop-value-2 from inventory of {_p}
-	give {_p} 2 of {health-item::GA} # always given as a baseline, regardless of selected consumable
-	give {_p} 1 of {health-item::%{_p}'s uuid%::item} # the player's selected consumable, additional on top
+	give {_p} 1 of {health-item::GA} # baseline for everyone (was 2)
+	if name of {health-item::%{_p}'s uuid%::item} is name of {health-item::GA}:
+		give {_p} 2 of {health-item::GA} # golden apple as the selected consumable is worth +2 apples on top of the baseline (3 total)
+	else:
+		give {_p} 1 of {health-item::%{_p}'s uuid%::item} # the player's selected consumable, additional on top
 	stackItem({_p}, "all")
 
 function giveKillReward(p: player): # called from 09-death-match.sk when {_p} gets a kill
 	give {_p} 1 of {health-item::GA} # baseline — always given on every kill regardless of inventory, separate from the "no duplicate consumables" rule below
 	set {_selected} to {health-item::%{_p}'s uuid%::item}
 	set {_selectedName} to name of {_selected}
-	if {_selectedName} is name of {health-item::GA}: # selected consumable is also golden apple — give the second copy unconditionally too, so a kill always nets 2 total
-		give {_p} 1 of {health-item::GA}
+	if {_selectedName} is name of {health-item::GA}: # selected consumable is also golden apple — worth +2 apples on top of the baseline 1, unconditionally, so a kill nets 3 total
+		give {_p} 2 of {health-item::GA}
 	else:
 		set {_hasSelected} to false
 		loop {_p}'s inventory:
@@ -148,7 +153,7 @@ function giveKillReward(p: player): # called from 09-death-match.sk when {_p} ge
 
 function enchantedConsumablesCheck(p: player): # 06-perks-general.sk — Enchanted Consumables: every one of the 7 consumables below calls this right after recordConsumableUse(), so the bonus applies uniformly whether or not that item already heals on its own
 	if {general-perk::%{_p}'s uuid%::selected} is "enchantedconsumables":
-		heal {_p} by 0.5 heart
+		heal {_p} by 0.75 hearts
 
 on consume:
 	if name of event-item is "&cGolden Apple":
@@ -162,8 +167,17 @@ on consume:
 		cancel event
 		remove 1 potion of health from player
 		recordConsumableUse(player, "HP") # 19-balance-stats.sk
+		set {_hp} to health of player # read BEFORE any heal (including Enchanted Consumables') so the tier reflects the health the potion was drunk at
+		if {_hp} <= 2:
+			set {_heal} to 4
+		else if {_hp} <= 4:
+			set {_heal} to 3.5
+		else if {_hp} <= 6:
+			set {_heal} to 3
+		else:
+			set {_heal} to 2.5
 		enchantedConsumablesCheck(player)
-		heal player by 3 heart
+		heal player by {_heal} hearts
 	else if name of event-item is "&cChorus Fruit":
 		recordConsumableUse(player, "CF") # 19-balance-stats.sk
 		enchantedConsumablesCheck(player)
@@ -227,17 +241,22 @@ function cleanseEffect(p: player):
 	loop 20 times:
 		if {_p}.getFireTicks() > 0:
 			set {_cleanse} to true
+		else if {staminaPause::%{_p}'s uuid%} is set: # a stamina lockout (Basher ult, Cyberpunk dart) counts as a bad effect too
+			set {_cleanse} to true
 		else:
 			set {_potions::*} to active potion effects of {_p}
 			if {_potions::*} is set:
 				loop {_potions::*}:
 					set {_effect} to "%loop-value-2%"
-					if {_effect} contains "poison" or "wither" or "weakness" or "mining fatigue":
+					if {_effect} contains "poison" or "wither" or "weakness" or "mining fatigue" or "slowness": # blindness is intentionally NOT cleansed
 						set {_cleanse} to true
 		if {_cleanse} is true:
+			set {cleanseImmune::%{_p}'s uuid%} to true # for the whole 2.5 seconds, effects that re-apply on a timer (Executioner's Mark slow) are suppressed instead of racing the 0.25s scrub below
 			loop 10 times:
-				removeBadEffects({_p}, "victim")
+				removeBadEffects({_p}, "victim") # poison, wither, slowness, weakness, mining fatigue, fire
+				delete {staminaPause::%{_p}'s uuid%} # also lifts any stamina lockout
 				wait 5 ticks
+			delete {cleanseImmune::%{_p}'s uuid%}
 			stop loop
 		wait 5 ticks
 
@@ -278,6 +297,8 @@ function nadeCount(p: player, id: string):
 					give {_p} 1 of {nade::grenade}
 					stackItem({_p}, "all")
 		set {_cd} to 30 seconds # "More Explosions!" faster-recharge perk removed — Mighty's level 2 perk slot is now Grenade Protection (damage reduction, gated below in grenadeExplosion())
+		if {general-perk::%{_p}'s uuid%::selected} is "quickfuse": # general perk Quick Fuse: grenades recharge 50% faster (30s -> 15s)
+			set {_cd} to 15 seconds
 		wait {_cd}
 
 function grenadeExplosion(e: entity, radius: number):
@@ -299,7 +320,7 @@ on right click:
 
 		set {_fuseTicks} to 40 # 2 seconds
 		if {general-perk::%player's uuid%::selected} is "quickfuse":
-			set {_fuseTicks} to 25 # 1.25 seconds
+			set {_fuseTicks} to 25 # 1.25 seconds (Quick Fuse; the old bonus damage vs jungle mobs/bosses was removed in the rework)
 
 		make player shoot a dropped fire charge with speed 1
 		set item of last shot entity to fire charge of unbreaking 1 named "%unix timestamp of now%"
@@ -331,26 +352,6 @@ on right click:
 			if {class::%player's uuid%} is "EA": # Executioner's Mark — nade is one of the passive's four trigger sources; this bypasses dmgUpdate() entirely, so register it here directly (the global 1-second ticker in executioner.sk does the actual health check off the victim's real current health)
 				eaMarkCheck(player, loop-entity) # executioner.sk
 			set {_v} to vector between {_e} and loop-entity
-			if {general-perk::%player's uuid%::selected} is "quickfuse":
-				set {_level} to classLevel(player, {class::%player's uuid%}) # thrower's level in their currently equipped class
-				if metadata value "minibossLoc" of loop-entity is set: # jungle mobs — x1.5 (level 0) / x2 (level 1) / x3 (level 2) / x4 (level 3)
-					if {_level} >= 3:
-						set {_d} to {_d} * 4
-					else if {_level} >= 2:
-						set {_d} to {_d} * 3
-					else if {_level} >= 1:
-						set {_d} to {_d} * 2
-					else:
-						set {_d} to {_d} * 1.5
-				else if metadata value "isMajorBoss" of loop-entity is set: # boss — x1.25 (level 0) / x1.5 (level 1) / x1.75 (level 2) / x2 (level 3)
-					if {_level} >= 3:
-						set {_d} to {_d} * 2
-					else if {_level} >= 2:
-						set {_d} to {_d} * 1.75
-					else if {_level} >= 1:
-						set {_d} to {_d} * 1.5
-					else:
-						set {_d} to {_d} * 1.25
 			wait 1 tick
 			damage loop-entity by {_d}
 			set velocity of loop-entity to vector(0, 0, 0)

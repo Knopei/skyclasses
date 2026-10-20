@@ -57,7 +57,7 @@ on load:
 	# class's own kit/perks/level-ups already do, and independent of general
 	# perks (a Juggernaut can still stack Healthy Boy, a Skirmisher can still
 	# stack Nimble Feet for its speed burst on top of this).
-	#   - Juggernaut: +1 max health at level 0 (see maxHealth(), 04-leveling.sk).
+	#   - Juggernaut: +1 max health at level 0 (see maxHealth(), 04-leveling.sk) and 40%% knockback resistance (03-resources.sk's ticker).
 	#   - Striker: 5 melee attack damage at level 0 instead of the 4.5 every
 	#     other category uses — already the case for every Striker's {weapons::
 	#     %class%::AD}/{AD-PERK} value below, so no extra code was needed, just
@@ -127,10 +127,10 @@ on load:
 	set {weapons::FH::ULT-CD} to 90 seconds
 
 	set {weapons::GD::AS} to -2
-	set {weapons::GD::TAC-COST} to 55
+	set {weapons::GD::TAC-COST} to 50
 	set {weapons::GD::ULT-COST} to 60
-	set {weapons::GD::ULT-CD} to 90 seconds
-	set {perk-var::GD::alt-tac-cost} to 40 # Perk 1: reduced tactical cost (mana, not x10)
+	set {weapons::GD::ULT-CD} to 70 seconds
+	set {perk-var::GD::alt-tac-cost} to 45 # Perk 1: reduced tactical cost (mana, not x10)
 
 	set {weapons::BS::AS} to -2
 	set {weapons::BS::TAC-COST} to 30 # must be divisible by 10
@@ -139,15 +139,15 @@ on load:
 	set {weapons::BS::SS} to 6 # base shield health
 
 	set {weapons::MH::AS} to -2
-	set {weapons::MH::TAC-COST} to 55
+	set {weapons::MH::TAC-COST} to 50
 	set {weapons::MH::ULT-COST} to 60
 	set {weapons::MH::ULT-CD} to 90 seconds
 
 	set {weapons::NS::AS} to -2
 	set {weapons::NK::AS} to -2
-	set {weapons::NS::TAC-COST} to 50
+	set {weapons::NS::TAC-COST} to 45
 	set {weapons::NS::ULT-COST} to 60
-	set {weapons::NS::ULT-CD} to 80 seconds
+	set {weapons::NS::ULT-CD} to 70 seconds
 
 	set {weapons::PGS::AS} to -2
 	set {weapons::PGS::TAC-COST} to 60
@@ -158,15 +158,15 @@ on load:
 	set {weapons::RD::AS} to -2
 	set {weapons::RB::TAC-COST} to 50
 	set {weapons::RB::ULT-COST} to 60
-	set {weapons::RB::ULT-CD} to 90 seconds
+	set {weapons::RB::ULT-CD} to 80 seconds
 
 	set {weapons::RS::AS} to -2
 	set {weapons::RS::0-TAC-COST} to 20 # cost when the grapple hits nothing (miss)
-	set {weapons::RS::S-TAC-COST} to 40 # short-range grapple hit
-	set {weapons::RS::M-TAC-COST} to 50 # medium-range grapple hit
-	set {weapons::RS::L-TAC-COST} to 60 # long-range grapple hit
+	set {weapons::RS::S-TAC-COST} to 35 # short-range grapple hit
+	set {weapons::RS::M-TAC-COST} to 45 # medium-range grapple hit
+	set {weapons::RS::L-TAC-COST} to 55 # long-range grapple hit
 	set {weapons::RS::ULT-COST} to 60
-	set {weapons::RS::ULT-CD} to 70 seconds
+	set {weapons::RS::ULT-CD} to 60 seconds
 
 	set {weapons::ZT::AS} to -2
 	set {weapons::ZT::TAC-COST} to 45
@@ -182,7 +182,7 @@ on load:
 	set {weapons::TS::AS} to -2
 	set {weapons::TS::TAC-COST} to 45
 	set {weapons::TS::ULT-COST} to 60
-	set {weapons::TS::ULT-CD} to 80 seconds
+	set {weapons::TS::ULT-CD} to 60 seconds
 
 	set {weapons::EA::AS} to -2
 	set {weapons::EA::TAC-COST} to 55
@@ -250,8 +250,8 @@ on load:
 	wait 1 tick
 	set {class-display::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&e&lPASSIVE" and "&3Pitch Fork" and "&8&oExtended your trident forward dealing" and "&8&odamage in front of you, every 4th hit." and "" and "&e&lTACTICAL" and "&bEmpowered Throw &7[RIGHT] &9🧪%{weapons::ZT::TAC-COST}%" and "&8&oThrow your trident and strike lightning" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&bThunderstorm &7[DROP] &9🧪%{weapons::ZT::ULT-COST}% &f⌚%formatCooldown({weapons::ZT::ULT-CD})%" and "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance." and ""
 	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oRegenerate health while below 5 hearts." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
-	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bQuick Feet" and "&8&oBriefly gain speed 2 when you" and "&8&ohit an enemy." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis, does a large" and "&8&opercent of the enemies current health." and ""
-	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&oGain attack damage and speed the lower" and "&8&oyour health." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oLittle Rage but more furious." and ""
+	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow half health, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis, does a large" and "&8&opercent of the enemies current health." and ""
+	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&oGain attack damage the lower" and "&8&oyour health." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oLittle Rage but more furious." and ""
 	set {class-display::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&e&lPASSIVE" and "&4Life Steal" and "&8&oHeal when damaging enemies." and "" and "&e&lTACTICAL" and "&cBlood Beam &7[RIGHT] &9🧪%{weapons::DS::TAC-COST}%" and "&8&oTarget a enemy to damage and heal from." and "" and "&e&lULTIMATE" and "&4Blood Harvest &7[DROP] &9🧪%{weapons::DS::ULT-COST}% &f⌚%formatCooldown({weapons::DS::ULT-CD})%" and "&8&oAutomatically shoot Blood Beams at all" and "&8&onearby enemies." and ""
 	set {class-display::MH} to mace named "&eClass: %{class-color::MH}%&l%{class-name::MH}%" with lore "" and "&e&lPASSIVE" and "&cHammer Down" and "&8&oYour weapon allows you to do smash" and "&8&oattacks." and "" and "&e&lTACTICAL" and "&3Explode &7[RIGHT] &9🧪%{weapons::MH::TAC-COST}%" and "&8&oCreate an explosion at your location damaging" and "&8&oand knocking up any enemies nearby." and "" and "&e&lULTIMATE" and "&bMighty Leap &7[DROP] &9🧪%{weapons::MH::ULT-COST}% &f⌚%formatCooldown({weapons::MH::ULT-CD})%" and "&8&oLeap high into the air and create a big explosion" and "&8&oupon landing that damages and pushes enemies away" and "&8&o+ &7[DROP] &8&oWhile airborne to directional dash." and ""
 	set {class-display::RS} to netherite hoe named "&eClass: %{class-color::RS}%&l%{class-name::RS}%" with lore "" and "&e&lPASSIVE" and "&cReaping Slash" and "&8&oSlash around you applying wither on every" and "&8&o3rd hit." and "" and "&e&lTACTICAL" and "&eGrapple &7[RIGHT] &9🧪%{weapons::RS::S-TAC-COST}%-%{weapons::RS::L-TAC-COST}%" and "&8&oThrow a grapple that pulls you toward solid" and "&8&oobjects or pulls enemies toward you." and "" and "&e&lULTIMATE" and "&4Soul Collector &7[DROP] &9🧪%{weapons::RS::ULT-COST}% &f⌚%formatCooldown({weapons::RS::ULT-CD})%" and "&8&oSwing your scythe around you, and apply" and "&8&owithering and blindness to hit enemies." and ""
