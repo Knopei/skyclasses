@@ -88,13 +88,13 @@ on drop of netherite axe with priority low: # ULTIMATE — Death's Toll
 			set {godlike-ULT-USE::%player's uuid%::EA} to now
 			set {ea-chargeLevel::%player's uuid%} to 1 # level 1 is reached instantly (0 seconds) — hitting right away locks in the minimum tier
 			play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at player
-			loop 120 times: # 3 seconds to reach full charge (1.5s per level) + 3 more seconds of grace to land the hit = 6 seconds total
+			loop 100 times: # 2 seconds to reach full charge (1s per level) + 3 more seconds of grace to land the hit = 5 seconds total
 				if {godlike-ULT-USE::%player's uuid%::EA} isn't set: # consumed by a landed hit — see 08-damage.sk's dmgUpdate() EA branch
 					stop loop
 				add 1 to {_tick}
-				if {_tick} = 30: # 1.5 seconds — level 2
+				if {_tick} = 20: # 1 second — level 2
 					set {ea-chargeLevel::%player's uuid%} to 2
-				else if {_tick} = 60: # 3 seconds — level 3, full charge, turns red
+				else if {_tick} = 40: # 2 seconds — level 3, full charge, turns red
 					set {ea-chargeLevel::%player's uuid%} to 3
 					play sound "entity.wither.death" with volume 0.4 and pitch 2 at player
 				set {_level} to {ea-chargeLevel::%player's uuid%}
@@ -357,8 +357,8 @@ on death of player:
 	eaUltFxKill(victim)
 
 # ---- TEST COMMAND: only the ult's visuals, no cost, no cooldown, no damage, no slow ----
-# /eatest        plays the charge (level 1 -> 2 at 1.5s -> 3 at 3s), holds full charge, then slams on a "hit" 1.5s later
-# /eatest miss   same charge but lets it time out like an ult that never landed a hit (6 seconds total)
+# /eatest        plays the charge (level 1 -> 2 at 1s -> 3 at 2s), holds full charge, then slams on a "hit" 2s later
+# /eatest miss   same charge but lets it time out like an ult that never landed a hit (5 seconds total)
 # /eatest old    the original particle visual (semicircles + handle line) for comparison
 command /eatest [<text>]:
 	permission: op
@@ -374,10 +374,10 @@ command /eatest [<text>]:
 		set {_mode} to arg-1
 		set {_old} to false
 		set {_miss} to false
-		set {_max} to 100 # 1.5 seconds at full charge, then the slam
+		set {_max} to 80 # full charge at 2 seconds, then 2 more seconds held before the slam
 		if {_mode} is "miss":
 			set {_miss} to true
-			set {_max} to 120
+			set {_max} to 100
 		if {_mode} is "old":
 			set {_old} to true
 		send "&7Running the Executioner ult visuals (&f%{_mode}%&7)..."
@@ -389,9 +389,9 @@ command /eatest [<text>]:
 			if player is not online:
 				stop loop
 			add 1 to {_tick}
-			if {_tick} = 30:
+			if {_tick} = 20:
 				set {_level} to 2
-			else if {_tick} = 60:
+			else if {_tick} = 40:
 				set {_level} to 3
 				play sound "entity.wither.death" with volume 0.4 and pitch 2 at player
 			if {_old} is true:

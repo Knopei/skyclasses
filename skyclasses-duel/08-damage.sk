@@ -49,20 +49,19 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 			set {_cbCap} to 2 + skirmisherTacBonus({_a})
 			if {_dmg} > {_cbCap}:
 				set {_dmg} to {_cbCap}
-	else if {godlike-ULT-USE::%{_a}'s uuid%::RS} is set:
-		set {_temp} to rsCHECK({_a}, {_v}, {_cause})
-		if {_temp} is set: # 19-balance-stats.sk — Soul Collector's perk bonus only fires on some of RS's melee hits (blinded victim + perk owned); only those specific hits count as ULT, not every RS swing while the ult is merely active
-			set {balance-abilitySource::%{_a}'s uuid%} to "ULT"
-	else if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
-		set {_temp} to gdCHECK({_a}, {_v})
+	else if {class::%{_a}'s uuid%} is "RS": # class-checked (not just the flag) so a stale ult flag on some other class can't swallow that class's own branch further down
+		if {godlike-ULT-USE::%{_a}'s uuid%::RS} is set:
+			set {_temp} to rsCHECK({_a}, {_v}, {_cause})
+			if {_temp} is set: # 19-balance-stats.sk — Soul Collector's perk bonus only fires on some of RS's melee hits (blinded victim + perk owned); only those specific hits count as ULT, not every RS swing while the ult is merely active
+				set {balance-abilitySource::%{_a}'s uuid%} to "ULT"
+	else if {class::%{_a}'s uuid%} is "GD": # class-checked like RS above
+		if {_cause} = "attack": # ONLY a real melee hit may trigger/consume the Ghost's empowered hit. This used to run for every damage cause, and the generic non-melee branch of the damage event (fire, fall, poison, a lunge's flat damage...) resolves the attacker from the victim's "last attacker" metadata — so while the ult was up, ANY damage tick on someone the Ghost had recently hit fired the execute without a swing
+			if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
+				set {_temp} to gdCHECK({_a}, {_v})
 	else if {class::%{_a}'s uuid%} is "FH": # attacker
 		if {_cause} = "attack":
-			if {_dmg} > 3:
-				set {_dmg} to 3
-	else if {class::%{_v}'s uuid%} is "FH": # victim
-		if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
-			if {_cause} = "projectile":
-				set {_temp} to fhULT({_a}, {_v}, {_dmg})
+			if {_dmg} > 3.375: # hammer smash — melee damage cap, equal to its crit damage (0.75 x the 4.5 attack multiplier)
+				set {_dmg} to 3.375
 	else if {class::%{_a}'s uuid%} is "EA": # Executioner — executioner.sk
 		if {_cause} = "attack":
 			if {godlike-ULT-USE::%{_a}'s uuid%::EA} is set: # Death's Toll — this melee hit consumes the charge and overrides the damage, then ends the ultimate (the charge loop in executioner.sk polls this flag every tick and stops once it's gone)
@@ -102,6 +101,10 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 				delete {ea-tacBuff::%{_a}'s uuid%}
 				eaRedstoneEffect({_v}) # executioner.sk
 			eaMarkCheck({_a}, {_v}) # executioner.sk — Executioner's Mark; just registers the victim for the real-health check on the global 1-second ticker, no health math happens here
+	else if {class::%{_v}'s uuid%} is "FH": # victim — kept LAST in the chain: while it sat above the EA branch, every Executioner hit on a Frankenstein matched this branch first and the EA ult never fired
+		if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
+			if {_cause} = "projectile":
+				set {_temp} to fhULT({_a}, {_v}, {_dmg})
 	if {_temp} is set: # checks if any addon changed the damage
 		if {_temp} > 0:
 			set {_dmg} to {_dmg}+{_temp}
@@ -115,7 +118,16 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 
 	# Damage Reductions
 	if {_cause} is "lightning":
-		if {class::%{_v}'s uuid%} is "ZT":
+		if {class::%{_a}'s uuid%} is "ZT": # Zeus's lightning (tactical + ultimate): 1.5 base, +0.25 for every heart the hit target has over Zeus's own max health, capped at 3 — replaces the old flat 0.6x of vanilla lightning (which also came out to 1.5)
+			set {_over} to (max health of {_v}) - (max health of {_a})
+			if {_over} < 0:
+				set {_over} to 0
+			set {_dmg} to 1.5 + (0.25 * {_over})
+			if {_dmg} > 3:
+				set {_dmg} to 3
+			if {class::%{_v}'s uuid%} is "ZT": # Zeus-on-Zeus keeps the 60%% lightning resistance
+				set {_dmg} to {_dmg}*0.4
+		else if {class::%{_v}'s uuid%} is "ZT":
 			set {_dmg} to {_dmg}*0.4
 		else:
 			set {_dmg} to {_dmg}*0.6

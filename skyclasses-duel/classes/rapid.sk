@@ -71,8 +71,8 @@ on drop of stone sword with priority low: # ULTIMATE
 							add 0.1 to {_speed}
 						set {_l} to location 0.5 in front of player # only used to compute the jittered aim direction below now — spawning the arrow FROM this location (instead of from the player) was the actual cause of the north-facing visual bug: the client can't render a fresh projectile's rotation correctly unless it's spawned from a living entity
 						add 1.5 to y-coord of {_l}
-						set {_y} to a random number between -4 and 4
-						set {_pitch} to a random number between -4 and 4
+						set {_y} to a random number between -2.5 and 2.5
+						set {_pitch} to a random number between -2.5 and 2.5
 						add {_y} to yaw of {_l}
 						add {_pitch} to pitch of {_l}
 						shoot a arrow from player at speed {_speed} # shooting from the player (not a custom location) is what renders correctly in every direction

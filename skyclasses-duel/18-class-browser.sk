@@ -259,6 +259,14 @@ on inventory click:
 		else if index of event-slot is 50:
 			openClassDefaultGeneralPerkSelect(player, {_class})
 			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if index of event-slot is 53: # Class Statistics: flip between lifetime and the last 30 games
+			if {classStatsRecent::%player's uuid%} is set:
+				delete {classStatsRecent::%player's uuid%}
+				set slot 53 of metadata tag "class info" of player to classStatisticsIcon(player, {_class}, false)
+			else:
+				set {classStatsRecent::%player's uuid%} to true
+				set slot 53 of metadata tag "class info" of player to classStatisticsIcon(player, {_class}, true)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
 	else if event-inventory = (metadata tag "default consumable select" of player):
 		cancel event
 		set {_class} to {classInfoActiveClass::%player's uuid%}
@@ -315,6 +323,7 @@ on inventory click:
 # ============================================
 
 function openClassInfoPage(p: player, class: text):
+	delete {classStatsRecent::%{_p}'s uuid%} # the Class Statistics icon always opens on lifetime
 	set {classInfoActiveClass::%{_p}'s uuid%} to {_class} # read by the click handler + the two default-selector sub-menus below, so they always know which class they're editing
 	set metadata tag "class info" of {_p} to chest inventory with 6 rows named "Class Info"
 	set slot (integers between 0 and 8) of metadata tag "class info" of {_p} to black stained glass pane named " "
@@ -402,15 +411,43 @@ function openClassInfoPage(p: player, class: text):
 
 	# ---- bottom row: back (left corner) + consumable (48) + general perk (50) + class statistics (right corner) ----
 	set slot 45 of metadata tag "class info" of {_p} to {class-bottom::back} # 05-class-menu.sk
-	set slot 53 of metadata tag "class info" of {_p} to classStatisticsIcon({_p}, {_class})
+	set slot 53 of metadata tag "class info" of {_p} to classStatisticsIcon({_p}, {_class}, false)
 
 	open (metadata tag "class info" of {_p}) to {_p}
 
-function classStatisticsIcon(p: player, class: text) :: item:
+function classStatisticsIcon(p: player, class: text, recent: boolean) :: item: # lifetime by default; recent = totals over the player's last 30 real matches (14-stats.sk's rolling window)
 	set {_uuid} to {_p}'s uuid
-	set {_ckd} to safeDivide({class-kill::%{_uuid}%::%{_class}%}, {class-death::%{_uuid}%::%{_class}%}) # 14-stats.sk
-	set {_cwinrate} to safeDivide({class-wins::%{_uuid}%::%{_class}%}, {class-games::%{_uuid}%::%{_class}%}) * 100
-	set {_lore::*} to "" and "&7Games: &e%{class-games::%{_uuid}%::%{_class}%}% &7(&a%{class-wins::%{_uuid}%::%{_class}%}%W &7- &c%{class-losses::%{_uuid}%::%{_class}%}%L&7)" and "&7Win Rate: &e%{_cwinrate}%%%" and "&7Kills: &e%{class-kill::%{_uuid}%::%{_class}%}% &7Deaths: &e%{class-death::%{_uuid}%::%{_class}%}% &7K/D: &e%{_ckd}%" and "&7Damage: &e%formatNumber({class-damage::%{_uuid}%::%{_class}%})%" and "&7Player Damage: &e%formatNumber({class-playerdamage::%{_uuid}%::%{_class}%})%" and "&7Damage Taken: &e%formatNumber({class-damagetaken::%{_uuid}%::%{_class}%})%" and "&7Jungle Slain: &e%{class-jungleslain::%{_uuid}%::%{_class}%}% &7Bosses: &e%{class-bossesslain::%{_uuid}%::%{_class}%}%" and "&7Best Killstreak: &e%{class-ks::%{_uuid}%::%{_class}%::top}%" and ""
+	if {_recent} is true:
+		recentStatsAgg({_p}) # 14-stats.sk
+		set {_g} to bd({sv-r::%{_uuid}%::c::%{_class}%::g})
+		set {_w} to bd({sv-r::%{_uuid}%::c::%{_class}%::w})
+		set {_l} to bd({sv-r::%{_uuid}%::c::%{_class}%::l})
+		set {_k} to bd({sv-r::%{_uuid}%::c::%{_class}%::k})
+		set {_d} to bd({sv-r::%{_uuid}%::c::%{_class}%::d})
+		set {_dmg} to bd({sv-r::%{_uuid}%::c::%{_class}%::dmg})
+		set {_pd} to bd({sv-r::%{_uuid}%::c::%{_class}%::pd})
+		set {_dt} to bd({sv-r::%{_uuid}%::c::%{_class}%::dt})
+		set {_jg} to bd({sv-r::%{_uuid}%::c::%{_class}%::jg})
+		set {_bs} to bd({sv-r::%{_uuid}%::c::%{_class}%::bs})
+		set {_ks} to bd({sv-r::%{_uuid}%::c::%{_class}%::mxks})
+		set {_foot::*} to "" and "&e> Last 30 Games &7(%bd({sv-r::%{_uuid}%::n})% played)" and "&7[CLICK] Show lifetime" and ""
+	else:
+		set {_g} to bd({class-games::%{_uuid}%::%{_class}%})
+		set {_w} to bd({class-wins::%{_uuid}%::%{_class}%})
+		set {_l} to bd({class-losses::%{_uuid}%::%{_class}%})
+		set {_k} to bd({class-kill::%{_uuid}%::%{_class}%})
+		set {_d} to bd({class-death::%{_uuid}%::%{_class}%})
+		set {_dmg} to bd({class-damage::%{_uuid}%::%{_class}%})
+		set {_pd} to bd({class-playerdamage::%{_uuid}%::%{_class}%})
+		set {_dt} to bd({class-damagetaken::%{_uuid}%::%{_class}%})
+		set {_jg} to bd({class-jungleslain::%{_uuid}%::%{_class}%})
+		set {_bs} to bd({class-bossesslain::%{_uuid}%::%{_class}%})
+		set {_ks} to bd({class-ks::%{_uuid}%::%{_class}%::top})
+		set {_foot::*} to "" and "&b> Lifetime" and "&7[CLICK] Show last 30 games" and ""
+	set {_ckd} to safeDivide({_k}, {_d}) # 14-stats.sk
+	set {_cwinrate} to safeDivide({_w}, {_g}) * 100
+	set {_lore::*} to "" and "&7Games: &e%{_g}% &7(&a%{_w}%W &7- &c%{_l}%L&7)" and "&7Win Rate: &e%{_cwinrate}%%%" and "&7Kills: &e%{_k}% &7Deaths: &e%{_d}% &7K/D: &e%{_ckd}%" and "&7Damage: &e%formatNumber({_dmg})%" and "&7Player Damage: &e%formatNumber({_pd})%" and "&7Damage Taken: &e%formatNumber({_dt})%" and "&7Jungle Slain: &e%{_jg}% &7Bosses: &e%{_bs}%" and "&7Best Killstreak: &e%{_ks}%"
+	add {_foot::*} to {_lore::*}
 	return (book named "&fClass Statistics" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 # ============================================

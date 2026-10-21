@@ -156,7 +156,7 @@ every 1 seconds:
 				set {_kb} to 0.4
 		loop-player.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue({_kb})
 
-# ---- BASELINE MOVEMENT SPEED (Viking's Little Rage no longer gives speed, so it uses the same baseline as everyone else; TESTING: every Skirmisher class has permanent speed 2) ----
+# ---- BASELINE MOVEMENT SPEED (Viking's Little Rage gives speed 2 at low health; TESTING: every Skirmisher class has permanent speed 2) ----
 every 1 seconds:
 	loop all players:
 		if {top::%loop-player's uuid%} is set:
@@ -168,6 +168,11 @@ every 1 seconds:
 					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
 			else if classCategory({class::%loop-player's uuid%}) is "SKIRMISHER": # RS, CB, TS — Skirmisher (TESTING: permanent speed 2)
 				add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+			else if {class::%loop-player's uuid%} = "VBA": # Viking passive (Little Rage) — more speed the lower current health is: speed 2 at 5 hearts or below, otherwise the normal baseline
+				if loop-player's health <= 5:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+				else:
+					add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
 			else: # baseline speed for all other classes
 				add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
 

@@ -116,7 +116,7 @@ function reaperGrappleCHECKWorker(p: player, length: number):
 		set {_loc} to {rg::%{_uuid}%::%{_x}%}
 		set {_height} to 0
 		loop 3 times:
-			loop all living entities in radius 0.75 around {_loc}: # grapple hit check for entities (was 0.5); the block check below stays at 0.5
+			loop all living entities in radius 0.5 around {_loc}: # grapple hit check for entities; the block check below also uses 0.5
 				if loop-entity is not a armor stand:
 					if loop-entity is not {_p}:
 						if {_height} = 0:

@@ -142,7 +142,7 @@ function runClassDraft(p1: player, p2: player):
 		wait 2 seconds
 
 		delete {_thisGameBanned::*}
-		loop {config::draft::ban-count} times:
+		loop 2 times: # fixed at 2 random bans now (was {config::draft::ban-count}) — each player then gets one ban of their own mid-draft, see the order below
 			if draftCheckContinue({_p1}, {_p2}) is false:
 				stop
 			if {draftDeck::*} isn't set:
@@ -210,8 +210,17 @@ function runClassDraft(p1: player, p2: player):
 		stop
 
 	# ---- SNAKE DRAFT (3 picks each) — pick-waiting is fully inlined here, not a separate called function ----
-	set {_pickOrder::*} to 1, 2, 2, 1, 1, and 2
+	# Turn order: P = pick, B = ban; the number is which player (1 = won the coinflip). Picks follow a snake (1,2,2,1 ... 1,2) with both
+	# player bans in the middle, after each player has made 2 picks — player 2 bans first, player 1 gets the last ban. Player 2 gets the
+	# final pick as compensation. A /testduel has no bans, so it keeps the plain snake.
+	if {testMatch} is set:
+		set {_pickOrder::*} to 1, 2, 2, 1, 1, and 2
+		set {_pickKind::*} to "P", "P", "P", "P", "P", and "P"
+	else:
+		set {_pickOrder::*} to 1, 2, 2, 1, 2, 1, 1, and 2
+		set {_pickKind::*} to "P", "P", "P", "P", "B", "B", "P", and "P"
 	loop {_pickOrder::*}:
+		set {_turnKind} to {_pickKind::%loop-index%}
 		if draftCheckContinue({_p1}, {_p2}) is false:
 			stop
 
@@ -223,14 +232,21 @@ function runClassDraft(p1: player, p2: player):
 			set {_otherPlayer} to {_player::1}
 		set {_currUUID} to {_currPlayer}'s uuid
 
-		set name of {_asName} to "&e%{_currPlayer}% is choosing..."
+		if {_turnKind} = "B":
+			set name of {_asName} to "&c%{_currPlayer}% is banning..."
+		else:
+			set name of {_asName} to "&e%{_currPlayer}% is choosing..."
 		wait 1 second
 
 		delete {draftSelection::%{_currUUID}%}
+		set {draftMenuMode::%{_currUUID}%} to {_turnKind} # read by openDraftClassMenu() for its title / lore
 		set {draftMenuActive::%{_currUUID}%} to true # tells the "on inventory close" handler below to reopen if this closes without a pick
 		openDraftClassMenu({_currPlayer})
 
-		set {_bar} to boss bar with id "%{_currPlayer}%-draftbar" with title "&e&l%{_currPlayer}%'s PICK" with color yellow
+		if {_turnKind} = "B":
+			set {_bar} to boss bar with id "%{_currPlayer}%-draftbar" with title "&c&l%{_currPlayer}%'s BAN" with color red
+		else:
+			set {_bar} to boss bar with id "%{_currPlayer}%-draftbar" with title "&e&l%{_currPlayer}%'s PICK" with color yellow
 		set bar style of {_bar} to segmented 10
 		set bar progress of {_bar} to 100
 		add {_currPlayer} to {_bar}
@@ -258,7 +274,10 @@ function runClassDraft(p1: player, p2: player):
 				if {_available::*} is set:
 					set {draftSelection::%{_currUUID}%} to a random element out of {_available::*}
 				close {_currPlayer}'s inventory
-				send "&7Time's up — a class was picked for you." to {_currPlayer}
+				if {_turnKind} = "B":
+					send "&7Time's up — a class was banned for you." to {_currPlayer}
+				else:
+					send "&7Time's up — a class was picked for you." to {_currPlayer}
 				stop loop
 			remove {_step} from {_prog}
 			if {_prog} < 0:
@@ -272,24 +291,44 @@ function runClassDraft(p1: player, p2: player):
 		delete boss bar with id "%{_currPlayer}%-draftbar"
 
 		set {_picked} to {draftSelection::%{_currUUID}%}
-		recordDraftPick({_picked}) # 19-balance-stats.sk — draft select rate; must run before {draftPicked::*} below is updated, so "available" reflects this pick's actual pool
-		add 1 to {draftPickCount::%{_currUUID}%}
-		set {loadout::%{_currUUID}%::%{draftPickCount::%{_currUUID}%}%} to {_picked}
-		add {_picked} to {draftPicked::*}
-		delete {draftSelection::%{_currUUID}%}
+		delete {draftMenuMode::%{_currUUID}%}
+		if {_turnKind} = "B":
+			add {_picked} to {draftBanned::*}
+			delete {draftSelection::%{_currUUID}%}
+			set name of {_asName} to "&c%{_currPlayer}% banned!"
+			drop {class::weapon::%{_picked}%} at {config::lobby::draft-center-temp}
+			set {_tempName} to name of {class::weapon::%{_picked}%}
+			set {_tempItem} to last dropped item
+			set display name of {_tempItem} to {_tempName}
+			wait 1 seconds
+			teleport {_tempItem} to {_loc}
+			wait 1 second
+			set block 7 above {_loc} to anvil
+			wait 1 second
+			kill {_tempItem}
+			send title "%{_tempName}%" with subtitle "&cBANNED by %{_currPlayer}%" to {_p1} for 0 seconds with fade out 1 second
+			send title "%{_tempName}%" with subtitle "&cBANNED by %{_currPlayer}%" to {_p2} for 0 seconds with fade out 1 second
+			wait 3 seconds
+			draftCenterClear({_loc}, "anvil")
+		else:
+			recordDraftPick({_picked}) # 19-balance-stats.sk — draft select rate; must run before {draftPicked::*} below is updated, so "available" reflects this pick's actual pool
+			add 1 to {draftPickCount::%{_currUUID}%}
+			set {loadout::%{_currUUID}%::%{draftPickCount::%{_currUUID}%}%} to {_picked}
+			add {_picked} to {draftPicked::*}
+			delete {draftSelection::%{_currUUID}%}
 
-		set name of {_asName} to "&a%{_currPlayer}% picked!"
-		drop {class::weapon::%{_picked}%} at {config::lobby::draft-center-temp}
-		set {_tempName} to name of {class::weapon::%{_picked}%}
-		set {_tempItem} to last dropped item
-		set display name of {_tempItem} to {_tempName}
-		wait 1 seconds
-		teleport {_tempItem} to {_loc}
-		play sound "block.enchantment_table.use" at volume 5 at pitch 1.25 at {_loc}
-		wait 3 seconds
-		kill {_tempItem}
-		play sound "block.enchantment_table.use" at volume 5 at pitch 0.75 at {_loc}
-		wait 1 second
+			set name of {_asName} to "&a%{_currPlayer}% picked!"
+			drop {class::weapon::%{_picked}%} at {config::lobby::draft-center-temp}
+			set {_tempName} to name of {class::weapon::%{_picked}%}
+			set {_tempItem} to last dropped item
+			set display name of {_tempItem} to {_tempName}
+			wait 1 seconds
+			teleport {_tempItem} to {_loc}
+			play sound "block.enchantment_table.use" at volume 5 at pitch 1.25 at {_loc}
+			wait 3 seconds
+			kill {_tempItem}
+			play sound "block.enchantment_table.use" at volume 5 at pitch 0.75 at {_loc}
+			wait 1 second
 
 	draftCenterClear({_loc}, "clear")
 	send "&a&lDraft complete!" to {_p1}
@@ -326,7 +365,10 @@ function runClassDraft(p1: player, p2: player):
 # ---- DRAFT CLASS MENU (banned = barrier, already picked = placeholder, mystery skull = random pick) ----
 
 function openDraftClassMenu(p: player):
-	set metadata tag "draft class menu" of {_p} to chest inventory with 6 rows named "Choose Your Class"
+	if {draftMenuMode::%{_p}'s uuid%} = "B":
+		set metadata tag "draft class menu" of {_p} to chest inventory with 6 rows named "Ban a Class"
+	else:
+		set metadata tag "draft class menu" of {_p} to chest inventory with 6 rows named "Choose Your Class"
 	set slot (integers between 0 and 8) of metadata tag "draft class menu" of {_p} to white stained glass pane named " "
 	set slot (integers between 9 and 35) of metadata tag "draft class menu" of {_p} to light gray stained glass pane named " " # 3 rows, one per category — same grouping as the class browser (18-class-browser.sk)
 	set slot (integers between 36 and 53) of metadata tag "draft class menu" of {_p} to white stained glass pane named " "
@@ -336,7 +378,7 @@ function openDraftClassMenu(p: player):
 	placeDraftCategoryRow({_p}, 18, "JUGGERNAUT")
 	placeDraftCategoryRow({_p}, 27, "SKIRMISHER")
 
-	set slot 49 of metadata tag "draft class menu" of {_p} to ({mysterySkull} named "&d&lRandom Class" with lore "" and "&7Click to instantly pick a random" and "&7available class." and "")
+	set slot 49 of metadata tag "draft class menu" of {_p} to ({mysterySkull} named "&d&lRandom Class" with lore "" and "&7Click to instantly pick a random" and "&7available class (or ban one, on a ban turn)." and "")
 
 	open (metadata tag "draft class menu" of {_p}) to {_p}
 
@@ -352,6 +394,8 @@ function placeDraftCategoryRow(p: player, rowStart: number, category: text): # f
 		else:
 			set {_lore::*} to classRatingLore({_p}, {_class}) # 18-class-browser.sk — same difficulty/stat/mastery lore as the class browser, but no "[CLICK] Info" line here since clicking picks the class instead of opening an info page
 			add "" to {_lore::*}
+			if {draftMenuMode::%{_p}'s uuid%} = "B":
+				add "&c&lCLICK TO BAN" and "" to {_lore::*}
 			set slot {_slot} of metadata tag "draft class menu" of {_p} to ({class::weapon::%{_class}%} named "&eClass: %{class-color::%{_class}%}%&l%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 		set {draftMenuSlotClass::%{_p}'s uuid%::%{_slot}%} to {_class}
 		add 1 to {_slot}

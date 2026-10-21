@@ -1,8 +1,8 @@
 # ============================================
 # TEMPEST (TS) — Tempest Scythe
-# Tactical: always available (Air Burst — shoots a wind charge; 1.25 direct
+# Tactical: always available (Air Burst — shoots a wind charge; 2 direct
 #   damage to whatever it hits, plus a separate AOE splash on impact that
-#   does 1 damage and 3s of Slowness 1 to mobs/players in a 2.5 block
+#   does 1.25 damage and 3s of Slowness 1 to mobs/players in a 2.5 block
 #   radius). Ultimate: unlocks at class level 1 (Tornado — a directional
 #   tornado that pushes and damages enemies in its path).
 # Passive: Airborne — briefly gain speed after using Air Burst ON YOURSELF
@@ -43,7 +43,7 @@ on projectile hit with priority low: # Air Burst impact — handles BOTH the dir
 						updateAttacker({_shooter}, {_direct})
 						directAttack({_direct})
 						set {balance-abilitySource::%{_shooter}'s uuid%} to "TAC" # 19-balance-stats.sk — matches how 08-damage.sk's own generic projectile handler tags TAC/ULT before calling dmgUpdate()
-						damage {_direct} by (1.25 + skirmisherTacBonus({_shooter})) # raw ability damage only — "damage X by Y" fires its own fresh damage event, which 08-damage.sk's generic handler catches and runs through dmgUpdate() itself (same as the AOE splash's flat "damage loop-entity by 1" below). Calling dmgUpdate() here too double-counted it: showDMG() fired twice, showing the hit number twice for one hit
+						damage {_direct} by (2 + skirmisherTacBonus({_shooter})) # raw ability damage only — "damage X by Y" fires its own fresh damage event, which 08-damage.sk's generic handler catches and runs through dmgUpdate() itself (same as the AOE splash's flat "damage loop-entity by 1" below). Calling dmgUpdate() here too double-counted it: showDMG() fired twice, showing the hit number twice for one hit
 						if {_shooter} is a player: # a direct hit also triggers the passive (Airborne) for the shooter
 							tsAirborne({_shooter})
 			loop all living entities in radius 2.5 around event-location: # AOE splash — 1 damage + 3s Slowness 1 to everyone else in range. The direct-hit target is excluded so it gets ONLY the direct-hit effect, not both (per the original split: direct hit = damage+passive to shooter, splash = damage+slow to victims)
@@ -51,7 +51,7 @@ on projectile hit with priority low: # Air Burst impact — handles BOTH the dir
 					if loop-entity is not {_shooter}:
 						if loop-entity is not {_direct}:
 							updateAttacker({_shooter}, loop-entity)
-							damage loop-entity by (1 + skirmisherTacBonus({_shooter}))
+							damage loop-entity by (1.25 + skirmisherTacBonus({_shooter}))
 							add potion effect of slowness 1 for 3 seconds to potion effects of loop-entity
 			if {_direct} isn't set: # self-launch case (shooting it at the ground near yourself) — only checked when nothing was hit directly, since a direct hit on another entity already triggered the passive above
 				if {_shooter} is a player:

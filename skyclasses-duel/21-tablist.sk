@@ -1,0 +1,37 @@
+# ============================================
+# MATCH TAB LIST (TAB menu during matches)
+# While a player is in a match, their entry in the TAB list shows their current class + mastery rating (class name and mastery score, coloured by rank), then the general perk and health item they currently have equipped. Refreshed every second so a class
+# swap on respawn shows up right away. Once the match is over (or before one starts) the entry goes back to the plain player name.
+#
+#   Jacky | Viking (487) | Stamina Recovery | Golden Apple
+# ============================================
+
+function tabListName(p: player) :: text:
+	set {_u} to {_p}'s uuid
+	set {_perkName} to "&7No Perk"
+	set {_perk} to {general-perk::%{_u}%::selected} # 06-perks-general.sk — the perk effective for the class currently equipped
+	if {_perk} is set:
+		if {gp-display::%{_perk}%} is set:
+			set {_perkName} to name of {gp-display::%{_perk}%}
+	set {_itemName} to "&7No Item"
+	set {_item} to {health-item::%{_u}%::item} # 07-consumables.sk — likewise per-class resolved by classSelect()
+	if {_item} is set:
+		set {_itemName} to name of {_item}
+	set {_class} to {class::%{_u}%}
+	set {_color} to getMasteryColor({_p}, {_class}) # 13-mastery.sk — colour of the player's current rank on this class
+	set {_rating} to round(calcMasteryScore({_p}, {_class})) # the numeric mastery score the rank is based on
+	return "&f%{_p}% &8| %{_color}%%{class-name::%{_class}%}% (%{_rating}%) &8| %{_perkName}% &8| %{_itemName}%"
+
+every 1 seconds:
+	loop all players:
+		set {_u} to loop-player's uuid
+		if {inMatch::%{_u}%} is set:
+			if {class::%{_u}%} is set:
+				set player list name of loop-player to tabListName(loop-player)
+				set {tabCustom::%{_u}%} to true
+		else if {tabCustom::%{_u}%} is set: # match over — back to the normal name
+			set player list name of loop-player to name of loop-player
+			delete {tabCustom::%{_u}%}
+
+on join:
+	delete {tabCustom::%player's uuid%}

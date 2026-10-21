@@ -67,6 +67,7 @@ on death of player: # ----------------------------------------------------------
 			add 1 to {classPvpKills::%{_attacker}'s uuid%::%{_aClass}%} # 04-leveling.sk — in-match player-kills-only count, shown in the class menu
 			add 1 to {ks::%{_attacker}'s uuid%::count}
 			add 1 to {class-ks::%{_attacker}'s uuid%::%{_aClass}%::count}
+			trackKillstreak({_attacker}, {_aClass}) # 14-stats.sk — best streak reached this match, for the last-30-games window
 			add 1 to {matchkills::%{_attacker}'s uuid%}
 			add 1 to {matchkills::%{_attacker}'s uuid%::%{_aClass}%}
 			recordPvpKill({_attacker}, {_aClass}, {_vClass}) # 19-balance-stats.sk — matchup win rate, time-to-first-kill, perk/consumable K/D (this function itself no-ops during a test duel)

@@ -93,6 +93,7 @@ function forceEndMatchWorker(reason: text):
 	delete {majorbosses-claimed}
 	delete {matchStartTime}
 	delete {firstBloodClaimed}
+	delete {arenaLive}
 	draftCenterClear({config::lobby::draft-center}, "clear") # 17-draft.sk — removes any leftover draft armor stands/dropped items
 	delete {draftBanned::*}
 	delete {draftPicked::*}
@@ -107,6 +108,7 @@ function forceEndMatchWorker(reason: text):
 			remove {_p} from boss bar with id "%{_p}%-draftbar" # harmless if that bar doesn't exist for this player
 			delete boss bar with id "%{_p}%-draftbar"
 		delete {inMatch::%{_p}'s uuid%}
+		delete {disconnectAt::%{_p}'s uuid%}
 		delete {matchOpponent::%{_p}'s uuid%}
 		delete {playerSpawn::%{_p}'s uuid%}
 		delete {lifepool::%{_p}'s uuid%}
@@ -150,26 +152,71 @@ command /unstuck <player>:
 		send "&aYou've been unstuck." to {_target}
 		send "&aUnstuck %{_target}%." to player
 
-# ---- DISCONNECT HANDLING ----
-# Before first blood (including the whole pregame draft), a disconnect just
-# cancels the match with no stats recorded — forceEndMatch() already covers
-# the draft phase; this covers the same rule once players are in the arena
-# but nothing meaningful has happened yet. After first blood, a disconnect
-# is a real forfeit: the player still online gets a win, the one who left
-# gets a loss, both fully recorded via the normal endMatch() pipeline.
+# ---- DISCONNECT HANDLING + SURRENDER ----
+# Leaving no longer ends the match on the spot. Once the arena is live, a player who disconnects has 30 seconds to rejoin; if they
+# don't, it counts as a surrender BY THEM. Before first blood a surrender (or a no-show) is just a cancelled match with no stats
+# recorded, same as it always was; after first blood it is a real loss for the one who left. During the pregame draft there is
+# still no grace period — the draft can't continue with a player missing, so a disconnect there cancels the match (no stats).
+# A rejoining player is put through the normal respawn flow (frozen at the deathmode spawn, pick a class from their loadout), without losing a life.
+
 on quit:
 	if {inMatch::%player's uuid%} is set:
-		set {_opponent} to {matchOpponent::%player's uuid%}
-		if {firstBloodClaimed} is set:
-			if {_opponent} is set:
-				if {_opponent} is online:
-					endMatch(player, {_opponent}) # player (disconnecting) = loser, opponent = winner
-				else:
-					forceEndMatch("Both players disconnected — match cancelled.")
-			else:
-				forceEndMatch("Your opponent disconnected.")
-		else:
+		set {_p} to player
+		set {_u} to player's uuid
+		set {_opp} to {matchOpponent::%{_u}%}
+		if {arenaLive} isn't set: # draft / pre-arena phase
 			forceEndMatch("Your opponent disconnected before the match properly began. No stats were recorded.")
+			stop
+		set {_when} to now
+		set {disconnectAt::%{_u}%} to {_when}
+		if {_opp} is online:
+			send "&e&l%{_p}% &edisconnected. &7They have 30 seconds to rejoin, or it counts as a surrender." to {_opp}
+		wait 30 seconds
+		if {disconnectAt::%{_u}%} is {_when}: # still the same absence — they never rejoined
+			if {inMatch::%{_u}%} is set: # the match could have ended some other way meanwhile
+				delete {disconnectAt::%{_u}%}
+				if {firstBloodClaimed} is set:
+					if {_opp} is online:
+						broadcast "&c&l%{_p}% &cdid not rejoin in time — counted as a surrender."
+						endMatch({_p}, {_opp}) # the one who left = loser, opponent = winner
+					else if {disconnectAt::%{_opp}'s uuid%} is set:
+						stop # the opponent is also in their own 30 second window — their timer decides
+					else:
+						forceEndMatch("Both players disconnected — match cancelled.")
+				else:
+					forceEndMatch("A player disconnected before first blood — match cancelled. No stats were recorded.")
+
+on join:
+	if {inMatch::%player's uuid%} is set:
+		if {disconnectAt::%player's uuid%} is set:
+			delete {disconnectAt::%player's uuid%}
+			set {_opp} to {matchOpponent::%player's uuid%}
+			if {_opp} is online:
+				send "&a&l%player% &arejoined the match." to {_opp}
+			wait 1 second # let every other join handler finish first (gamemode, health bar, etc.)
+			if {inMatch::%player's uuid%} is set:
+				send "&aWelcome back! &7Choose a class to jump back in." to player
+				handleRespawnFlow(player) # 09-death-match.sk — same flow as after a death, but no life is lost
+
+command /forfeit:
+	aliases: ff, surrender
+	description: Surrender the current match
+	trigger:
+		if {inMatch::%player's uuid%} isn't set:
+			send "&cYou're not in a match."
+			stop
+		set {_opp} to {matchOpponent::%player's uuid%}
+		if {arenaLive} isn't set:
+			forceEndMatch("%player% surrendered during class selection — match cancelled. No stats were recorded.")
+			stop
+		if {firstBloodClaimed} isn't set:
+			forceEndMatch("%player% surrendered before first blood — match cancelled. No stats were recorded.")
+			stop
+		if {_opp} is online:
+			broadcast "&c&l%player% &chas surrendered!"
+			endMatch(player, {_opp})
+		else:
+			forceEndMatch("The match was cancelled.")
 
 command /endduel:
 	permission: op
@@ -191,6 +238,8 @@ function resetMatchStats(p: player):
 	set {matchobjectives::%{_p}'s uuid%} to 0
 	delete {hadLead::%{_p}'s uuid%}
 	delete {wasBehind::%{_p}'s uuid%}
+	set {matchtopks::%{_p}'s uuid%} to 0 # 14-stats.sk — best killstreak reached this match
+	delete {matchtopks::%{_p}'s uuid%::*}
 
 function startMatch(p1: player, p2: player):
 	set {inMatch::%{_p1}'s uuid%} to true
@@ -223,6 +272,10 @@ function enterArena(p1: player, p2: player): # called by 17-draft.sk once the dr
 	set {playerSpawn::%{_p1}'s uuid%} to {config::arena::spawn-a}
 	set {playerSpawn::%{_p2}'s uuid%} to {config::arena::spawn-b}
 
+	if {testMatch} isn't set:
+		playerRecentSnapshot({_p1}) # 14-stats.sk — baselines for the per-player last-30-games window (loadout is known now)
+		playerRecentSnapshot({_p2})
+	set {arenaLive} to true # the draft is over and the match is really underway — /forfeit and the disconnect grace period only apply from here
 	set {majorbosses-claimed} to 0 # global per-match objective-stakes counter — 04-leveling.sk reads this
 	set {matchStartTime} to unix timestamp of now # 04-leveling.sk reads this for Early/Mid/Late-Game XP; also used for match duration
 	delete {firstBloodClaimed} # 09-death-match.sk checks this
@@ -275,8 +328,8 @@ function processEndMatchStats(p: offline player, result: text, duration: number)
 		set {_class} to {loadout::%{_uuid}%::%loop-value%}
 		if {_class} is set:
 			add 1 to {class-games::%{_uuid}%::%{_class}%}
-			add 1 to {balance-class-games::%{_class}%} # 19-balance-stats.sk — global (all-players) denominator for carry rate + average tac/ult usage per game
-			recordClassDefaultPicks({_p}, {_class}) # 19-balance-stats.sk — consumable/perk pick rate
+			balAdd("class-games", {_class}, 1) # 19-balance-stats.sk — global (all-players) denominator for carry rate + average tac/ult usage per game
+			recordClassDefaultPicks({_p}, {_class}, {_result}) # 19-balance-stats.sk — consumable/perk pick rate
 			add {_duration} to {class-duration-total::%{_uuid}%::%{_class}%}
 			if {_result} = "WIN":
 				set {_livesOnClass} to {matchkills::%{_uuid}%::%{_class}%} + {matchdeaths::%{_uuid}%::%{_class}%}
@@ -331,6 +384,8 @@ function endMatch(loser: offline player, winner: player): # loser is "offline pl
 	# them below.
 
 	if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch any persistent/balance stat, including match history
+		playerRecentRecord({_winner}, "WIN", {_duration}) # 14-stats.sk — must run before processEndMatchStats(), which clears hadLead/wasBehind
+		playerRecentRecord({_loser}, "LOSS", {_duration})
 		processEndMatchStats({_winner}, "WIN", {_duration})
 		processEndMatchStats({_loser}, "LOSS", {_duration})
 		recordClassCarry({_winner}) # 19-balance-stats.sk — kill/boss carry rate among each player's 3 loadout classes
@@ -359,6 +414,9 @@ function endMatch(loser: offline player, winner: player): # loser is "offline pl
 
 	delete {inMatch::%{_winner}'s uuid%}
 	delete {inMatch::%{_loser}'s uuid%}
+	delete {arenaLive}
+	delete {disconnectAt::%{_winner}'s uuid%}
+	delete {disconnectAt::%{_loser}'s uuid%}
 	delete {matchOpponent::%{_winner}'s uuid%}
 	delete {matchOpponent::%{_loser}'s uuid%}
 	delete {respawning::%{_winner}'s uuid%} # in case the match ended while either was mid-respawn-choice

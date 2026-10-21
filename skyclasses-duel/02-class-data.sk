@@ -92,7 +92,8 @@ on load:
 	set {category-name::JUGGERNAUT} to "Juggernaut"
 	set {category-color::JUGGERNAUT} to "&6"
 	set {category-desc::JUGGERNAUT::*} to "&8&oTough classes that rely on their" and "&8&odurability to stay in fights and" and "&8&ooutlast enemies."
-	set {category-buffdesc::JUGGERNAUT} to "&8&o+1 Max Health"
+	set {category-buffdesc::JUGGERNAUT} to "&8&o+1 Max Health and 40%% knockback"
+	set {category-buffdesc2::JUGGERNAUT} to "&8&oresistance."
 	set {category-icon::JUGGERNAUT} to netherite chestplate
 
 	set {category-name::STRIKER} to "Striker"
@@ -104,8 +105,8 @@ on load:
 	set {category-name::SKIRMISHER} to "Skirmisher"
 	set {category-color::SKIRMISHER} to "&b"
 	set {category-desc::SKIRMISHER::*} to "&8&oFast and mobile classes that use" and "&8&omovement and positioning to gain" and "&8&oan advantage."
-	set {category-buffdesc::SKIRMISHER} to "&8&oTake zero fall stun and"
-	set {category-buffdesc2::SKIRMISHER} to "&8&ogain speed 2 briefly." # optional second lore line (only Skirmisher needs one)
+	set {category-buffdesc::SKIRMISHER} to "&8&oPermanent speed 2 and take"
+	set {category-buffdesc2::SKIRMISHER} to "&8&ozero fall stun." # optional second lore line (only Skirmisher needs one)
 	set {category-buffdesc-l2::SKIRMISHER} to "&8&oDirect Hit Tactical Damage: +0.25"
 	set {category-icon::SKIRMISHER} to netherite boots
 
@@ -119,7 +120,7 @@ on load:
 	set {weapons::DS::AS} to -2
 	set {weapons::DS::TAC-COST} to 45
 	set {weapons::DS::ULT-COST} to 55
-	set {weapons::DS::ULT-CD} to 70 seconds
+	set {weapons::DS::ULT-CD} to 90 seconds
 
 	set {weapons::FH::AS} to -2
 	set {weapons::FH::TAC-COST} to 50
@@ -196,7 +197,7 @@ on load:
 	set {weapons::VBA::AD-PERK} to 4 # alt multiplier used by Perk 1's health-scaling formula
 
 	set {weapons::DS::AD} to 4.5
-	set {weapons::FH::AD} to 4
+	set {weapons::FH::AD} to 4.5 # same as Basher
 	set {weapons::GD::AD} to 4.5
 	set {weapons::BS::AD} to 4.5
 	set {weapons::MH::AD} to 5
@@ -251,7 +252,7 @@ on load:
 	set {class-display::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&e&lPASSIVE" and "&3Pitch Fork" and "&8&oExtended your trident forward dealing" and "&8&odamage in front of you, every 4th hit." and "" and "&e&lTACTICAL" and "&bEmpowered Throw &7[RIGHT] &9🧪%{weapons::ZT::TAC-COST}%" and "&8&oThrow your trident and strike lightning" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&bThunderstorm &7[DROP] &9🧪%{weapons::ZT::ULT-COST}% &f⌚%formatCooldown({weapons::ZT::ULT-CD})%" and "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance." and ""
 	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oRegenerate health while below 5 hearts." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
 	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow half health, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis, does a large" and "&8&opercent of the enemies current health." and ""
-	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&oGain attack damage the lower" and "&8&oyour health." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oLittle Rage but more furious." and ""
+	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&oGain attack damage and speed the lower" and "&8&oyour health." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oLittle Rage but more furious." and ""
 	set {class-display::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&e&lPASSIVE" and "&4Life Steal" and "&8&oHeal when damaging enemies." and "" and "&e&lTACTICAL" and "&cBlood Beam &7[RIGHT] &9🧪%{weapons::DS::TAC-COST}%" and "&8&oTarget a enemy to damage and heal from." and "" and "&e&lULTIMATE" and "&4Blood Harvest &7[DROP] &9🧪%{weapons::DS::ULT-COST}% &f⌚%formatCooldown({weapons::DS::ULT-CD})%" and "&8&oAutomatically shoot Blood Beams at all" and "&8&onearby enemies." and ""
 	set {class-display::MH} to mace named "&eClass: %{class-color::MH}%&l%{class-name::MH}%" with lore "" and "&e&lPASSIVE" and "&cHammer Down" and "&8&oYour weapon allows you to do smash" and "&8&oattacks." and "" and "&e&lTACTICAL" and "&3Explode &7[RIGHT] &9🧪%{weapons::MH::TAC-COST}%" and "&8&oCreate an explosion at your location damaging" and "&8&oand knocking up any enemies nearby." and "" and "&e&lULTIMATE" and "&bMighty Leap &7[DROP] &9🧪%{weapons::MH::ULT-COST}% &f⌚%formatCooldown({weapons::MH::ULT-CD})%" and "&8&oLeap high into the air and create a big explosion" and "&8&oupon landing that damages and pushes enemies away" and "&8&o+ &7[DROP] &8&oWhile airborne to directional dash." and ""
 	set {class-display::RS} to netherite hoe named "&eClass: %{class-color::RS}%&l%{class-name::RS}%" with lore "" and "&e&lPASSIVE" and "&cReaping Slash" and "&8&oSlash around you applying wither on every" and "&8&o3rd hit." and "" and "&e&lTACTICAL" and "&eGrapple &7[RIGHT] &9🧪%{weapons::RS::S-TAC-COST}%-%{weapons::RS::L-TAC-COST}%" and "&8&oThrow a grapple that pulls you toward solid" and "&8&oobjects or pulls enemies toward you." and "" and "&e&lULTIMATE" and "&4Soul Collector &7[DROP] &9🧪%{weapons::RS::ULT-COST}% &f⌚%formatCooldown({weapons::RS::ULT-CD})%" and "&8&oSwing your scythe around you, and apply" and "&8&owithering and blindness to hit enemies." and ""

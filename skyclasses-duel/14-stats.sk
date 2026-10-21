@@ -78,6 +78,9 @@ function initializePlayerStats(p: offline player): # offline player, so /resetst
 		set {class-behindwingames::%{_uuid}%::%{_c}%} to 0
 
 	delete {matchhistory::%{_uuid}%::*}
+	delete {pr::%{_uuid}%::*} # last-30-games rolling window (see PER-PLAYER RECENT GAMES below)
+	delete {pr-ptr::%{_uuid}%}
+	delete {prb::%{_uuid}%::*}
 
 function backfillClassStats(p: offline player, class: text): # fills in only the MISSING per-class stat keys for one class, defaulted to 0 — unlike initializePlayerStats() (a full, unconditional reset), this never touches a key that's already set. Exists so a player who joined before a new class (e.g. Cyberpunk/Tempest) existed doesn't show blank/broken values on that class's Class Info page — their other classes' real stats are left completely untouched
 	set {_uuid} to {_p}'s uuid
@@ -135,8 +138,329 @@ function formatDuration(seconds: number) :: string: # e.g. 754 -> "12m 34s"
 	set {_s} to mod({_seconds}, 60)
 	return "%{_m}%m %{_s}%s"
 
+# ---- PER-PLAYER RECENT GAMES (last 30 real matches, powers the click-to-toggle on /stats icons and the Class Statistics icon) ----
+# A ring buffer of 30 slots per player: {pr::<uuid>::<slot>::<field>} for the match's overall numbers and {pr::<uuid>::<slot>::c::<CLASS>::<field>} for each of
+# the 3 loadout classes. Most lifetime counters only exist as running totals, so playerRecentSnapshot() (called once the draft is done) stores a baseline
+# {prb::...} and playerRecentRecord() (called from endMatch(), real matches only) writes the DIFFERENCE for the match into the next slot. A match that is
+# force-ended or is a /testduel never reaches playerRecentRecord(), so it is simply not in the window.
+#   overall fields : games wins losses dur durwin durloss kills deaths mxks fb dmg pdmg dtaken jungle bosses steals xe xm xl pge pgm pgl lead leadloss behindwin mxdmg mxpdmg mxcs mxkd
+#   per-class      : g w l k d dmg pd dt jg bs mxks
+# Fields starting with "mx" are best-of values (aggregated as a MAX over the window), everything else is summed.
+
+function trackKillstreak(p: player, class: text): # called from 09-death-match.sk right after a kill increments the streak — remembers the best streak reached THIS match (overall + per class)
+	set {_cur} to {ks::%{_p}'s uuid%::count}
+	if {_cur} > bd({matchtopks::%{_p}'s uuid%}):
+		set {matchtopks::%{_p}'s uuid%} to {_cur}
+	set {_cc} to {class-ks::%{_p}'s uuid%::%{_class}%::count}
+	if {_cc} > bd({matchtopks::%{_p}'s uuid%::%{_class}%}):
+		set {matchtopks::%{_p}'s uuid%::%{_class}%} to {_cc}
+
+function playerRecentSnapshot(p: player): # called from 10-match-manager.sk's enterArena() for real matches, once the loadout is known
+	set {_u} to {_p}'s uuid
+	delete {prb::%{_u}%::*}
+	set {prb::%{_u}%::dtaken} to bd({damagetaken::%{_u}%})
+	set {prb::%{_u}%::bosses} to bd({bossesslain::%{_u}%})
+	set {prb::%{_u}%::steals} to bd({bosssteals::%{_u}%})
+	set {prb::%{_u}%::fb} to bd({firstbloods::%{_u}%})
+	set {prb::%{_u}%::xe} to bd({xpearly::%{_u}%})
+	set {prb::%{_u}%::xm} to bd({xpmid::%{_u}%})
+	set {prb::%{_u}%::xl} to bd({xplate::%{_u}%})
+	loop integers between 1 and 3:
+		set {_c} to {loadout::%{_u}%::%loop-value%}
+		if {_c} is set:
+			set {prb::%{_u}%::c::%{_c}%::pd} to bd({class-playerdamage::%{_u}%::%{_c}%})
+			set {prb::%{_u}%::c::%{_c}%::dt} to bd({class-damagetaken::%{_u}%::%{_c}%})
+			set {prb::%{_u}%::c::%{_c}%::jg} to bd({class-jungleslain::%{_u}%::%{_c}%})
+			set {prb::%{_u}%::c::%{_c}%::bs} to bd({class-bossesslain::%{_u}%::%{_c}%})
+	set {prb::%{_u}%::ok} to true
+
+function playerRecentRecord(p: offline player, result: text, duration: number): # called from endMatch() BEFORE processEndMatchStats() (which clears hadLead/wasBehind), real matches only
+	set {_u} to {_p}'s uuid
+	if {prb::%{_u}%::ok} isn't set: # no baseline (match started before this feature existed) — skip rather than record nonsense
+		stop
+	if {pr-ptr::%{_u}%} isn't set:
+		set {pr-ptr::%{_u}%} to 0
+	add 1 to {pr-ptr::%{_u}%}
+	if {pr-ptr::%{_u}%} > 30:
+		set {pr-ptr::%{_u}%} to 1
+	set {_s} to {pr-ptr::%{_u}%}
+	delete {pr::%{_u}%::%{_s}%::*}
+	set {pr::%{_u}%::%{_s}%::games} to 1
+	set {pr::%{_u}%::%{_s}%::dur} to {_duration}
+	if {_result} = "WIN":
+		set {pr::%{_u}%::%{_s}%::wins} to 1
+		set {pr::%{_u}%::%{_s}%::durwin} to {_duration}
+	else:
+		set {pr::%{_u}%::%{_s}%::losses} to 1
+		set {pr::%{_u}%::%{_s}%::durloss} to {_duration}
+	set {pr::%{_u}%::%{_s}%::kills} to bd({matchkills::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::deaths} to bd({matchdeaths::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::mxks} to bd({matchtopks::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::dmg} to bd({matchdamage::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::pdmg} to bd({matchplayerdamage::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::jungle} to bd({matchjungleslain::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::fb} to bd({firstbloods::%{_u}%}) - bd({prb::%{_u}%::fb})
+	set {pr::%{_u}%::%{_s}%::dtaken} to bd({damagetaken::%{_u}%}) - bd({prb::%{_u}%::dtaken})
+	set {pr::%{_u}%::%{_s}%::bosses} to bd({bossesslain::%{_u}%}) - bd({prb::%{_u}%::bosses})
+	set {pr::%{_u}%::%{_s}%::steals} to bd({bosssteals::%{_u}%}) - bd({prb::%{_u}%::steals})
+	set {pr::%{_u}%::%{_s}%::xe} to bd({xpearly::%{_u}%}) - bd({prb::%{_u}%::xe})
+	set {pr::%{_u}%::%{_s}%::xm} to bd({xpmid::%{_u}%}) - bd({prb::%{_u}%::xm})
+	set {pr::%{_u}%::%{_s}%::xl} to bd({xplate::%{_u}%}) - bd({prb::%{_u}%::xl})
+	set {pr::%{_u}%::%{_s}%::pge} to 1 # every match reaches the early phase
+	set {pr::%{_u}%::%{_s}%::pgm} to 0
+	set {pr::%{_u}%::%{_s}%::pgl} to 0
+	if {_duration} >= {config::xpphase::early-end}:
+		set {pr::%{_u}%::%{_s}%::pgm} to 1
+	if {_duration} >= {config::xpphase::mid-end}:
+		set {pr::%{_u}%::%{_s}%::pgl} to 1
+	set {pr::%{_u}%::%{_s}%::lead} to 0
+	set {pr::%{_u}%::%{_s}%::leadloss} to 0
+	set {pr::%{_u}%::%{_s}%::behindwin} to 0
+	if {hadLead::%{_u}%} is set:
+		set {pr::%{_u}%::%{_s}%::lead} to 1
+		if {_result} = "LOSS":
+			set {pr::%{_u}%::%{_s}%::leadloss} to 1
+	if {wasBehind::%{_u}%} is set:
+		if {_result} = "WIN":
+			set {pr::%{_u}%::%{_s}%::behindwin} to 1
+	set {pr::%{_u}%::%{_s}%::mxdmg} to bd({matchdamage::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::mxpdmg} to bd({matchplayerdamage::%{_u}%})
+	set {pr::%{_u}%::%{_s}%::mxcs} to bd({matchjungleslain::%{_u}%})
+	if bd({matchdeaths::%{_u}%}) = 0:
+		set {pr::%{_u}%::%{_s}%::mxkd} to bd({matchkills::%{_u}%})
+	else:
+		set {pr::%{_u}%::%{_s}%::mxkd} to bd({matchkills::%{_u}%}) / bd({matchdeaths::%{_u}%})
+
+	loop integers between 1 and 3:
+		set {_c} to {loadout::%{_u}%::%loop-value%}
+		if {_c} is set:
+			set {_k} to bd({matchkills::%{_u}%::%{_c}%})
+			set {_d} to bd({matchdeaths::%{_u}%::%{_c}%})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::g} to 1
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::w} to 0
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::l} to 0
+			if {_result} = "WIN":
+				if ({_k} + {_d}) >= 3: # same anti-boost bar as the lifetime class-wins stat
+					set {pr::%{_u}%::%{_s}%::c::%{_c}%::w} to 1
+			else:
+				set {pr::%{_u}%::%{_s}%::c::%{_c}%::l} to 1
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::k} to {_k}
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::d} to {_d}
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::dmg} to bd({matchdamage::%{_u}%::%{_c}%})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::pd} to bd({class-playerdamage::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::pd})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::dt} to bd({class-damagetaken::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::dt})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::jg} to bd({class-jungleslain::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::jg})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::bs} to bd({class-bossesslain::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::bs})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::mxks} to bd({matchtopks::%{_u}%::%{_c}%})
+	set {pr::%{_u}%::%{_s}%::ok} to true
+
+function recentStatsAgg(target: offline player): # totals the player's last-30 window into {sv-r::<uuid>::<field>} and {sv-r::<uuid>::c::<CLASS>::<field>}; {sv-r::<uuid>::n} = matches in the window
+	set {_u} to {_target}'s uuid
+	delete {sv-r::%{_u}%::*}
+	set {sv-r::%{_u}%::n} to 0
+	# explicit field lists — the totals are built by name rather than by looping the stored list and trusting loop-index, which didn't reproduce the nested "c::CLASS::field" paths
+	set {_sumf::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin"
+	set {_csumf::*} to "g", "w", "l", "k", "d", "dmg", "pd", "dt", "jg", "bs"
+	set {_classes::*} to {menu::classlist::*}
+	set {_si} to 1
+	while {_si} <= 30:
+		if {pr::%{_u}%::%{_si}%::ok} is set:
+			add 1 to {sv-r::%{_u}%::n}
+			set {_fi} to 1
+			while {_fi} <= size of {_sumf::*}:
+				set {_f} to {_sumf::%{_fi}%}
+				add bd({pr::%{_u}%::%{_si}%::%{_f}%}) to {sv-r::%{_u}%::%{_f}%}
+				add 1 to {_fi}
+			set {_ci} to 1
+			while {_ci} <= size of {_classes::*}:
+				set {_c} to {_classes::%{_ci}%}
+				set {_cfi} to 1
+				while {_cfi} <= size of {_csumf::*}:
+					set {_f} to {_csumf::%{_cfi}%}
+					add bd({pr::%{_u}%::%{_si}%::c::%{_c}%::%{_f}%}) to {sv-r::%{_u}%::c::%{_c}%::%{_f}%}
+					add 1 to {_cfi}
+				add 1 to {_ci}
+		add 1 to {_si}
+	# best-of fields are a MAX over the window, not a sum — overwrite what the sum above produced
+	set {_mx::*} to "mxks", "mxdmg", "mxpdmg", "mxcs", and "mxkd"
+	set {_fi} to 1
+	while {_fi} <= 5:
+		set {_f} to {_mx::%{_fi}%}
+		set {_best} to 0
+		set {_si} to 1
+		while {_si} <= 30:
+			if {pr::%{_u}%::%{_si}%::ok} is set:
+				if {pr::%{_u}%::%{_si}%::%{_f}%} > {_best}:
+					set {_best} to {pr::%{_u}%::%{_si}%::%{_f}%}
+			add 1 to {_si}
+		set {sv-r::%{_u}%::%{_f}%} to {_best}
+		add 1 to {_fi}
+	set {_classes::*} to {menu::classlist::*}
+	set {_ci} to 1
+	while {_ci} <= size of {_classes::*}:
+		set {_c} to {_classes::%{_ci}%}
+		set {_best} to 0
+		set {_si} to 1
+		while {_si} <= 30:
+			if {pr::%{_u}%::%{_si}%::ok} is set:
+				if {pr::%{_u}%::%{_si}%::c::%{_c}%::mxks} > {_best}:
+					set {_best} to {pr::%{_u}%::%{_si}%::c::%{_c}%::mxks}
+			add 1 to {_si}
+		set {sv-r::%{_u}%::c::%{_c}%::mxks} to {_best}
+		add 1 to {_ci}
+	# make sure every overall field exists, so the icons never print "<none>"
+	set {_all::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "mxks", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin", "mxdmg", "mxpdmg", "mxcs", and "mxkd"
+	set {_fi} to 1
+	while {_fi} <= size of {_all::*}:
+		set {_f} to {_all::%{_fi}%}
+		if {sv-r::%{_u}%::%{_f}%} isn't set:
+			set {sv-r::%{_u}%::%{_f}%} to 0
+		add 1 to {_fi}
+
+function lifetimeStatsView(target: offline player): # mirrors the lifetime counters into {sv-l::<uuid>::<field>} using the same field names as the recent view, so one icon builder serves both
+	set {_u} to {_target}'s uuid
+	delete {sv-l::%{_u}%::*}
+	set {sv-l::%{_u}%::games} to bd({games::%{_u}%})
+	set {sv-l::%{_u}%::wins} to bd({wins::%{_u}%})
+	set {sv-l::%{_u}%::losses} to bd({losses::%{_u}%})
+	set {sv-l::%{_u}%::dur} to bd({duration-total::%{_u}%})
+	set {sv-l::%{_u}%::durwin} to bd({duration-win-total::%{_u}%})
+	set {sv-l::%{_u}%::durloss} to bd({duration-loss-total::%{_u}%})
+	set {sv-l::%{_u}%::kills} to bd({kill::%{_u}%})
+	set {sv-l::%{_u}%::deaths} to bd({death::%{_u}%})
+	set {sv-l::%{_u}%::mxks} to bd({ks::%{_u}%::top})
+	set {sv-l::%{_u}%::fb} to bd({firstbloods::%{_u}%})
+	set {sv-l::%{_u}%::dmg} to bd({damage::%{_u}%})
+	set {sv-l::%{_u}%::pdmg} to bd({playerdamage::%{_u}%})
+	set {sv-l::%{_u}%::dtaken} to bd({damagetaken::%{_u}%})
+	set {sv-l::%{_u}%::jungle} to bd({jungleslain::%{_u}%})
+	set {sv-l::%{_u}%::bosses} to bd({bossesslain::%{_u}%})
+	set {sv-l::%{_u}%::steals} to bd({bosssteals::%{_u}%})
+	set {sv-l::%{_u}%::xe} to bd({xpearly::%{_u}%})
+	set {sv-l::%{_u}%::xm} to bd({xpmid::%{_u}%})
+	set {sv-l::%{_u}%::xl} to bd({xplate::%{_u}%})
+	set {sv-l::%{_u}%::pge} to bd({phasegames-early::%{_u}%})
+	set {sv-l::%{_u}%::pgm} to bd({phasegames-mid::%{_u}%})
+	set {sv-l::%{_u}%::pgl} to bd({phasegames-late::%{_u}%})
+	set {sv-l::%{_u}%::lead} to bd({leadgames::%{_u}%})
+	set {sv-l::%{_u}%::leadloss} to bd({leadlossgames::%{_u}%})
+	set {sv-l::%{_u}%::behindwin} to bd({behindwingames::%{_u}%})
+	set {sv-l::%{_u}%::mxdmg} to bd({bestgame-damage::%{_u}%})
+	set {sv-l::%{_u}%::mxpdmg} to bd({bestgame-playerdamage::%{_u}%})
+	set {sv-l::%{_u}%::mxcs} to bd({bestgame-cs::%{_u}%})
+	set {sv-l::%{_u}%::mxkd} to bd({bestgame-kd::%{_u}%})
+
+function recentBestWorstWorker(target: offline player): # the Best/Worst Class icon for the recent view — same score formula as 13-mastery.sk (win rate x 700 + K/D x 150, K/D capped at 2), computed from the window; a class is eligible once it has the games and score of the configured ranking tier
+	set {_u} to {_target}'s uuid
+	set {recentBestResult} to "N/A"
+	set {recentWorstResult} to "N/A"
+	set {_tier} to {config::mastery::min-tier-for-ranking}
+	set {_bestScore} to -1
+	set {_worstScore} to 999999
+	loop {menu::classlist::*}:
+		set {_c} to loop-value
+		set {_g} to bd({sv-r::%{_u}%::c::%{_c}%::g})
+		if {_g} >= {mastery-min-games::%{_tier}%}:
+			set {_k} to bd({sv-r::%{_u}%::c::%{_c}%::k})
+			set {_d} to bd({sv-r::%{_u}%::c::%{_c}%::d})
+			if {_d} = 0:
+				set {_kd} to {_k}
+			else:
+				set {_kd} to {_k} / {_d}
+			if {_kd} > 2:
+				set {_kd} to 2
+			set {_score} to (safeDivide(bd({sv-r::%{_u}%::c::%{_c}%::w}), {_g}) * 700) + ({_kd} * 150)
+			if {_score} >= {mastery-threshold::%{_tier}%}:
+				if {_score} > {_bestScore}:
+					set {_bestScore} to {_score}
+					set {recentBestResult} to {_c}
+				if {_score} < {_worstScore}:
+					set {_worstScore} to {_score}
+					set {recentWorstResult} to {_c}
+
+function statsIcon(slot: number, target: offline player, mode: text) :: item: # builds one icon of the stats menu; mode "l" = lifetime, "r" = last 30 games
+	set {_u} to {_target}'s uuid
+	set {_m} to {_mode}
+	set {_n} to bd({sv-r::%{_u}%::n})
+	if {_m} is "r":
+		set {_foot::*} to "" and "&e> Last 30 Games &7(%{_n}% played)" and "&7[CLICK] Show lifetime" and ""
+	else:
+		set {_foot::*} to "" and "&b> Lifetime" and "&7[CLICK] Show last 30 games" and ""
+	set {_icon} to barrier named "&cUnknown"
+	if {_slot} is 10:
+		set {_games} to {sv-%{_m}%::%{_u}%::games}
+		set {_winrate} to safeDivide({sv-%{_m}%::%{_u}%::wins}, {_games}) * 100
+		set {_lore::*} to "" and "&7Games Played: &e%{_games}%" and "&7Wins: &a%{sv-%{_m}%::%{_u}%::wins}%" and "&7Losses: &c%{sv-%{_m}%::%{_u}%::losses}%" and "&7Win Rate: &e%{_winrate}%%%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (nether star named "&e&lMatch Record" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	else if {_slot} is 12:
+		set {_kd} to safeDivide({sv-%{_m}%::%{_u}%::kills}, {sv-%{_m}%::%{_u}%::deaths})
+		set {_lore::*} to "" and "&7Kills: &e%formatNumber({sv-%{_m}%::%{_u}%::kills})%" and "&7Deaths: &e%formatNumber({sv-%{_m}%::%{_u}%::deaths})%" and "&7K/D Ratio: &e%{_kd}%" and "&7Best Killstreak: &e%{sv-%{_m}%::%{_u}%::mxks}%" and "&7First Bloods: &e%{sv-%{_m}%::%{_u}%::fb}%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (iron sword named "&c&lCombat" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		add nbt compound of "{""minecraft:tooltip_display"":{hidden_components:[""minecraft:attribute_modifiers"",""minecraft:enchantments"",""minecraft:stored_enchantments"",""minecraft:unbreakable"",""minecraft:can_break"",""minecraft:can_place_on"",""minecraft:dyed_color"",""minecraft:trim"",""minecraft:potion_contents"",""minecraft:jukebox_playable"",""minecraft:banner_patterns"",""minecraft:firework_explosion"",""minecraft:fireworks"",""minecraft:map_id"",""minecraft:bundle_contents"",""minecraft:lodestone_tracker"",""minecraft:instrument"",""minecraft:suspicious_stew_effects"",""minecraft:writable_book_content"",""minecraft:written_book_content"",""minecraft:charged_projectiles"",""minecraft:container""]}}" to nbt of {_icon} # sword's inherent attack damage/speed survive the item flag alone
+	else if {_slot} is 14:
+		set {_lore::*} to "" and "&7Overall Damage Dealt: &e%formatNumber({sv-%{_m}%::%{_u}%::dmg})%" and "&7Player Damage Dealt: &e%formatNumber({sv-%{_m}%::%{_u}%::pdmg})%" and "&7Damage Taken: &e%formatNumber({sv-%{_m}%::%{_u}%::dtaken})%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (blaze powder named "&6&lDamage" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	else if {_slot} is 16:
+		set {_games} to {sv-%{_m}%::%{_u}%::games}
+		set {_avgCS} to safeDivide({sv-%{_m}%::%{_u}%::jungle}, {_games})
+		set {_avgBosses} to safeDivide({sv-%{_m}%::%{_u}%::bosses}, {_games})
+		set {_lore::*} to "" and "&7Jungle Mobs Slain: &e%{sv-%{_m}%::%{_u}%::jungle}%" and "&7Avg Jungle CS/Game: &e%{_avgCS}%" and "&7Bosses Slain: &e%{sv-%{_m}%::%{_u}%::bosses}%" and "&7Avg Bosses/Game: &e%{_avgBosses}%" and "&7Boss Steals: &e%{sv-%{_m}%::%{_u}%::steals}%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (zombie head named "&2&lJungle & Bosses" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	else if {_slot} is 28:
+		set {_avgXpEarly} to safeDivide({sv-%{_m}%::%{_u}%::xe}, {sv-%{_m}%::%{_u}%::pge})
+		set {_avgXpMid} to safeDivide({sv-%{_m}%::%{_u}%::xm}, {sv-%{_m}%::%{_u}%::pgm})
+		set {_avgXpLate} to safeDivide({sv-%{_m}%::%{_u}%::xl}, {sv-%{_m}%::%{_u}%::pgl})
+		set {_lore::*} to "" and "&7Avg Early-Game XP: &e%{_avgXpEarly}%" and "&7Avg Mid-Game XP: &e%{_avgXpMid}%" and "&7Avg Late-Game XP: &e%{_avgXpLate}%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (experience bottle named "&d&lXP by Phase" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	else if {_slot} is 22:
+		set {_lore::*} to "" and "&7Highest Damage Game: &e%formatNumber({sv-%{_m}%::%{_u}%::mxdmg})%" and "&7Highest Player Damage Game: &e%formatNumber({sv-%{_m}%::%{_u}%::mxpdmg})%" and "&7Best CS Game: &e%{sv-%{_m}%::%{_u}%::mxcs}%" and "&7Best K/D Game: &e%{sv-%{_m}%::%{_u}%::mxkd}%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (player head named "&6&lPersonal Records" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+		set skull owner of {_icon} to {_target}
+	else if {_slot} is 30:
+		set {_leadconv} to safeDivide({sv-%{_m}%::%{_u}%::leadloss}, {sv-%{_m}%::%{_u}%::lead})
+		set {_leadconv} to (1 - {_leadconv}) * 100 # % of "significant lead" games that were actually won
+		set {_lore::*} to "" and "&7Games With Sig. Lead: &e%{sv-%{_m}%::%{_u}%::lead}%" and "&7Games Lost After Leading: &c%{sv-%{_m}%::%{_u}%::leadloss}%" and "&7Games Won While Behind: &a%{sv-%{_m}%::%{_u}%::behindwin}%" and "&7Lead Conversion Rate: &e%{_leadconv}%%%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (golden apple named "&b&lComeback Stats" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	else if {_slot} is 32:
+		set {_avgDur} to formatDuration(safeDivide({sv-%{_m}%::%{_u}%::dur}, {sv-%{_m}%::%{_u}%::games}))
+		set {_avgWinDur} to formatDuration(safeDivide({sv-%{_m}%::%{_u}%::durwin}, {sv-%{_m}%::%{_u}%::wins}))
+		set {_avgLossDur} to formatDuration(safeDivide({sv-%{_m}%::%{_u}%::durloss}, {sv-%{_m}%::%{_u}%::losses}))
+		set {_lore::*} to "" and "&7Avg Game Duration: &e%{_avgDur}%" and "&7Avg Winning Game: &a%{_avgWinDur}%" and "&7Avg Losing Game: &c%{_avgLossDur}%"
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (clock named "&f&lDurations" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	else if {_slot} is 34:
+		if {_m} is "r":
+			recentBestWorstWorker({_target})
+			set {_best} to {recentBestResult}
+			set {_worst} to {recentWorstResult}
+			set {_note} to "&8&oBest/worst of your last games; needs Bronze-level games and score."
+		else:
+			set {_best} to getBestClass({_target}) # 13-mastery.sk
+			set {_worst} to getWorstClass({_target})
+			set {_note} to "&8&oRequires Bronze+ mastery to rank."
+		if {_best} = "N/A":
+			set {_bestName} to "N/A"
+		else:
+			set {_bestName} to {class-name::%{_best}%}
+		if {_worst} = "N/A":
+			set {_worstName} to "N/A"
+		else:
+			set {_worstName} to {class-name::%{_worst}%}
+		set {_lore::*} to "" and "&7Best Class: &a%{_bestName}%" and "&7Worst Class: &c%{_worstName}%" and "" and {_note}
+		add {_foot::*} to {_lore::*}
+		set {_icon} to (diamond named "&5&lBest / Worst Class" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	return {_icon}
+
 function openStatsMenu(viewer: player, target: offline player):
 	set {_uuid} to {_target}'s uuid
+	set {_vid} to {_viewer}'s uuid
 	set {_ownStats} to false
 	if {_viewer}'s uuid is {_uuid}:
 		set {_ownStats} to true
@@ -152,67 +476,17 @@ function openStatsMenu(viewer: player, target: offline player):
 	set slot (integers between 9 and 35) of metadata tag "stats menu" of {_viewer} to gray stained glass pane named " "
 	set slot (integers between 36 and {_borderEnd}) of metadata tag "stats menu" of {_viewer} to black stained glass pane named " "
 
-	# ---- Match Record ----
-	set {_winrate} to safeDivide({wins::%{_uuid}%}, {games::%{_uuid}%}) * 100
-	set {_lore::*} to "" and "&7Games Played: &e%{games::%{_uuid}%}%" and "&7Wins: &a%{wins::%{_uuid}%}%" and "&7Losses: &c%{losses::%{_uuid}%}%" and "&7Win Rate: &e%{_winrate}%%%" and ""
-	set slot 10 of metadata tag "stats menu" of {_viewer} to (nether star named "&e&lMatch Record" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-
-	# ---- Combat ----
-	set {_kd} to safeDivide({kill::%{_uuid}%}, {death::%{_uuid}%})
-	set {_lore::*} to "" and "&7Kills: &e%formatNumber({kill::%{_uuid}%})%" and "&7Deaths: &e%formatNumber({death::%{_uuid}%})%" and "&7K/D Ratio: &e%{_kd}%" and "&7Best Killstreak: &e%{ks::%{_uuid}%::top}%" and "&7First Bloods: &e%{firstbloods::%{_uuid}%}%" and ""
-	set {_combatIcon} to (iron sword named "&c&lCombat" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	add nbt compound of "{""minecraft:tooltip_display"":{hidden_components:[""minecraft:attribute_modifiers"",""minecraft:enchantments"",""minecraft:stored_enchantments"",""minecraft:unbreakable"",""minecraft:can_break"",""minecraft:can_place_on"",""minecraft:dyed_color"",""minecraft:trim"",""minecraft:potion_contents"",""minecraft:jukebox_playable"",""minecraft:banner_patterns"",""minecraft:firework_explosion"",""minecraft:fireworks"",""minecraft:map_id"",""minecraft:bundle_contents"",""minecraft:lodestone_tracker"",""minecraft:instrument"",""minecraft:suspicious_stew_effects"",""minecraft:writable_book_content"",""minecraft:written_book_content"",""minecraft:charged_projectiles"",""minecraft:container""]}}" to nbt of {_combatIcon} # sword's inherent attack damage/speed survive the item flag alone
-	set slot 12 of metadata tag "stats menu" of {_viewer} to {_combatIcon}
-
-	# ---- Damage ----
-	set {_lore::*} to "" and "&7Overall Damage Dealt: &e%formatNumber({damage::%{_uuid}%})%" and "&7Player Damage Dealt: &e%formatNumber({playerdamage::%{_uuid}%})%" and "&7Damage Taken: &e%formatNumber({damagetaken::%{_uuid}%})%" and ""
-	set slot 14 of metadata tag "stats menu" of {_viewer} to (blaze powder named "&6&lDamage" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-
-	# ---- Jungle & Bosses ----
-	set {_avgCS} to safeDivide({jungleslain::%{_uuid}%}, {games::%{_uuid}%})
-	set {_avgBosses} to safeDivide({bossesslain::%{_uuid}%}, {games::%{_uuid}%})
-	set {_lore::*} to "" and "&7Jungle Mobs Slain: &e%{jungleslain::%{_uuid}%}%" and "&7Avg Jungle CS/Game: &e%{_avgCS}%" and "&7Bosses Slain: &e%{bossesslain::%{_uuid}%}%" and "&7Avg Bosses/Game: &e%{_avgBosses}%" and "&7Boss Steals: &e%{bosssteals::%{_uuid}%}%" and ""
-	set slot 16 of metadata tag "stats menu" of {_viewer} to (zombie head named "&2&lJungle & Bosses" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-
-	# ---- XP by Phase (average per game that reached that phase, not the lifetime total) ----
-	set {_avgXpEarly} to safeDivide({xpearly::%{_uuid}%}, {phasegames-early::%{_uuid}%})
-	set {_avgXpMid} to safeDivide({xpmid::%{_uuid}%}, {phasegames-mid::%{_uuid}%})
-	set {_avgXpLate} to safeDivide({xplate::%{_uuid}%}, {phasegames-late::%{_uuid}%})
-	set {_lore::*} to "" and "&7Avg Early-Game XP: &e%{_avgXpEarly}%" and "&7Avg Mid-Game XP: &e%{_avgXpMid}%" and "&7Avg Late-Game XP: &e%{_avgXpLate}%" and ""
-	set slot 28 of metadata tag "stats menu" of {_viewer} to (experience bottle named "&d&lXP by Phase" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-
-	# ---- Personal Records (center of the third row) — icon is the target's own head ----
-	set {_lore::*} to "" and "&7Highest Damage Game: &e%formatNumber({bestgame-damage::%{_uuid}%})%" and "&7Highest Player Damage Game: &e%formatNumber({bestgame-playerdamage::%{_uuid}%})%" and "&7Best CS Game: &e%{bestgame-cs::%{_uuid}%}%" and "&7Best K/D Game: &e%{bestgame-kd::%{_uuid}%}%" and ""
-	set {_headIcon} to (player head named "&6&lPersonal Records" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set skull owner of {_headIcon} to {_target}
-	set slot 22 of metadata tag "stats menu" of {_viewer} to {_headIcon}
-
-	# ---- Comeback / Lead Stats ----
-	set {_leadconv} to safeDivide({leadlossgames::%{_uuid}%}, {leadgames::%{_uuid}%})
-	set {_leadconv} to (1 - {_leadconv}) * 100 # % of "significant lead" games that were actually won
-	set {_lore::*} to "" and "&7Games With Sig. Lead: &e%{leadgames::%{_uuid}%}%" and "&7Games Lost After Leading: &c%{leadlossgames::%{_uuid}%}%" and "&7Games Won While Behind: &a%{behindwingames::%{_uuid}%}%" and "&7Lead Conversion Rate: &e%{_leadconv}%%%" and ""
-	set slot 30 of metadata tag "stats menu" of {_viewer} to (golden apple named "&b&lComeback Stats" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-
-	# ---- Durations ----
-	set {_avgDur} to formatDuration(safeDivide({duration-total::%{_uuid}%}, {games::%{_uuid}%}))
-	set {_avgWinDur} to formatDuration(safeDivide({duration-win-total::%{_uuid}%}, {wins::%{_uuid}%}))
-	set {_avgLossDur} to formatDuration(safeDivide({duration-loss-total::%{_uuid}%}, {losses::%{_uuid}%}))
-	set {_lore::*} to "" and "&7Avg Game Duration: &e%{_avgDur}%" and "&7Avg Winning Game: &a%{_avgWinDur}%" and "&7Avg Losing Game: &c%{_avgLossDur}%" and ""
-	set slot 32 of metadata tag "stats menu" of {_viewer} to (clock named "&f&lDurations" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-
-	# ---- Best / Worst Class ----
-	set {_best} to getBestClass({_target}) # 13-mastery.sk
-	set {_worst} to getWorstClass({_target})
-	if {_best} = "N/A":
-		set {_bestName} to "N/A"
-	else:
-		set {_bestName} to {class-name::%{_best}%}
-	if {_worst} = "N/A":
-		set {_worstName} to "N/A"
-	else:
-		set {_worstName} to {class-name::%{_worst}%}
-	set {_lore::*} to "" and "&7Best Class: &a%{_bestName}%" and "&7Worst Class: &c%{_worstName}%" and "" and "&8&oRequires Silver+ mastery to rank." and ""
-	set slot 34 of metadata tag "stats menu" of {_viewer} to (diamond named "&5&lBest / Worst Class" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	# every icon starts on lifetime; clicking an icon flips just that icon between lifetime and last 30 games (handler below)
+	delete {statsMode::%{_vid}%::*}
+	set {statsTarget::%{_vid}%} to {_target}
+	lifetimeStatsView({_target})
+	recentStatsAgg({_target})
+	set {_slots::*} to 10, 12, 14, 16, 28, 22, 30, 32, and 34
+	set {_si} to 1
+	while {_si} <= size of {_slots::*}:
+		set {_sl} to {_slots::%{_si}%}
+		set slot {_sl} of metadata tag "stats menu" of {_viewer} to statsIcon({_sl}, {_target}, "l")
+		add 1 to {_si}
 
 	# ---- back to class browser (bottom center, own stats only) ----
 	if {_ownStats} is true:
@@ -231,9 +505,23 @@ command /stats [<offline player>]:
 on inventory click:
 	if event-inventory = (metadata tag "stats menu" of player):
 		cancel event
-		if index of event-slot is 49:
+		set {_slot} to index of event-slot
+		set {_vid} to player's uuid
+		if {_slot} is 49:
 			openClassBrowser(player) # 18-class-browser.sk
 			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {_slot} is 10 or 12 or 14 or 16 or 22 or 28 or 30 or 32 or 34: # any stat icon: flip it between lifetime and last 30 games
+			set {_target} to {statsTarget::%{_vid}%}
+			if {_target} is set:
+				if {statsMode::%{_vid}%::%{_slot}%} is "r":
+					set {_new} to "l"
+				else:
+					set {_new} to "r"
+				set {statsMode::%{_vid}%::%{_slot}%} to {_new}
+				lifetimeStatsView({_target}) # refresh both views so the numbers are current
+				recentStatsAgg({_target})
+				set slot {_slot} of metadata tag "stats menu" of player to statsIcon({_slot}, {_target}, {_new})
+				play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
 	else if event-inventory = (metadata tag "match summary" of player):
 		cancel event
 	else if event-inventory = (metadata tag "match history" of player):

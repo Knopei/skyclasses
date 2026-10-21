@@ -93,6 +93,99 @@ function bkd(kills: number, deaths: number) :: text: # formatted K/D, or "No dat
 function bcount(x: number) :: text: # a plain count is always meaningful at 0 — just format it safely
 	return "&e%bd({_x})%"
 
+# ---- LIFETIME + RECENT-WINDOW COUNTERS ----
+# balAdd() is the one place every dashboard counter is incremented: it adds to the lifetime variable {balance-<name>::<key>} AND to the current slot of the
+# recent-games ring buffer ({balance-recent::<slot>::<name>::<key>}, see the RECENT-GAMES WINDOW section below). The dashboard pages read through bgv(),
+# which returns either the lifetime value or the sum over the last {balance-recent-size} completed matches (balRecentAgg() must run first for the recent view).
+
+function balAdd(name: text, key: text, amt: number):
+	add {_amt} to {balance-%{_name}%::%{_key}%}
+	set {_s} to {balance-recent-slot}
+	if {_s} is set:
+		add {_amt} to {balance-recent::%{_s}%::%{_name}%::%{_key}%}
+
+function balRecentAgg(): # sums every counter of every completed slot into {balance-agg::<name>::<key>}; {balance-agg-games} = how many matches that was. Built from an explicit list of every counter path (balance-paths below), not by looping the stored tree, so it never depends on how nested loop indexes come back.
+	delete {balance-agg::*}
+	set {balance-agg-games} to 0
+	set {_ids::*} to "GA", "HP", "GP", "GM", "CF", "MP", and "SP"
+	set {_perks::*} to generalPerkPool() # 06-perks-general.sk
+	set {_n} to 0
+	loop {menu::classlist::*}:
+		set {_c} to loop-value
+		set {_cn::*} to "mana-spent", "class-games", "class-kills", "firstkill-sum", "firstkill-count", "firstdeath-sum", "firstdeath-count", "draft-available", "draft-picked", "carry-kills-top", and "carry-bosses-top"
+		set {_k} to 1
+		while {_k} <= size of {_cn::*}:
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "%{_cn::%{_k}%}%::%{_c}%"
+			add 1 to {_k}
+		set {_sub::*} to "TAC", "ULT"
+		set {_k} to 1
+		while {_k} <= 2:
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "ability-casts::%{_c}%::%{_sub::%{_k}%}%"
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "ability-hits::%{_c}%::%{_sub::%{_k}%}%"
+			add 1 to {_k}
+		set {_src::*} to "TAC", "ULT", "PASSIVE", "MELEE"
+		set {_k} to 1
+		while {_k} <= 4:
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "dmg-by-source::%{_c}%::%{_src::%{_k}%}%"
+			add 1 to {_k}
+		set {_k} to 1
+		while {_k} <= 3:
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "levelup-lives-sum::%{_c}%::%{_k}%"
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "levelup-lives-count::%{_c}%::%{_k}%"
+			add 1 to {_k}
+		set {_k} to 1
+		while {_k} <= 7:
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "cons-games::%{_ids::%{_k}%}%::%{_c}%"
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "cons-wins::%{_ids::%{_k}%}%::%{_c}%"
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "perk-games::%{_perks::%{_k}%}%::%{_c}%"
+			add 1 to {_n}
+			set {_paths::%{_n}%} to "perk-wins::%{_perks::%{_k}%}%::%{_c}%"
+			add 1 to {_k}
+	set {_k} to 1
+	while {_k} <= 7:
+		add 1 to {_n}
+		set {_paths::%{_n}%} to "consumable-picks::%{_ids::%{_k}%}%"
+		add 1 to {_n}
+		set {_paths::%{_n}%} to "consumable-kills::%{_ids::%{_k}%}%"
+		add 1 to {_n}
+		set {_paths::%{_n}%} to "consumable-deaths::%{_ids::%{_k}%}%"
+		add 1 to {_n}
+		set {_paths::%{_n}%} to "perk-picks::%{_perks::%{_k}%}%"
+		add 1 to {_n}
+		set {_paths::%{_n}%} to "perk-kills::%{_perks::%{_k}%}%"
+		add 1 to {_n}
+		set {_paths::%{_n}%} to "perk-deaths::%{_perks::%{_k}%}%"
+		add 1 to {_k}
+	set {_si} to 1
+	while {_si} <= {balance-recent-size}:
+		if {balance-recent-valid::%{_si}%} is set:
+			add 1 to {balance-agg-games}
+			set {_pi} to 1
+			while {_pi} <= {_n}:
+				set {_path} to {_paths::%{_pi}%}
+				set {_v} to {balance-recent::%{_si}%::%{_path}%}
+				if {_v} is set:
+					add {_v} to {balance-agg::%{_path}%}
+				add 1 to {_pi}
+		add 1 to {_si}
+
+function bgv(name: text, key: text, recent: boolean) :: number: # balance get value — lifetime or recent-window total, 0 if never set
+	if {_recent} is true:
+		return bd({balance-agg::%{_name}%::%{_key}%})
+	return bd({balance-%{_name}%::%{_key}%})
+
+function balRecentInfoIcon() :: item:
+	return (book named "&e&lRecent Games" with lore "" and "&7Showing the last %{balance-agg-games}% completed" and "&7real match(es), out of a window of" and "&7%{balance-recent-size}%. Test duels and force-ended" and "&7matches are not counted." and "") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
 # ---- ABILITY CASTS / HIT RATE / DAMAGE-BY-SOURCE ATTRIBUTION ----
 
 function recordAbilityCast(p: player, source: text, manaSpent: number): # "TAC" or "ULT" — called from 03-resources.sk's tacCHECK()/ultCHECK() on every successful cast, and once from Basher's dash-bash (03-resources.sk's on sneak toggle) since that TAC isn't gated by tacCHECK
@@ -100,8 +193,8 @@ function recordAbilityCast(p: player, source: text, manaSpent: number): # "TAC" 
 		stop
 	set {_class} to {class::%{_p}'s uuid%}
 	if {_class} is set:
-		add 1 to {balance-ability-casts::%{_class}%::%{_source}%}
-		add {_manaSpent} to {balance-mana-spent::%{_class}%}
+		balAdd("ability-casts", "%{_class}%::%{_source}%", 1)
+		balAdd("mana-spent", {_class}, {_manaSpent})
 		set {balance-abilityHit::%{_p}'s uuid%} to false # marks this cast as "not yet counted a hit" — recordDamageBySource() below flips it on the first landed hit, so an AOE/multi-hit cast only counts once toward hit rate
 
 # ---- FIRE-TICK SOURCE TAGGING (Mighty's Fire Pit, Ninja's ignites, Rapid's Overheat) ----
@@ -139,7 +232,7 @@ function recordDamageBySource(a: player, class: text, dmg: number): # called fro
 		set {_source} to {balance-abilitySource::%{_a}'s uuid%}
 	else:
 		set {_source} to "MELEE"
-	add {_dmg} to {balance-dmg-by-source::%{_class}%::%{_source}%}
+	balAdd("dmg-by-source", "%{_class}%::%{_source}%", {_dmg})
 
 function recordAbilityHit(a: player, source: text): # called from dmgUpdate() for ANY landed TAC/ULT hit regardless of victim type — unlike damage-by-source, hit rate has to count a boss/mini-boss hit too (Paladin's ultimate and Zeus's iron-golem branch only ever land on bosses, never players, so they'd otherwise show a permanent 0% hit rate despite working exactly as designed)
 	if {testMatch} is set: # 10-match-manager.sk / 17-draft.sk — a test duel (/testduel) records no balance-dashboard stats at all
@@ -148,7 +241,7 @@ function recordAbilityHit(a: player, source: text): # called from dmgUpdate() fo
 	if {_class} is set:
 		if {balance-abilityHit::%{_a}'s uuid%} is false: # counted once per cast even if the ability hits multiple targets (AOE)
 			set {balance-abilityHit::%{_a}'s uuid%} to true
-			add 1 to {balance-ability-hits::%{_class}%::%{_source}%}
+			balAdd("ability-hits", "%{_class}%::%{_source}%", 1)
 
 # ---- MATCHUPS / FIRST-KILL-DEATH / PERK & CONSUMABLE K/D ----
 
@@ -197,7 +290,7 @@ function recordPvpKill(attacker: player, aClass: text, vClass: text): # called f
 	set {_slotNow} to {balance-recent-slot}
 	if {_slotNow} is set:
 		add 1 to {balance-recent::%{_slotNow}%::matchup::%{_aClass}%::%{_vClass}%} # recent-games window
-	add 1 to {balance-class-kills::%{_aClass}%} # global kill count for this class — mana-efficiency denominator
+	balAdd("class-kills", {_aClass}, 1) # global kill count for this class — mana-efficiency denominator
 
 	# LEVEL K/D — bucketed by the killer's CURRENT level in aClass at the moment of the kill (classLevel() reads persistent classKills, which addClassKill() below hasn't incremented yet for this kill, so a kill that itself causes a level-up is still counted at the level it was earned at)
 	set {_br} to levelKDBracket(classLevel({_attacker}, {_aClass}))
@@ -209,16 +302,16 @@ function recordPvpKill(attacker: player, aClass: text, vClass: text): # called f
 		set {balance-firstKillDone::%{_attacker}'s uuid%::%{_aClass}%} to true
 		if {matchStartTime} is set:
 			set {_elapsed} to (unix timestamp of now) - {matchStartTime}
-			add {_elapsed} to {balance-firstkill-sum::%{_aClass}%}
-			add 1 to {balance-firstkill-count::%{_aClass}%}
+			balAdd("firstkill-sum", {_aClass}, {_elapsed})
+			balAdd("firstkill-count", {_aClass}, 1)
 
 	set {_perk} to {general-perk::%{_attacker}'s uuid%::selected}
 	if {_perk} is set:
-		add 1 to {balance-perk-kills::%{_perk}%}
+		balAdd("perk-kills", {_perk}, 1)
 
 	set {_consumable} to {balance-consumeWindow::%{_attacker}'s uuid%}
 	if {_consumable} is set:
-		add 1 to {balance-consumable-kills::%{_consumable}%}
+		balAdd("consumable-kills", {_consumable}, 1)
 		delete {balance-consumeWindow::%{_attacker}'s uuid%} # closes the window — recordConsumableUse() is what reopens it
 
 function recordPvpDeath(victim: player, vClass: text): # called from 09-death-match.sk's death block, for every in-match death
@@ -234,16 +327,16 @@ function recordPvpDeath(victim: player, vClass: text): # called from 09-death-ma
 		set {balance-firstDeathDone::%{_victim}'s uuid%::%{_vClass}%} to true
 		if {matchStartTime} is set:
 			set {_elapsed} to (unix timestamp of now) - {matchStartTime}
-			add {_elapsed} to {balance-firstdeath-sum::%{_vClass}%}
-			add 1 to {balance-firstdeath-count::%{_vClass}%}
+			balAdd("firstdeath-sum", {_vClass}, {_elapsed})
+			balAdd("firstdeath-count", {_vClass}, 1)
 
 	set {_perk} to {general-perk::%{_victim}'s uuid%::selected}
 	if {_perk} is set:
-		add 1 to {balance-perk-deaths::%{_perk}%}
+		balAdd("perk-deaths", {_perk}, 1)
 
 	set {_consumable} to {balance-consumeWindow::%{_victim}'s uuid%}
 	if {_consumable} is set:
-		add 1 to {balance-consumable-deaths::%{_consumable}%}
+		balAdd("consumable-deaths", {_consumable}, 1)
 		delete {balance-consumeWindow::%{_victim}'s uuid%}
 
 function recordConsumableUse(p: player, id: text): # called from 07-consumables.sk's 7 consume triggers — opens (or re-opens) the K/D tracking window
@@ -262,23 +355,32 @@ function recordDraftPick(picked: text): # called from 17-draft.sk right after a 
 	loop {draftPicked::*}:
 		remove loop-value from {_available::*}
 	loop {_available::*}:
-		add 1 to {balance-draft-available::%loop-value%}
-	add 1 to {balance-draft-picked::%{_picked}%}
+		balAdd("draft-available", loop-value, 1)
+	balAdd("draft-picked", {_picked}, 1)
 
 # ---- CONSUMABLE / PERK PICK RATE (class-default, once per loadout-class per match) ----
 
-function recordClassDefaultPicks(p: offline player, class: text): # called from 10-match-manager.sk's processEndMatchStats()
+function recordClassDefaultPicks(p: offline player, class: text, result: text): # called from 10-match-manager.sk's processEndMatchStats()
 	if {testMatch} is set: # 10-match-manager.sk / 17-draft.sk — a test duel (/testduel) records no balance-dashboard stats at all
 		stop
 	set {_consumable} to {class-default-consumable::%{_p}'s uuid%::%{_class}%}
 	if {_consumable} isn't set:
 		set {_consumable} to "GA"
-	add 1 to {balance-consumable-picks::%{_consumable}%}
+	balAdd("consumable-picks", {_consumable}, 1)
 
 	set {_perk} to {class-default-generalperk::%{_p}'s uuid%::%{_class}%}
 	if {_perk} isn't set:
 		set {_perk} to "healthyboy"
-	add 1 to {balance-perk-picks::%{_perk}%}
+	balAdd("perk-picks", {_perk}, 1)
+
+	# win rate per class WITH that consumable / perk — only games where the class was really played (3+ combined kills/deaths on it, same bar as the class-wins mastery rule)
+	set {_lives} to bd({matchkills::%{_p}'s uuid%::%{_class}%}) + bd({matchdeaths::%{_p}'s uuid%::%{_class}%})
+	if {_lives} >= 3:
+		balAdd("cons-games", "%{_consumable}%::%{_class}%", 1)
+		balAdd("perk-games", "%{_perk}%::%{_class}%", 1)
+		if {_result} = "WIN":
+			balAdd("cons-wins", "%{_consumable}%::%{_class}%", 1)
+			balAdd("perk-wins", "%{_perk}%::%{_class}%", 1)
 
 # ---- CARRY RATE (kills / major bosses, among a player's 3 loadout classes) ----
 
@@ -305,11 +407,11 @@ function recordClassCarry(p: offline player): # called once per player from 10-m
 		set {_topK} to {_k3}
 	if {_topK} > 0: # nobody "carried" if nobody got a kill on any of the 3 classes this match
 		if {_k1} = {_topK}:
-			add 1 to {balance-carry-kills-top::%{_c1}%}
+			balAdd("carry-kills-top", {_c1}, 1)
 		if {_k2} = {_topK}:
-			add 1 to {balance-carry-kills-top::%{_c2}%}
+			balAdd("carry-kills-top", {_c2}, 1)
 		if {_k3} = {_topK}:
-			add 1 to {balance-carry-kills-top::%{_c3}%}
+			balAdd("carry-kills-top", {_c3}, 1)
 
 	set {_b1} to {matchbosskills::%{_p}'s uuid%::%{_c1}%}
 	set {_b2} to {matchbosskills::%{_p}'s uuid%::%{_c2}%}
@@ -327,19 +429,19 @@ function recordClassCarry(p: offline player): # called once per player from 10-m
 		set {_topB} to {_b3}
 	if {_topB} > 0:
 		if {_b1} = {_topB}:
-			add 1 to {balance-carry-bosses-top::%{_c1}%}
+			balAdd("carry-bosses-top", {_c1}, 1)
 		if {_b2} = {_topB}:
-			add 1 to {balance-carry-bosses-top::%{_c2}%}
+			balAdd("carry-bosses-top", {_c2}, 1)
 		if {_b3} = {_topB}:
-			add 1 to {balance-carry-bosses-top::%{_c3}%}
+			balAdd("carry-bosses-top", {_c3}, 1)
 
 # ---- LEVEL VS LIVES LEFT ----
 
 function recordLevelUpLives(class: text, level: number, lives: number): # called from 04-leveling.sk's addClassKill() the instant a class reaches a new level
 	if {testMatch} is set: # 10-match-manager.sk / 17-draft.sk — a test duel (/testduel) records no balance-dashboard stats at all
 		stop
-	add {_lives} to {balance-levelup-lives-sum::%{_class}%::%{_level}%}
-	add 1 to {balance-levelup-lives-count::%{_class}%::%{_level}%}
+	balAdd("levelup-lives-sum", "%{_class}%::%{_level}%", {_lives})
+	balAdd("levelup-lives-count", "%{_class}%::%{_level}%", 1)
 
 # ============================================
 # GUI — /balancestats (op only)
@@ -354,14 +456,14 @@ function openBalanceMainMenu(p: player):
 	set metadata tag "balance main" of {_p} to chest inventory with 3 rows named "Balance Dashboard"
 	set slot (integers between 0 and 26) of metadata tag "balance main" of {_p} to black stained glass pane named " "
 
-	set slot 10 of metadata tag "balance main" of {_p} to (bow named "&e&lAbility Usage & Hit Rate" with lore "" and "&7Casts, hit rate, avg casts per" and "&7game, and avg mana spent per" and "&7kill — per class." and "" and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set slot 11 of metadata tag "balance main" of {_p} to (blaze powder named "&6&lDamage by Source" with lore "" and "&7Tactical vs Ultimate vs Passive" and "&7vs Melee share of player damage" and "&7dealt, per class." and "" and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set slot 12 of metadata tag "balance main" of {_p} to (clock named "&b&lTime to First Kill/Death" with lore "" and "&7Average time into a match before" and "&7a class gets its first kill or" and "&7takes its first death." and "" and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 10 of metadata tag "balance main" of {_p} to (bow named "&e&lAbility Usage & Hit Rate" with lore "" and "&7Casts, hit rate, avg casts per" and "&7game, and avg mana spent per" and "&7kill — per class." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 11 of metadata tag "balance main" of {_p} to (blaze powder named "&6&lDamage by Source" with lore "" and "&7Tactical vs Ultimate vs Passive" and "&7vs Melee share of player damage" and "&7dealt, per class." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 12 of metadata tag "balance main" of {_p} to (clock named "&b&lTime to First Kill/Death" with lore "" and "&7Average time into a match before" and "&7a class gets its first kill or" and "&7takes its first death." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 13 of metadata tag "balance main" of {_p} to (iron sword named "&c&lMatchup Win Rates" with lore "" and "&7Win rate of each class against" and "&7every other class, based on" and "&7kill exchanges." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set slot 14 of metadata tag "balance main" of {_p} to (book named "&d&lDraft & Carry Rates" with lore "" and "&7How often a class is picked when" and "&7available, and how often it's the" and "&7top kill/boss contributor of a" and "&7player's 3 classes." and "" and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set slot 15 of metadata tag "balance main" of {_p} to (experience bottle named "&a&lLevel vs. Lives Left" with lore "" and "&7Average lives remaining when a" and "&7class reaches level 1, 2, and 3." and "" and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set slot 16 of metadata tag "balance main" of {_p} to (golden apple named "&c&lConsumable Pick Rate & K/D" with lore "" and "&7How often each consumable is set" and "&7as a default, and K/D while the" and "&7window after eating one is open." and "" and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set slot 20 of metadata tag "balance main" of {_p} to (glowstone dust named "&e&lGeneral Perk Pick Rate & K/D" with lore "" and "&7How often each perk is set as a" and "&7default, and K/D while it's the" and "&7active perk." and "" and "&7[CLICK] View") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 14 of metadata tag "balance main" of {_p} to (book named "&d&lDraft & Carry Rates" with lore "" and "&7How often a class is picked when" and "&7available, and how often it's the" and "&7top kill/boss contributor of a" and "&7player's 3 classes." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 15 of metadata tag "balance main" of {_p} to (experience bottle named "&a&lLevel vs. Lives Left" with lore "" and "&7Average lives remaining when a" and "&7class reaches level 1, 2, and 3." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 16 of metadata tag "balance main" of {_p} to (golden apple named "&c&lConsumable Pick Rate & K/D" with lore "" and "&7How often each consumable is set" and "&7as a default, and K/D while the" and "&7window after eating one is open." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 20 of metadata tag "balance main" of {_p} to (glowstone dust named "&e&lGeneral Perk Pick Rate & K/D" with lore "" and "&7How often each perk is set as a" and "&7default, and K/D while it's the" and "&7active perk." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 21 of metadata tag "balance main" of {_p} to (totem of undying named "&d&lK/D by Level" with lore "" and "&7A class's kill/death ratio before" and "&7level 2, at level 2, and at level 3 —" and "&7shows whether leveling up actually" and "&7makes a class stronger." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	open (metadata tag "balance main" of {_p}) to {_p}
@@ -370,40 +472,32 @@ on inventory click:
 	if event-inventory = (metadata tag "balance main" of player):
 		cancel event
 		set {_slot} to index of event-slot
+		set {_ct} to "%event.getClick()%" # RIGHT / SHIFT_RIGHT = recent games, LEFT / SHIFT_LEFT = lifetime
+		set {_recent} to false
+		if {_ct} contains "RIGHT":
+			set {_recent} to true
+		set {_opened} to true
 		if {_slot} is 10:
-			openBalanceAbilityPage(player)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalanceAbilityPage(player, {_recent})
 		else if {_slot} is 11:
-			openBalanceDamageSourcePage(player)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalanceDamageSourcePage(player, {_recent})
 		else if {_slot} is 12:
-			openBalanceTimeToKillPage(player)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalanceTimeToKillPage(player, {_recent})
 		else if {_slot} is 13:
-			set {_ct} to "%event.getClick()%" # RIGHT / SHIFT_RIGHT = recent games, LEFT / SHIFT_LEFT = lifetime
-			if {_ct} contains "RIGHT":
-				openBalanceMatchupPage(player, true)
-			else:
-				openBalanceMatchupPage(player, false)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalanceMatchupPage(player, {_recent})
 		else if {_slot} is 14:
-			openBalanceDraftCarryPage(player)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalanceDraftCarryPage(player, {_recent})
 		else if {_slot} is 15:
-			openBalanceLevelLivesPage(player)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalanceLevelLivesPage(player, {_recent})
 		else if {_slot} is 16:
-			openBalanceConsumablePage(player)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalanceConsumablePage(player, {_recent})
 		else if {_slot} is 20:
-			openBalancePerkPage(player)
-			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+			openBalancePerkPage(player, {_recent})
 		else if {_slot} is 21:
-			set {_ct} to "%event.getClick()%"
-			if {_ct} contains "RIGHT":
-				openBalanceLevelKDPage(player, true)
-			else:
-				openBalanceLevelKDPage(player, false)
+			openBalanceLevelKDPage(player, {_recent})
+		else:
+			set {_opened} to false
+		if {_opened} is true:
 			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
 
 # ---- shared back-button handling for every read-only sub-page below ----
@@ -456,76 +550,102 @@ on inventory click:
 
 # ---- PAGE: Ability Usage & Hit Rate ----
 
-function openBalanceAbilityPage(p: player):
-	set metadata tag "balance ability" of {_p} to chest inventory with 4 rows named "Ability Usage & Hit Rate"
-	set slot (integers between 0 and 35) of metadata tag "balance ability" of {_p} to gray stained glass pane named " " # fills every slot first — the border and class icons below overwrite what they need, leaving any leftover slot gray instead of empty
+function openBalanceAbilityPage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Ability Usage & Hit Rate (Recent)"
+	else:
+		set {_title} to "Ability Usage & Hit Rate (Lifetime)"
+	set metadata tag "balance ability" of {_p} to chest inventory with 4 rows named {_title}
+	set slot (integers between 0 and 35) of metadata tag "balance ability" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance ability" of {_p} to black stained glass pane named " "
 	set slot (integers between 27 and 35) of metadata tag "balance ability" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk); 25 was added for Executioner (EA), the 14th class
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk)
 	loop {menu::classlist::*}: # 05-class-menu.sk
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
 
-		set {_tacCasts} to bd({balance-ability-casts::%{_class}%::TAC})
-		set {_ultCasts} to bd({balance-ability-casts::%{_class}%::ULT})
-		set {_tacHits} to bd({balance-ability-hits::%{_class}%::TAC})
-		set {_ultHits} to bd({balance-ability-hits::%{_class}%::ULT})
-		set {_games} to bd({balance-class-games::%{_class}%})
-		set {_classKills} to bd({balance-class-kills::%{_class}%})
+		set {_tacCasts} to bgv("ability-casts", "%{_class}%::TAC", {_recent})
+		set {_ultCasts} to bgv("ability-casts", "%{_class}%::ULT", {_recent})
+		set {_tacHits} to bgv("ability-hits", "%{_class}%::TAC", {_recent})
+		set {_ultHits} to bgv("ability-hits", "%{_class}%::ULT", {_recent})
+		set {_games} to bgv("class-games", {_class}, {_recent})
+		set {_classKills} to bgv("class-kills", {_class}, {_recent})
+		set {_manaSpent} to bgv("mana-spent", {_class}, {_recent})
 		set {_avgManaText} to "&8No data"
 		if {_classKills} > 0:
-			set {_avgMana} to safeDivide(bd({balance-mana-spent::%{_class}%}), {_classKills}) / 10 # internal units -> displayed mana points
+			set {_avgMana} to safeDivide({_manaSpent}, {_classKills}) / 10 # internal units -> displayed mana points
 			set {_avgManaText} to "&e%{_avgMana}%"
 
 		set {_lore::*} to "" and "&7TAC Casts: %bcount({_tacCasts})% &7Hit Rate: %bpct({_tacHits}, {_tacCasts})%" and "&7ULT Casts: %bcount({_ultCasts})% &7Hit Rate: %bpct({_ultHits}, {_ultCasts})%" and "" and "&7Avg TAC/Game: %bavg({_tacCasts}, {_games})%" and "&7Avg ULT/Game: %bavg({_ultCasts}, {_games})%" and "&7Avg Mana Spent/Kill: %{_avgManaText}%" and ""
 		set slot {_slot} of metadata tag "balance ability" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance ability" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 30 of metadata tag "balance ability" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance ability" of {_p}) to {_p}
 
 # ---- PAGE: Damage by Source ----
 
-function openBalanceDamageSourcePage(p: player):
-	set metadata tag "balance damage" of {_p} to chest inventory with 4 rows named "Damage by Source"
+function openBalanceDamageSourcePage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Damage by Source (Recent)"
+	else:
+		set {_title} to "Damage by Source (Lifetime)"
+	set metadata tag "balance damage" of {_p} to chest inventory with 4 rows named {_title}
 	set slot (integers between 0 and 35) of metadata tag "balance damage" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance damage" of {_p} to black stained glass pane named " "
 	set slot (integers between 27 and 35) of metadata tag "balance damage" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk); 25 was added for Executioner (EA), the 14th class
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk)
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
 
-		set {_tacDmg} to bd({balance-dmg-by-source::%{_class}%::TAC})
-		set {_ultDmg} to bd({balance-dmg-by-source::%{_class}%::ULT})
-		set {_passiveDmg} to bd({balance-dmg-by-source::%{_class}%::PASSIVE})
-		set {_meleeDmg} to bd({balance-dmg-by-source::%{_class}%::MELEE})
+		set {_tacDmg} to bgv("dmg-by-source", "%{_class}%::TAC", {_recent})
+		set {_ultDmg} to bgv("dmg-by-source", "%{_class}%::ULT", {_recent})
+		set {_passiveDmg} to bgv("dmg-by-source", "%{_class}%::PASSIVE", {_recent})
+		set {_meleeDmg} to bgv("dmg-by-source", "%{_class}%::MELEE", {_recent})
 		set {_total} to {_tacDmg} + {_ultDmg} + {_passiveDmg} + {_meleeDmg}
 
 		set {_lore::*} to "" and "&7Tactical: %bpct({_tacDmg}, {_total})%" and "&7Ultimate: %bpct({_ultDmg}, {_total})%" and "&7Passive: %bpct({_passiveDmg}, {_total})%" and "&7Melee: %bpct({_meleeDmg}, {_total})%" and "" and "&8&oTotal Player Damage: &7%formatNumber({_total})%" and ""
 		set slot {_slot} of metadata tag "balance damage" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance damage" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 30 of metadata tag "balance damage" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance damage" of {_p}) to {_p}
 
 # ---- PAGE: Time to First Kill/Death ----
 
-function openBalanceTimeToKillPage(p: player):
-	set metadata tag "balance ttk" of {_p} to chest inventory with 4 rows named "Time to First Kill/Death"
+function openBalanceTimeToKillPage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Time to First Kill/Death (Recent)"
+	else:
+		set {_title} to "Time to First Kill/Death (Lifetime)"
+	set metadata tag "balance ttk" of {_p} to chest inventory with 4 rows named {_title}
 	set slot (integers between 0 and 35) of metadata tag "balance ttk" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance ttk" of {_p} to black stained glass pane named " "
 	set slot (integers between 27 and 35) of metadata tag "balance ttk" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk); 25 was added for Executioner (EA), the 14th class
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk)
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
 
-		set {_lore::*} to "" and "&7Avg Time to First Kill:" and bdur({balance-firstkill-sum::%{_class}%}, {balance-firstkill-count::%{_class}%}) and "" and "&7Avg Time to First Death:" and bdur({balance-firstdeath-sum::%{_class}%}, {balance-firstdeath-count::%{_class}%}) and ""
+		set {_fkSum} to bgv("firstkill-sum", {_class}, {_recent})
+		set {_fkCount} to bgv("firstkill-count", {_class}, {_recent})
+		set {_fdSum} to bgv("firstdeath-sum", {_class}, {_recent})
+		set {_fdCount} to bgv("firstdeath-count", {_class}, {_recent})
+		set {_lore::*} to "" and "&7Avg Time to First Kill:" and bdur({_fkSum}, {_fkCount}) and "" and "&7Avg Time to First Death:" and bdur({_fdSum}, {_fdCount}) and ""
 		set slot {_slot} of metadata tag "balance ttk" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance ttk" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 30 of metadata tag "balance ttk" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance ttk" of {_p}) to {_p}
 
 # ---- PAGE: Matchup Win Rates ----
@@ -647,94 +767,180 @@ function openBalanceMatchupPage(p: player, recent: boolean):
 
 # ---- PAGE: Draft & Carry Rates ----
 
-function openBalanceDraftCarryPage(p: player):
-	set metadata tag "balance draftcarry" of {_p} to chest inventory with 4 rows named "Draft & Carry Rates"
+function openBalanceDraftCarryPage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Draft & Carry Rates (Recent)"
+	else:
+		set {_title} to "Draft & Carry Rates (Lifetime)"
+	set metadata tag "balance draftcarry" of {_p} to chest inventory with 4 rows named {_title}
 	set slot (integers between 0 and 35) of metadata tag "balance draftcarry" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance draftcarry" of {_p} to black stained glass pane named " "
 	set slot (integers between 27 and 35) of metadata tag "balance draftcarry" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk); 25 was added for Executioner (EA), the 14th class
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk)
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
 
-		set {_games} to bd({balance-class-games::%{_class}%})
+		set {_games} to bgv("class-games", {_class}, {_recent})
+		set {_picked} to bgv("draft-picked", {_class}, {_recent})
+		set {_avail} to bgv("draft-available", {_class}, {_recent})
+		set {_ck} to bgv("carry-kills-top", {_class}, {_recent})
+		set {_cb} to bgv("carry-bosses-top", {_class}, {_recent})
 
-		set {_lore::*} to "" and "&7Draft Select Rate: %bpct({balance-draft-picked::%{_class}%}, {balance-draft-available::%{_class}%})%" and "" and "&7Kill Carry Rate: %bpct({balance-carry-kills-top::%{_class}%}, {_games})%" and "&7Boss Carry Rate: %bpct({balance-carry-bosses-top::%{_class}%}, {_games})%" and ""
+		set {_lore::*} to "" and "&7Draft Select Rate: %bpct({_picked}, {_avail})%" and "" and "&7Kill Carry Rate: %bpct({_ck}, {_games})%" and "&7Boss Carry Rate: %bpct({_cb}, {_games})%" and ""
 		set slot {_slot} of metadata tag "balance draftcarry" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance draftcarry" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 30 of metadata tag "balance draftcarry" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance draftcarry" of {_p}) to {_p}
 
 # ---- PAGE: Level vs. Lives Left ----
 
-function openBalanceLevelLivesPage(p: player):
-	set metadata tag "balance levellives" of {_p} to chest inventory with 4 rows named "Level vs. Lives Left"
+function openBalanceLevelLivesPage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Level vs. Lives Left (Recent)"
+	else:
+		set {_title} to "Level vs. Lives Left (Lifetime)"
+	set metadata tag "balance levellives" of {_p} to chest inventory with 4 rows named {_title}
 	set slot (integers between 0 and 35) of metadata tag "balance levellives" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance levellives" of {_p} to black stained glass pane named " "
 	set slot (integers between 27 and 35) of metadata tag "balance levellives" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk); 25 was added for Executioner (EA), the 14th class
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk)
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
 
-		set {_lore::*} to "" and "&7Avg Lives @ Level 1: %bavg({balance-levelup-lives-sum::%{_class}%::1}, {balance-levelup-lives-count::%{_class}%::1})%" and "&7Avg Lives @ Level 2: %bavg({balance-levelup-lives-sum::%{_class}%::2}, {balance-levelup-lives-count::%{_class}%::2})%" and "&7Avg Lives @ Level 3: %bavg({balance-levelup-lives-sum::%{_class}%::3}, {balance-levelup-lives-count::%{_class}%::3})%" and ""
+		set {_s1} to bgv("levelup-lives-sum", "%{_class}%::1", {_recent})
+		set {_c1} to bgv("levelup-lives-count", "%{_class}%::1", {_recent})
+		set {_s2} to bgv("levelup-lives-sum", "%{_class}%::2", {_recent})
+		set {_c2} to bgv("levelup-lives-count", "%{_class}%::2", {_recent})
+		set {_s3} to bgv("levelup-lives-sum", "%{_class}%::3", {_recent})
+		set {_c3} to bgv("levelup-lives-count", "%{_class}%::3", {_recent})
+		set {_lore::*} to "" and "&7Avg Lives @ Level 1: %bavg({_s1}, {_c1})%" and "&7Avg Lives @ Level 2: %bavg({_s2}, {_c2})%" and "&7Avg Lives @ Level 3: %bavg({_s3}, {_c3})%" and ""
 		set slot {_slot} of metadata tag "balance levellives" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance levellives" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 30 of metadata tag "balance levellives" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance levellives" of {_p}) to {_p}
+
+# ---- PER-CLASS WIN RATE LINES (used by the consumable + perk pages) ----
+# Void worker that fills the global {balance-ratelines::*} (same result-in-a-global pattern as firstAvailableClassWorker()): one line per class, sorted by win rate
+# with that item/perk, highest first; classes with no data go last. prefix = "cons" or "perk" ({balance-<prefix>-games::ID::CLASS} / {balance-<prefix>-wins::ID::CLASS}).
+
+function balRateLines(prefix: text, id: text, recent: boolean):
+	delete {balance-ratelines::*}
+	set {_classes::*} to {menu::classlist::*}
+	set {_count} to size of {_classes::*}
+	set {_i} to 1
+	while {_i} <= {_count}:
+		set {_c} to {_classes::%{_i}%}
+		set {_g::%{_i}%} to bgv("%{_prefix}%-games", "%{_id}%::%{_c}%", {_recent})
+		set {_w::%{_i}%} to bgv("%{_prefix}%-wins", "%{_id}%::%{_c}%", {_recent})
+		if {_g::%{_i}%} > 0:
+			set {_r::%{_i}%} to {_w::%{_i}%} / {_g::%{_i}%}
+		else:
+			set {_r::%{_i}%} to -1
+		add 1 to {_i}
+	set {_n} to 0
+	while {_n} < {_count}:
+		set {_best} to 0
+		set {_bestRate} to -2
+		set {_j} to 1
+		while {_j} <= {_count}:
+			if {_used::%{_j}%} isn't set:
+				if {_r::%{_j}%} > {_bestRate}:
+					set {_bestRate} to {_r::%{_j}%}
+					set {_best} to {_j}
+			add 1 to {_j}
+		set {_used::%{_best}%} to true
+		set {_bc} to {_classes::%{_best}%}
+		set {_bg} to {_g::%{_best}%}
+		set {_bw} to {_w::%{_best}%}
+		set {_bl} to {_bg} - {_bw}
+		if {_bg} > 0:
+			add "&7%{class-name::%{_bc}%}%: %bpct({_bw}, {_bg})% &8(%{_bw}%W-%{_bl}%L)" to {balance-ratelines::*}
+		else:
+			add "&7%{class-name::%{_bc}%}%: &8No data" to {balance-ratelines::*}
+		add 1 to {_n}
 
 # ---- PAGE: Consumable Pick Rate & K/D ----
 
-function openBalanceConsumablePage(p: player):
-	set metadata tag "balance consumable" of {_p} to chest inventory with 4 rows named "Consumable Pick Rate & K/D"
+function openBalanceConsumablePage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Consumable Pick Rate & K/D (Recent)"
+	else:
+		set {_title} to "Consumable Pick Rate & K/D (Lifetime)"
+	set metadata tag "balance consumable" of {_p} to chest inventory with 4 rows named {_title}
 	set slot (integers between 0 and 35) of metadata tag "balance consumable" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance consumable" of {_p} to black stained glass pane named " "
 	set slot (integers between 27 and 35) of metadata tag "balance consumable" of {_p} to black stained glass pane named " "
 
-	set {_ids::*} to "GA", "HP", "GP", "GM", "CF", "MP", and "SP" # 07-consumables.sk's {health-item::*} — kept as an explicit list rather than looping the persistent variable directly: {health-item::*} also picks up unrelated nested entries like {health-item::%uuid%::item} (a player's cached selection), which broke slot lookups here (that's the missing-icon bug)
+	set {_ids::*} to "GA", "HP", "GP", "GM", "CF", "MP", and "SP" # 07-consumables.sk — explicit list (looping {health-item::*} also picks up per-player cache entries)
 	set {_totalPicks} to 0
 	loop {_ids::*}:
-		add bd({balance-consumable-picks::%loop-value%}) to {_totalPicks}
+		add bgv("consumable-picks", loop-value, {_recent}) to {_totalPicks}
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, and 16 # centers 7 icons on row 2 (absolute slots 9-17) — a fixed lookup list matched by loop-index, same proven pattern as every other page in this file, instead of a floor()/arithmetic row calc that was silently producing bad slots and swallowing every icon
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, and 16 # centers 7 icons on row 2 — a fixed lookup list matched by loop-index
 	loop {_ids::*}:
 		set {_id} to loop-value
 		set {_slot} to {_slots::%loop-index%}
-		set {_kills} to bd({balance-consumable-kills::%{_id}%})
-		set {_deaths} to bd({balance-consumable-deaths::%{_id}%})
+		set {_pickCount} to bgv("consumable-picks", {_id}, {_recent})
+		set {_kills} to bgv("consumable-kills", {_id}, {_recent})
+		set {_deaths} to bgv("consumable-deaths", {_id}, {_recent})
+		balRateLines("cons", {_id}, {_recent}) # fills {balance-ratelines::*}: every class's win rate with this item, highest first
 
-		set {_lore::*} to "" and "&7Default Pick Share: %bpct({balance-consumable-picks::%{_id}%}, {_totalPicks})%" and "&8&o(%bd({balance-consumable-picks::%{_id}%})% picks)" and "" and "&7K/D While Active: %bkd({_kills}, {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and ""
+		set {_lore::*} to "" and "&7Default Pick Share: %bpct({_pickCount}, {_totalPicks})%" and "&8&o(%{_pickCount}% picks)" and "" and "&7K/D While Active: %bkd({_kills}, {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and "" and "&6&lWin Rate by Class" and "&8&o(games with 3+ kills/deaths on the class)"
+		add {balance-ratelines::*} to {_lore::*}
+		add "" to {_lore::*}
 		set slot {_slot} of metadata tag "balance consumable" of {_p} to ({health-item::%{_id}%} named "&e%name of {health-item::%{_id}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance consumable" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 30 of metadata tag "balance consumable" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance consumable" of {_p}) to {_p}
 
 # ---- PAGE: General Perk Pick Rate & K/D ----
 
-function openBalancePerkPage(p: player):
-	set metadata tag "balance perk" of {_p} to chest inventory with 4 rows named "General Perk Pick Rate & K/D"
+function openBalancePerkPage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "General Perk Pick Rate & K/D (Recent)"
+	else:
+		set {_title} to "General Perk Pick Rate & K/D (Lifetime)"
+	set metadata tag "balance perk" of {_p} to chest inventory with 4 rows named {_title}
 	set slot (integers between 0 and 35) of metadata tag "balance perk" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance perk" of {_p} to black stained glass pane named " "
 	set slot (integers between 27 and 35) of metadata tag "balance perk" of {_p} to black stained glass pane named " "
 
-	set {_pool::*} to generalPerkPool() # 06-perks-general.sk
+	set {_ids::*} to generalPerkPool() # 06-perks-general.sk
 	set {_totalPicks} to 0
-	loop {_pool::*}:
-		add bd({balance-perk-picks::%loop-value%}) to {_totalPicks}
+	loop {_ids::*}:
+		add bgv("perk-picks", loop-value, {_recent}) to {_totalPicks}
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, and 16 # centers 7 icons on row 2 (absolute slots 9-17) — same fixed lookup-list fix as the consumable page above
-	loop {_pool::*}:
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, and 16 # centers 7 icons on row 2 — a fixed lookup list matched by loop-index
+	loop {_ids::*}:
 		set {_id} to loop-value
 		set {_slot} to {_slots::%loop-index%}
-		set {_kills} to bd({balance-perk-kills::%{_id}%})
-		set {_deaths} to bd({balance-perk-deaths::%{_id}%})
+		set {_pickCount} to bgv("perk-picks", {_id}, {_recent})
+		set {_kills} to bgv("perk-kills", {_id}, {_recent})
+		set {_deaths} to bgv("perk-deaths", {_id}, {_recent})
+		balRateLines("perk", {_id}, {_recent}) # fills {balance-ratelines::*}: every class's win rate with this item, highest first
 
-		set {_lore::*} to "" and "&7Default Pick Share: %bpct({balance-perk-picks::%{_id}%}, {_totalPicks})%" and "&8&o(%bd({balance-perk-picks::%{_id}%})% picks)" and "" and "&7K/D While Active: %bkd({_kills}, {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and ""
+		set {_lore::*} to "" and "&7Default Pick Share: %bpct({_pickCount}, {_totalPicks})%" and "&8&o(%{_pickCount}% picks)" and "" and "&7K/D While Active: %bkd({_kills}, {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and "" and "&6&lWin Rate by Class" and "&8&o(games with 3+ kills/deaths on the class)"
+		add {balance-ratelines::*} to {_lore::*}
+		add "" to {_lore::*}
 		set slot {_slot} of metadata tag "balance perk" of {_p} to ({gp-display::%{_id}%} named "&e%name of {gp-display::%{_id}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance perk" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 30 of metadata tag "balance perk" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance perk" of {_p}) to {_p}
 
 # ---- PAGE: K/D by Level ----
@@ -849,6 +1055,11 @@ command /resetbalancestats:
 		# delete {balance-levelkd-kills::*}
 		# delete {balance-levelkd-deaths::*}
 		# delete {balance-recent::*}
+		# delete {balance-agg::*}
+		# delete {balance-cons-games::*}
+		# delete {balance-cons-wins::*}
+		# delete {balance-perk-games::*}
+		# delete {balance-perk-wins::*}
 		# delete {balance-recent-valid::*}
 		# delete {balance-recent-slot}
 		# # transient in-flight tagging state — shouldn't normally be set outside the instant of a single damage call, cleared here for good measure

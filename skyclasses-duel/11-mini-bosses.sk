@@ -61,6 +61,11 @@ function spawnMiniBoss(loc: number):
 	delete {minibossRespawnAt::%{_loc}%}
 	set {_spawnloc} to {config::arena::miniboss-spawn::%{_loc}%}
 	set {_type} to {minibosstype::%{_loc}%}
+	# Duplicate guard: the tracking list can lose a mob that is still alive (e.g. it was in an unloaded chunk when the watchdog checked it, so it counted as "not alive" and was dropped, then the camp respawned a second pack on top of it = 6 crawlers). So before spawning, remove EVERY mob still tagged for this camp, straight from the world. "delete" removes without firing a death event, so nobody gets kill XP for it.
+	loop all entities in world {config::arena::world-name}:
+		if loop-entity is a zombie or cave spider:
+			if metadata value "minibossLoc" of loop-entity is {_loc}:
+				delete loop-entity
 	delete {minibossmobs::%{_loc}%::*}
 
 	if {_type} is "individual":
