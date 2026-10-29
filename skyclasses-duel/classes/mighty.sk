@@ -8,12 +8,12 @@
 #   file. Used to be Mighty's baseline (level 0) passive; "More Explosions!"
 #   (faster grenade recharge) used to be the level 2 perk and has been removed.
 # Perk 2 (level 3) "Fire Pit": adds a fire ring on ultimate landing.
-# Tactical damage is a 1.25 base, plus 0.25 for every heart of max health the target has OVER Mighty's own max health, capped at 4.
+# Tactical damage is 0.25 base, +1 per heart of max health the target has OVER Mighty's own, capped at 4.
 # "Bouncy Explode" (tactical pushes you upward when looking down) was cut per
 # design decision — the original 3-perk kit is trimmed to 2 slots.
 # ============================================
 
-function mightyExplosion(p: player, radius: integer):
+function mightyExplosion(p: player, radius: number):
 	set {_r} to ceil({_radius} - 1)
 	if {_radius} > 3:
 		set {_s} to 2
@@ -29,17 +29,17 @@ on right click with mace: # TACTICAL
 		if tacCHECK(player, {weapons::MH::TAC-COST}) is true:
 			mightyExplosion(player, 3)
 			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
-			loop all living entities in radius 3.5 around player:
+			loop all living entities in radius 3 around player: # tactical radius (was 3.5)
 				if loop-entity is not player:
 					if metadata value "levelTag" of loop-entity isn't set: # FIX: the level-tag armor stand riding the player (04-leveling.sk) sits at the player's own location, so it's always inside this radius — without this check it gets hit/pushed/teleported right along with real targets
 						updateAttacker(player, loop-entity)
 						directAttack(loop-entity)
 						push loop-entity upward at speed 0.75
-						set {_tacDmg} to 1.25 # base
-						set {_hpDiff} to (max health of loop-entity) - (max health of player) # hearts of max health the target has over Mighty (a target with the same or less adds nothing)
+						set {_tacDmg} to 0.25 # base
+						set {_hpDiff} to (max health of loop-entity) - (max health of player) # +1 per heart of max health the target has over Mighty's own
 						if {_hpDiff} > 0:
-							set {_tacDmg} to 1.25 + ({_hpDiff} * 0.25)
-						if {_tacDmg} > 4: # cap carried over from the old max-health version — mainly stops jungle mobs / bosses from taking huge tactical hits
+							add {_hpDiff} to {_tacDmg}
+						if {_tacDmg} > 4: # cap — also stops jungle mobs / bosses from taking huge tactical hits
 							set {_tacDmg} to 4
 						damage loop-entity by {_tacDmg}
 			delete {balance-abilitySource::%player's uuid%}
@@ -88,13 +88,13 @@ on drop of mace with priority low: # ULTIMATE
 			# slam
 			delete {mighty-DASH::%player's uuid%}
 			if {godlike-ULT-CANCEL::%player's uuid%::MH} isn't set:
-				mightyExplosion(player, 5.5)
-				loop all living entities in radius 5.5 around player:
+				mightyExplosion(player, 3.5) # ultimate radius 5.5 -> 3.5 max
+				loop all living entities in radius 3.5 around player:
 					if loop-entity is not player:
 						if metadata value "levelTag" of loop-entity isn't set: # FIX: excludes the level-tag armor stand itself (04-leveling.sk) from being hit directly as its own loop-entity — but it rides whichever PLAYER it's tagged to as a passenger, so a victim player caught in this loop still needed the teleport-to-self below replaced (see the comment on that line) or their own armor stand would get knocked off them the same way the caster's used to
 							updateAttacker(player, loop-entity)
 							directAttack(loop-entity)
-							set {_dis} to distance between player and loop-entity
+							set {_dis} to (distance between player and loop-entity) * (5.5 / 3.5) # the radius shrank from 5.5 to 3.5, so distances are scaled back up by 5.5/3.5 before the damage curve below — a target at the same fraction of the radius takes the same damage as before (the 2.5-3.5 distance bands below are the ORIGINAL 5.5-radius values)
 							set {_d} to abs({_dis} - 6)
 							if {_d} < 2.5:
 								set {_d} to 2.5
@@ -112,12 +112,12 @@ on drop of mace with priority low: # ULTIMATE
 							push loop-entity {_v} at speed {_d}
 			# PERK 2 — Fire Pit
 			if classLevel(player, "MH") >= 3:
-				set {_shapes::circle} to a circle of radius 5
-				set {_shapes::line-1} to a line in direction vector(0, 0, 1) with length 5
-				set {_shapes::line-2} to a line in direction vector(0, 0, -1) with length 5
-				set {_shapes::line-3} to a line in direction vector(1, 0, 0) with length 5
-				set {_shapes::line-4} to a line in direction vector(-1, 0, 0) with length 5
-				set {_ultDmgRadius} to 5.25
+				set {_shapes::circle} to a circle of radius 3.2 # Fire Pit ring scaled with the ultimate (5 -> 3.2, same 5.5 -> 3.5 ratio)
+				set {_shapes::line-1} to a line in direction vector(0, 0, 1) with length 3.2
+				set {_shapes::line-2} to a line in direction vector(0, 0, -1) with length 3.2
+				set {_shapes::line-3} to a line in direction vector(1, 0, 0) with length 3.2
+				set {_shapes::line-4} to a line in direction vector(-1, 0, 0) with length 3.2
+				set {_ultDmgRadius} to 3.35 # 5.25 x (3.5 / 5.5), stays inside the 3.5 ult radius
 
 				set {_loc} to player's location
 				set {_y-max} to y-coord of {_loc}+2

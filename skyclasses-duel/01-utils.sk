@@ -157,6 +157,22 @@ command /gma [<offline player>]:
 			set gamemode of player to adventure
 			send "&7You set your gamemode to &aADVENTURE"
 
+command /pfuk <player>: # flings a player at speed 10 in a random direction every 2 ticks for 3 seconds
+	permission: op
+	permission message: &cYou don't have permission to use this.
+	trigger:
+		set {_p} to arg-1
+		send "&7Flinging &f%{_p}%&7 for 3 seconds."
+		loop 30 times: # 30 x 2 ticks = 3 seconds
+			if {_p} isn't online:
+				stop loop
+			set {_v} to vector(random number between -1 and 1, random number between -1 and 1, random number between -1 and 1)
+			if vector length of {_v} < 0.01:
+				set {_v} to vector(0, 1, 0)
+			set vector length of {_v} to 1
+			push {_p} {_v} at speed 10
+			wait 2 ticks
+
 command /hset <number>: # sets your max health (in hearts, 1 = 1 heart) and fully heals you
 	permission: op
 	usage: /hset <max health in hearts>

@@ -2,7 +2,7 @@
 # REAPER (RS) — Reaper Scythe
 # Tactical: always available. Ultimate: unlocks at class level 1.
 # Perk 1 (level 2) "Extended Grapple": longer grapple range and improved pull physics.
-# Perk 2 (level 3) "Soul Collector": bonus damage/heal from blinded enemies after the ultimate.
+# Perk 2 (level 3) "Blinding Scythe": the ultimate also blinds the enemies it hits (the base ultimate only applies wither).
 # "Reaping Grapple" (wither on grapple hit) was cut per design decision —
 # the original 3-perk kit is trimmed to 2 slots.
 # ============================================
@@ -211,7 +211,8 @@ on drop of netherite hoe with priority low: # ULTIMATE
 				if {_entity} is a living entity:
 					set {_v} to vector from player to {_entity}
 					reaperBeam(player, {_entity}, {_v})
-					add potion effect of blindness 1 without particles for 5 seconds to potion effects of {_entity}
+					if classLevel(player, "RS") >= 3: # Perk 2 (Blinding Scythe) — the base ultimate no longer blinds
+						add potion effect of blindness 1 without particles for 5 seconds to potion effects of {_entity}
 					set {_shapes::%{_entity}%} to a circle with radius 0.5
 					play sound "entity_wither_spawn" with volume 1 and pitch 1 to {_entity}
 
@@ -274,20 +275,3 @@ function reaperSlash(loc: location, main: number, degree: number, size: number):
 
 	add 1 to y-coord of {_loc}
 	draw shapes {_shapes::*} at {_loc}
-
-function rsCHECK(a: player, v: living entity, cause: text) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
-	delete {rsCheckResult}
-	rsCHECKWorker({_a}, {_v}, {_cause})
-	if {rsCheckResult} is set:
-		return {rsCheckResult}
-
-function rsCHECKWorker(a: player, v: living entity, cause: text): # Perk 2 (Soul Collector)
-	if {_cause} is "attack":
-		if classLevel({_a}, "RS") >= 3:
-			set {_potions::*} to active potion effects of {_v}
-			if {_potions::*} is set:
-				loop {_potions::*}:
-					set {_effect} to "%loop-value%"
-					if {_effect} contains "blindness":
-						heal {_a} by 0.5
-						set {rsCheckResult} to 0.5

@@ -1,12 +1,12 @@
 # ============================================
 # RAPID (RB/RD) — Rapid Bow / Rapid Dagger
 # Tactical: always available. Ultimate: unlocks at class level 1.
-# Passive "Longshot" — every 3rd melee hit fires an empowered arrow dealing
-#   25% of the victim's max health (30% at Perk 1, see below, when the shot
-#   lands from >= 7.5 blocks away). Replaces the old "speed on landed ult
-#   arrow hit" passive.
-# Perk 1 (level 2) "Long Shot": the passive's arrow does 30% max health
-#   damage instead of 25% when fired from >= 7.5 blocks away.
+# Passive "Longshot" — every 4th attack is empowered (3 landed melee hits charge it, the XP bar shows the progress). When it is ready:
+#   - an attack that LANDS as melee deals its normal damage PLUS the health-difference bonus (0.25 per heart over, no flat base, capped at +1.5)
+#   - an attack that doesn't land (swing at nothing / too far) fires an empowered arrow instead
+#   Empowered damage (both ways, rbPassiveDamage() below): 2.5 base, +0.25 for every heart of max health the victim has OVER Rapid's own
+#   max health (capped at 4 — the old passive's clamp, kept so bosses / jungle mobs don't take huge hits).
+# Perk 1 (level 2) "Hit and Run": speed 2 for 2 seconds whenever one of Rapid's arrows (passive or ultimate) hits a player or mob.
 # Perk 2 (level 3) "Overheat": arrows ignite near the end of the rapid-fire ultimate.
 #
 # Cleanup notes:
@@ -20,8 +20,8 @@ on right click with stone sword: # TACTICAL (dagger form)
 		if tacCHECK(player, {weapons::RB::TAC-COST}) is true:
 			play sound "entity_generic_drink" with volume 1 and pitch 1 at player
 			add potion effect of speed 3 for 0.5 seconds to potion effects of player
-			wait 1 seconds
-			add potion effect of speed 2 for 2 seconds to potion effects of player
+			wait 0.5 seconds
+			add potion effect of speed 2 for 2.5 seconds to potion effects of player
 
 on drop of stone sword with priority low: # ULTIMATE
 	if name of event-item is "%{wc}%Rapid Dagger":
@@ -71,8 +71,8 @@ on drop of stone sword with priority low: # ULTIMATE
 							add 0.1 to {_speed}
 						set {_l} to location 0.5 in front of player # only used to compute the jittered aim direction below now — spawning the arrow FROM this location (instead of from the player) was the actual cause of the north-facing visual bug: the client can't render a fresh projectile's rotation correctly unless it's spawned from a living entity
 						add 1.5 to y-coord of {_l}
-						set {_y} to a random number between -2.5 and 2.5
-						set {_pitch} to a random number between -2.5 and 2.5
+						set {_y} to a random number between -1.5 and 1.5
+						set {_pitch} to a random number between -1.5 and 1.5
 						add {_y} to yaw of {_l}
 						add {_pitch} to pitch of {_l}
 						shoot a arrow from player at speed {_speed} # shooting from the player (not a custom location) is what renders correctly in every direction
@@ -112,9 +112,15 @@ on drop of stone sword with priority low: # ULTIMATE
 			if {class::%player's uuid%} = "RB":
 				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
 
-on damage of living entity: # ult arrow hit effect — Overheat's ignite (the old "speed on landed ult arrow hit" passive was removed; see the new "every 3rd hit" passive below)
+on damage of living entity: # arrow hit effects — Perk 1 (Hit and Run) speed for any Rapid arrow, and Overheat's ignite on ult arrows
 	if event-damagecause is a projectile:
 		if event-projectile is a arrow:
+			if metadata value "type" of event-projectile is "RB-PASSIVE" or "RB":
+				set {_attacker} to metadata value "attacker" of event-projectile
+				if {_attacker} is a player:
+					if victim is not an armor stand:
+						if classLevel({_attacker}, "RB") >= 2: # Perk 1 (Hit and Run)
+							add potion effect of speed 2 without particles for 2 seconds to potion effects of {_attacker}
 			if metadata value "type" of event-projectile is "RB":
 				set {_attacker} to metadata value "attacker" of event-projectile
 				updateAttacker({_attacker}, victim)
@@ -123,7 +129,16 @@ on damage of living entity: # ult arrow hit effect — Overheat's ignite (the ol
 					setFireSource(victim, "ULT", 4) # 19-balance-stats.sk — Overheat only ignites arrows during the rapid-fire ultimate
 					set fire to victim for 4 seconds
 
-function rbPSS(p: player): # PASSIVE "Longshot" — fires from the "on left click" hook below once every 3rd melee hit lands; the arrow's damage (25%/30% max health) is applied by 08-damage.sk's dmgUpdate() when it lands, keyed off its "RB-PASSIVE" metadata type
+function rbPassiveDamage(a: living entity, v: living entity) :: number: # empowered passive damage — 2.5 + 0.25 per heart of the victim's max health over Rapid's own, capped at 4. Used by the arrow (08-damage.sk's RB-PASSIVE branch) and by the empowered melee hit (08-damage.sk's RB attack branch)
+	set {_d} to 2.5
+	set {_over} to (max health of {_v}) - (max health of {_a})
+	if {_over} > 0:
+		set {_d} to 2.5 + (0.25 * {_over})
+	if {_d} > 4:
+		set {_d} to 4
+	return {_d}
+
+function rbPSS(p: player): # PASSIVE "Longshot" arrow — fired by the "on left click" hook below when the passive is ready and the attack did NOT land as melee; its damage is applied by 08-damage.sk's dmgUpdate() when it lands, keyed off its "RB-PASSIVE" metadata type
 	shoot a arrow from {_p} at speed 2
 	set metadata value "type" of shot projectile to "RB-PASSIVE"
 	set metadata value "attacker" of shot projectile to {_p}
@@ -136,13 +151,16 @@ function rbPSS(p: player): # PASSIVE "Longshot" — fires from the "on left clic
 		wait 1 tick
 	kill shot projectile
 
-on left click with priority high: # PASSIVE — every 3rd hit is empowered (see rbCHECK() in 08-damage.sk for the counter increment on a landed melee hit)
+on left click with priority high: # PASSIVE — when ready, a swing that lands as melee gets the empowered damage (08-damage.sk consumes the charge on that hit); a swing that doesn't land fires the arrow instead
 	if name of player's held item is "%{wc}%Rapid Dagger":
 		if attack cooldown of player >= 0.75:
 			if {rapid-attack::%player's uuid%} = 3:
-				delete {rapid-attack::%player's uuid%}
-				set level progress of player to 0
-				rbPSS(player)
+				wait 2 ticks # the melee damage event (if the swing connected) is processed right after this click — give it time to consume the charge first
+				if {rapid-attack::%player's uuid%} = 3: # still charged => nothing was hit in melee
+					delete {rapid-attack::%player's uuid%}
+					set level of player to 0
+					set level progress of player to 0
+					rbPSS(player)
 
 function rbCHECK(a: player): # called from 08-damage.sk's dmgUpdate() on every landed RB melee hit — increments the passive's hit counter
 	if name of {_a}'s held item is "%{wc}%Rapid Dagger":

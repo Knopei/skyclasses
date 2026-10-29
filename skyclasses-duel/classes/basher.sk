@@ -102,13 +102,19 @@ function bsCHECK(p: player, dmg: number, cause: text): # called from the damage 
 			set level of {_p} to 0
 			set level progress of {_p} to {_xp}
 
+function bsBashSlowFollowup(victim: living entity): # runs on its own after the slowness 2 above has worn off — kept separate so bsBashHit()'s own waits aren't delayed by it
+	wait 2 seconds
+	if {_victim} is alive:
+		add potion effect of slowness 1 without particles for 2 seconds to potion effects of {_victim}
+
 function bsBashHit(victim: living entity, attacker: player, prevLoc: location):
 	play sound "item.shield.block" with volume 1 and pitch 0.5 at {_victim}
 	updateAttacker({_attacker}, {_victim})
 	directAttack({_victim})
 	set {balance-abilitySource::%{_attacker}'s uuid%} to "TAC" # 19-balance-stats.sk — dash-bash is Basher's tactical
 	damage {_victim} by 2.25
-	add potion effect of slowness 1 without particles for 3 seconds to potion effects of {_victim}
+	add potion effect of slowness 2 without particles for 2 seconds to potion effects of {_victim}
+	bsBashSlowFollowup({_victim}) # slowness 2 for 2 seconds, THEN slowness 1 for 2 more (the ult's own slow below is unchanged)
 	delete {balance-abilitySource::%{_attacker}'s uuid%}
 	set {_v} to vector between {_prevLoc} and location of {_victim}
 	wait 1 tick

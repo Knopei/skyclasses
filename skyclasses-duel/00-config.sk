@@ -16,7 +16,7 @@ on load:
 	set {config::nametags-enabled} to false # floating "[Lvl N] Class" armor-stand nametag above each player (04-leveling.sk). OFF now that the combat bossbar (20-combat.sk) replaces it — all nametag code is still in place; set this to true to bring them back.
 
 	# ---- PREGAME DRAFT (ban / coinflip / snake-draft pick, in the "lobby" world) ----
-	set {config::draft::ban-count} to 3 # classes banned before drafting begins each game — drawn from the shuffle-bag deck in 17-draft.sk, not a plain reroll
+	set {config::draft::ban-count} to 2 # classes banned before drafting begins each game — drawn from the shuffle-bag deck in 17-draft.sk, not a plain reroll
 	set {config::draft::pick-timeout} to 10 # seconds - plain number, used as a loop count
 	set {config::lobby::player1-spawn} to location(-3.5, -29.5, -36.5, world "lobby", -90, 0)
 	set {config::lobby::player2-spawn} to location(4.5, -29.5, -36.5, world "lobby", 90, 0)

@@ -14,7 +14,7 @@ on right click with nether star or diamond sword: # TACTICAL
 			loop 3 times:
 				set {_l} to location 0.5 in front of player # only used to compute the jittered aim direction below now — spawning the arrow FROM this location (instead of from the player) was the actual cause of the north-facing visual bug: the client can't render a fresh projectile's rotation correctly unless it's spawned from a living entity
 				add 1.5 to y-coord of {_l}
-				set {_y} to a random number between -1.5 and 1.5
+				set {_y} to a random number between -0.5 and 0.5
 				set {_p} to a random number between -0.5 and 0.5
 				add {_y} to yaw of {_l}
 				add {_p} to pitch of {_l}
@@ -66,8 +66,8 @@ on drop of nether star with priority low: # ULTIMATE
 			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1.5 at player
 			wait 20 ticks # 1s telegraph after the sound, before the speed/jump buffs and katana swap actually apply — gives the opponent a moment to react
 			if {godlike-ULT-CANCEL::%player's uuid%::NS} isn't set: # died during the telegraph window (09-death-match.sk) — skip straight to cleanup below rather than granting buffs/swapping weapons on a dead player
-				add potion effect of speed 3 without particles for 10 seconds to potion effects of player
-				add potion effect of jump boost 4 without particles for 10 seconds to potion effects of player
+				add potion effect of speed 3 without particles for 8 seconds to potion effects of player
+				add potion effect of jump boost 4 without particles for 8 seconds to potion effects of player
 				wait 5 ticks
 				if name of player's held item is "%{wc}%Ninja Shurikens":
 					set player's held item to {class::weapon::NK}
@@ -79,7 +79,7 @@ on drop of nether star with priority low: # ULTIMATE
 							set slot {_i} of player's inventory to {class::weapon::NK}
 							stop loop
 
-			loop 40 times:
+			loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
 				if {godlike-ULT-CANCEL::%player's uuid%::NS} is set:
 					stop loop
 				set {_loc} to player's location

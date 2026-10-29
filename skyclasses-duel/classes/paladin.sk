@@ -1,38 +1,31 @@
 # ============================================
 # PALADIN (PGS) — Paladin Great Sword
-# Tactical: always available. Ultimate: unlocks at class level 1; activating it also grants the
-#   tactical's absorption shield for free (same strength/duration, via paladinShield()).
-# Perk 1 (level 2) "Elder Shield": increases the tactical absorption shield's
-#   duration from 2 seconds to 3 seconds.
+# Tactical: always available. Ultimate: unlocks at class level 1.
+# Perk 1 (level 2) "Agile Shield": periodic speed burst while the tactical
+#   absorption shield is active.
 # Perk 2 (level 3) "Supreme Radiance": larger ultimate radius.
 # ============================================
-
-function paladinShield(p: player): # shared by the tactical and the ultimate — absorption shield + spinning ring visual. Contains a wait, so it returns to the caller immediately and runs on its own.
-	set {_duration} to 2 seconds
-	if classLevel({_p}, "PGS") >= 2: # Perk 1 (Elder Shield)
-		set {_duration} to 3 seconds
-	add potion effect of absorption 1 without particles for {_duration} to potion effects of {_p}
-	play sound "BLOCK_ANVIL_PLACE" with volume 1 and pitch 0.25 at {_p}
-	if {pgs-shieldFx::%{_p}'s uuid%} is set: # a ring is already spinning (e.g. tactical then ultimate) — the refreshed absorption just keeps that one going
-		stop
-	set {pgs-shieldFx::%{_p}'s uuid%} to true
-	set {_shapes::circle} to a circle with radius 1.25
-	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 0.75)
-	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
-	while (absorption amount of {_p}) > 0:
-		if {_p} isn't online:
-			stop loop
-		set {_loc} to {_p}'s location
-		add 1 to y-coord of {_loc}
-		rotate shapes {_shapes::*} by {_rotation}
-		draw shapes {_shapes::*} at {_loc}
-		wait 2 tick
-	delete {pgs-shieldFx::%{_p}'s uuid%}
 
 on right click with iron sword: # TACTICAL
 	if name of player's held item is "%{wc}%Paladin Great Sword":
 		if tacCHECK(player, {weapons::PGS::TAC-COST}) is true:
-			paladinShield(player)
+			add potion effect of absorption 1 without particles for 10 seconds to potion effects of player
+			play sound "BLOCK_ANVIL_PLACE" with volume 1 and pitch 0.25 at player
+			set {_shapes::circle} to a circle with radius 1.25
+			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 0.75)
+			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+			set {_perkCount} to 10
+			while (absorption amount of player) > 0:
+				set {_loc} to player's location
+				add 1 to y-coord of {_loc}
+				rotate shapes {_shapes::*} by {_rotation}
+				draw shapes {_shapes::*} at {_loc}
+				if classLevel(player, "PGS") >= 2: # Perk 1 (Agile Shield)
+					if {_perkCount} = 10:
+						add potion effect of speed 2 without particles for 1 seconds to potion effects of player
+						set {_perkCount} to 0
+					add 1 to {_perkCount}
+				wait 2 tick
 
 on damage of player: # visual cue while the tactical shield is absorbing hits
 	if (absorption amount of victim) > 0:
@@ -47,8 +40,6 @@ on damage of player: # visual cue while the tactical shield is absorbing hits
 			add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of last spawned armor stand
 			set name of last spawned armor stand to "&6✧&e&oSHIELDED&6✧"
 			wait 1 second
-			teleport {_ls} to block 100 below {_ls} # 01-utils.sk's showDMG — teleport away before killing so the kill's poof/particles don't show at the player's location
-			wait 1 tick
 			kill {_ls}
 
 on drop of iron sword with priority low: # ULTIMATE
@@ -57,7 +48,7 @@ on drop of iron sword with priority low: # ULTIMATE
 		if classLevel(player, "PGS") < 1:
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
-		set {_ultCooldown} to ultCooldownFor(player, {weapons::PGS::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		set {_ultCooldown} to {weapons::PGS::ULT-CD}
 		if {godlike-ULT-USE::%player's uuid%::PGS} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
 		else if {godlike-ULT-CD::%player's uuid%::PGS} is set:
@@ -66,7 +57,6 @@ on drop of iron sword with priority low: # ULTIMATE
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::PGS::ULT-COST}) is true:
 			set {godlike-ULT-USE::%player's uuid%::PGS} to now
-			paladinShield(player) # Holy Radiance also grants the tactical's absorption shield (same strength and duration, Elder Shield included)
 			if classLevel(player, "PGS") >= 3: # Perk 2 (Supreme Radiance)
 				set {_shapes::outer-circle} to a circle of radius 7.5
 				set {_shapes::inner-circle} to a circle of radius 7.25
@@ -88,40 +78,30 @@ on drop of iron sword with priority low: # ULTIMATE
 			set {_loc} to player's location
 			set {_y-max} to y-coord of {_loc}+2
 			set {_y-min} to y-coord of {_loc}-2
-			loop 40 times:
-				if {godlike-ULT-CANCEL::%player's uuid%::PGS} is set:
-					stop loop
+			loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
 				add 1 to {_n}
 				draw shapes {_shapes::*} at {_loc}
 				if {_n} = 4:
 					delete {_n}
-					set {balance-abilitySource::%player's uuid%} to "ULT" # 19-balance-stats.sk — Paladin's ultimate only ever damages non-players (mobs/bosses), but the cast should still register a hit for hit-rate purposes
 					loop all living entities in radius {_ultDmgRadius} around {_loc}:
 						if loop-entity is player:
-							add potion effect of speed 2 for 1 seconds to potion effects of loop-entity
+							add potion effect of speed 3 for 1 seconds to potion effects of loop-entity
 							add potion effect of regeneration 3 for 1 seconds to potion effects of loop-entity
 						else if y-coord of loop-entity is between {_y-max} and {_y-min}:
 							updateAttacker(player, loop-entity)
 							add potion effect of slowness 1 for 1 seconds to potion effects of loop-entity
-							damage loop-entity by 0.5
-							loop-entity.setNoDamageTicks(0) # the tick would otherwise start the vanilla 10-tick invulnerability window and swallow (or shrink) hits landing right after it
+							damage loop-entity by 1
 							play sound "BLOCK_ANVIL_PLACE" with volume 0.5 and pitch 3 at {_loc}
-					delete {balance-abilitySource::%player's uuid%}
 				wait 5 tick
 			set {godlike-ULT-CD::%player's uuid%::PGS} to now
 			delete {godlike-ULT-USE::%player's uuid%::PGS}
-			delete {godlike-ULT-CANCEL::%player's uuid%::PGS}
 			# ULT CD
 			wait {_ultCooldown}
 			delete {godlike-ULT-CD::%player's uuid%::PGS}
 			if {class::%player's uuid%} = "PGS":
 				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
 
-every 3 seconds: # baseline regen while wielding the sword (part of the class passive) — only kicks in below 5 hearts (5 health), rather than unconditionally, so it's a comeback/sustain tool instead of a permanent free heal
+every 3 seconds: # baseline regen while wielding the sword (part of the class passive)
 	loop all players:
 		if name of loop-player's held item is "%{wc}%Paladin Great Sword":
-			if health of loop-player < 5:
-				add potion effect of regeneration 1 without particles for 3 seconds to potion effects of loop-player
-
-on load: # a reload kills any running shield ring loop, so clear its guard flags
-	delete {pgs-shieldFx::*}
+			add potion effect of regeneration 1 without particles for 3 seconds to potion effects of loop-player

@@ -3,9 +3,10 @@
 # Tactical: always available. Ultimate: unlocks at class level 1.
 # Passive "Hammer Down" (flavor text only — the +1 max health it used to
 #   describe now comes from Frankenstein being a Juggernaut, see the category
-#   buff in 02-class-data.sk) and Perk 1 (level 2) "The Biggest Boy" (+1 max
-#   health, on top of the category buff) are both handled centrally in
-#   04-leveling.sk's maxHealth() function, not in this file.
+#   buff in 02-class-data.sk).
+# Perk 1 (level 2) "Restorative Smash": a landed hammer smash (a melee hit while falling — see the FH branch of dmgUpdate() in
+#   08-damage.sk) heals Frankenstein for 1 heart. (It used to be +1 max health.)
+# While the ultimate's absorption shield is up Frankenstein is slowed (Slowness 2), refreshed every loop tick so it ends right when the shield does.
 # Perk 2 (level 3) "Undying": increases the ultimate's absorption shield strength.
 # ============================================
 
@@ -55,9 +56,9 @@ on drop of mace with priority low: # ULTIMATE
 		else if ultCHECK(player, {weapons::FH::ULT-COST}) is true:
 			set {godlike-ULT-USE::%player's uuid%::FH} to now
 			if classLevel(player, "FH") >= 3: # Perk 2 (Undying)
-				add potion effect of absorption 2 without particles for 5 seconds to potion effects of player
+				add potion effect of absorption 2 without particles for 4 seconds to potion effects of player
 			else:
-				add potion effect of absorption 1 without particles for 5 seconds to potion effects of player
+				add potion effect of absorption 1 without particles for 4 seconds to potion effects of player
 			play sound "entity.warden.emerge" with volume 1 and pitch 1.5 at player
 			set {_shapes::triangle} to a triangle with radius 1.5
 			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
@@ -65,6 +66,7 @@ on drop of mace with priority low: # ULTIMATE
 			while (absorption amount of player) > 0:
 				if {godlike-ULT-CANCEL::%player's uuid%::FH} is set:
 					stop loop
+				add potion effect of slowness 2 without particles for 5 ticks to potion effects of player # the shield's drawback — lasts exactly as long as the absorption does
 				set {_loc} to player's location
 				add 1 to y-coord of {_loc}
 				rotate shapes {_shapes::*} by {_rotation}

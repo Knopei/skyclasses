@@ -1,7 +1,7 @@
 # ============================================
 # DEMON (DS) — Demonic Saber
 # Tactical: always available. Ultimate: unlocks at class level 1.
-# Perk 1 (level 2) "Extended Siphon": extends the tactical beam's range.
+# Perk 1 (level 2) "Efficient Siphon": the tactical costs 5 less mana (50 -> 45). (Replaced "Extended Siphon", which raised the beam range 5 -> 7.5.)
 # Perk 2 (level 3) "Vampire": increases lifesteal per hit during the ultimate.
 # ============================================
 
@@ -20,11 +20,11 @@ function demonicBeam(p: player, e: living entity, v: vector, h: number):
 
 on right click with netherite sword: # TACTICAL
 	if name of player's held item is "%{wc}%Demonic Saber":
-		if tacCHECK(player, {weapons::DS::TAC-COST}) is true:
-			if classLevel(player, "DS") >= 2: # Perk 1 (Extended Siphon)
-				set {_beamRange} to 7.5
-			else:
-				set {_beamRange} to 5
+		set {_cost} to {weapons::DS::TAC-COST}
+		if classLevel(player, "DS") >= 2: # Perk 1 (Efficient Siphon) — -5 mana
+			set {_cost} to {_cost} - 5
+		if tacCHECK(player, {_cost}) is true:
+			set {_beamRange} to 5
 
 			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
 			loop {_beamRange} times:
@@ -69,7 +69,6 @@ on drop of netherite sword with priority low: # ULTIMATE
 			loop 161 times:
 				if {godlike-ULT-CANCEL::%player's uuid%::DS} is set:
 					stop loop
-				add potion effect of speed 2 without particles for 2 seconds to potion effects of player # refreshed every tick so it lasts exactly as long as the ultimate is active
 				add 1 to {_n}
 				if {_n} = 40:
 					set {_n} to 0

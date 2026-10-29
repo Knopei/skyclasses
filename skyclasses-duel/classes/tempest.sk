@@ -1,9 +1,8 @@
 # ============================================
 # TEMPEST (TS) — Tempest Scythe
 # Tactical: always available (Air Burst — shoots a wind charge; 2 direct
-#   damage to whatever it hits, plus a separate AOE splash on impact that
-#   does 1.25 damage and 3s of Slowness 1 to mobs/players in a 2.5 block
-#   radius). Ultimate: unlocks at class level 1 (Tornado — a directional
+#   damage to whatever it hits; the burst around the impact only knocks back
+#   (vanilla wind charge) — the old AOE damage + slowness splash was removed). Ultimate: unlocks at class level 1 (Tornado — a directional
 #   tornado that pushes and damages enemies in its path).
 # Passive: Airborne — briefly gain speed after using Air Burst ON YOURSELF
 #   (e.g. shooting it downward to launch yourself — checked via a 2-block
@@ -13,17 +12,17 @@
 #   03-resources.sk's staminaCHECK() so it fires no matter which ability
 #   spent the stamina).
 # Perk 1 (level 2) "Lingering Winds": extends the passive's (Airborne)
-#   speed buff from 2 seconds to 3 seconds. (Previously "Wind Amplification",
+#   speed buff from 1.5 seconds to 2 seconds. (Previously "Wind Amplification",
 #   which sped up Air Burst itself — replaced in this rework.)
 # Perk 2 (level 3) "Category 5": Tornado travels farther.
 # ============================================
 
-function tsAirborne(p: player): # passive (Airborne) — Speed 3 for 2 seconds, or 3 seconds with Perk 1 (Lingering Winds). Also flags {tsAirborne::*} for that same duration (currently unused elsewhere, kept for any future perk/effect that wants to check "is Airborne currently active"), and draws the same white/light-gray dust particle as Tornado's ult trail at the player's feet — sparse and inconsistent (a 35% chance each tick, 1 particle at a time) rather than a steady stream, so it reads as a light trailing effect instead of a constant marker
-	set {_duration} to 2 seconds
-	set {_ticks} to 40
+function tsAirborne(p: player): # passive (Airborne) — Speed 3 for 1.5 seconds, or 2 seconds with Perk 1 (Lingering Winds). Also flags {tsAirborne::*} for that same duration (currently unused elsewhere, kept for any future perk/effect that wants to check "is Airborne currently active"), and draws the same white/light-gray dust particle as Tornado's ult trail at the player's feet — sparse and inconsistent (a 35% chance each tick, 1 particle at a time) rather than a steady stream, so it reads as a light trailing effect instead of a constant marker
+	set {_duration} to 1.5 seconds
+	set {_ticks} to 30
 	if classLevel({_p}, "TS") >= 2: # Perk 1 (Lingering Winds)
-		set {_duration} to 3 seconds
-		set {_ticks} to 60
+		set {_duration} to 2 seconds
+		set {_ticks} to 40
 	add potion effect of speed 3 without particles for {_duration} to potion effects of {_p}
 	set {tsAirborne::%{_p}'s uuid%} to true
 	loop {_ticks} times:
@@ -46,13 +45,7 @@ on projectile hit with priority low: # Air Burst impact — handles BOTH the dir
 						damage {_direct} by (2 + skirmisherTacBonus({_shooter})) # raw ability damage only — "damage X by Y" fires its own fresh damage event, which 08-damage.sk's generic handler catches and runs through dmgUpdate() itself (same as the AOE splash's flat "damage loop-entity by 1" below). Calling dmgUpdate() here too double-counted it: showDMG() fired twice, showing the hit number twice for one hit
 						if {_shooter} is a player: # a direct hit also triggers the passive (Airborne) for the shooter
 							tsAirborne({_shooter})
-			loop all living entities in radius 2.5 around event-location: # AOE splash — 1 damage + 3s Slowness 1 to everyone else in range. The direct-hit target is excluded so it gets ONLY the direct-hit effect, not both (per the original split: direct hit = damage+passive to shooter, splash = damage+slow to victims)
-				if loop-entity is not an armor stand:
-					if loop-entity is not {_shooter}:
-						if loop-entity is not {_direct}:
-							updateAttacker({_shooter}, loop-entity)
-							damage loop-entity by (1.25 + skirmisherTacBonus({_shooter}))
-							add potion effect of slowness 1 for 3 seconds to potion effects of loop-entity
+			# (the AOE splash — 1.25 damage + Slowness I to everyone near the impact — was removed: the burst now only knocks back, via the vanilla wind charge)
 			if {_direct} isn't set: # self-launch case (shooting it at the ground near yourself) — only checked when nothing was hit directly, since a direct hit on another entity already triggered the passive above
 				if {_shooter} is a player:
 					loop all players in radius 2 around event-location:

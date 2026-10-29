@@ -50,12 +50,14 @@ on projectile hit with priority low: # trident impact — lightning strike
 	if event-projectile is a trident:
 		if metadata value "type" of event-projectile is "ZT":
 			if metadata value "hit" of event-projectile isn't set:
-				loop all entities in radius 3 around event-location:
+				loop all entities in radius 5 around event-location: # radius 5, not 3 — same reason as the ultimate's loop below: the bolt reaches ~3 blocks horizontally, so every entity it can hit needs Zeus recorded as the attacker
 					if loop-entity is not shooter:
-						if loop-entity is an iron golem:
-							damage loop-entity by 1.5
-						updateAttacker(shooter, loop-entity)
-						directAttack(loop-entity)
+						if loop-entity is not an armor stand:
+							if (distance between loop-entity and event-location) <= 3:
+								if loop-entity is an iron golem:
+									damage loop-entity by 1.5
+							updateAttacker(shooter, loop-entity)
+							directAttack(loop-entity)
 				setAbilitySourceTimed(shooter, "TAC", 30) # 19-balance-stats.sk — matches the extinguishMobsFor() window below, since a lightning strike's damage can land a few ticks after "strike lightning" across its flashes, not synchronously with this line
 				strike lightning at the event-location
 				extinguishMobsFor(event-location, 3, 30) # sustained ~1.5s covers all possible flashes of the strike
@@ -112,13 +114,15 @@ on drop of trident with priority low: # ULTIMATE
 			loop 60 times:
 				if {godlike-ULT-CANCEL::%player's uuid%::ZT} is set:
 					stop loop
-				set {_r} to random integer between 0 and {_s}
-				loop all entities in radius 2 around {_strike::%{_r}%}:
+				set {_r} to random integer between 1 and {_s} # index 0 doesn't exist, so a 0 roll used to skip the strike entirely
+				loop all entities in radius 5 around {_strike::%{_r}%}: # vanilla lightning damages everything within ~3 blocks horizontally of the bolt (6 vertically), so the attacker has to be recorded for ALL of them — it used to only cover radius 2, and anything hit outside that fell through to the "no Zeus attacker" damage path (flat vanilla-based number instead of the 1.5-3 Zeus formula, wrong credit)
 					if loop-entity is not player:
-						if loop-entity is an iron golem:
-							damage loop-entity by 1.5
-						updateAttacker(player, loop-entity)
-						add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
+						if loop-entity is not an armor stand:
+							updateAttacker(player, loop-entity)
+							if distance between loop-entity and {_strike::%{_r}%} <= 2:
+								if loop-entity is an iron golem:
+									damage loop-entity by 1.5
+								add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
 				setAbilitySourceTimed(player, "ULT", 10) # 19-balance-stats.sk — matches the extinguishMobsFor() window below
 				strike lightning at {_strike::%{_r}%}
 				extinguishMobsFor({_strike::%{_r}%}, 2, 10) # shorter window is fine here — the next strike is only 2 ticks away and re-covers the same ground

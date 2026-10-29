@@ -23,24 +23,26 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 		if {_cause} = "attack": # VBA's TAC arrow is a projectile and already tagged via metadata (viking.sk) — only ordinary melee swings need the ult-active check here
 			if {godlike-ULT-USE::%{_a}'s uuid%::VBA} is set: # 19-balance-stats.sk — the ultimate is what's scaling this melee hit, so it counts as ULT damage rather than plain melee
 				set {balance-abilitySource::%{_a}'s uuid%} to "ULT"
-		set {_temp} to vbaCHECK({_a}, {_v}, {_dmg}, {_other})
+		set {_temp} to vbaCHECK({_a}, {_v}, {_dmg}, {_other}, {_cause})
 	else if {class::%{_a}'s uuid%} is "ZT":
 		if {_cause} = "attack":
 			set {_temp} to ztCHECK({_a})
 	else if {class::%{_a}'s uuid%} is "RB":
-		if {_cause} = "attack": # melee hit — rapid.sk's rbCHECK() advances the "every 3rd hit" passive counter
+		if {_cause} = "attack": # melee hit — if the passive is charged (counter = 3) this hit IS the empowered one; rbCHECK() then advances / resets the counter
+			if name of {_a}'s held item is "%{wc}%Rapid Dagger":
+				if {rapid-attack::%{_a}'s uuid%} = 3:
+					set {_over} to (max health of {_v}) - (max health of {_a}) # empowered melee = the normal swing damage (crit included) PLUS 0.25 per heart of the victim's max health over Rapid's own; nothing is added against an equal/lower max health. Capped at +1.5 — the same ceiling the arrow's formula has above its 2.5 base
+					if {_over} > 0:
+						set {_bonus} to 0.25 * {_over} # 0.25 per heart over
+						if {_bonus} > 1.5:
+							set {_bonus} to 1.5
+						set {_dmg} to {_dmg} + {_bonus}
+					set {balance-abilitySource::%{_a}'s uuid%} to "PASSIVE" # 19-balance-stats.sk
+					play sound "entity_player_attack_sweep" with volume 1 and pitch 1.8 at {_v} # empowered melee: high-pitched sweeping hit
 			rbCHECK({_a})
 		else if {_cause} = "projectile":
-			if {_other} = "RB-PASSIVE": # Longshot passive arrow — 25% max health, 30% at Perk 1 (Long Shot) when fired from >= 7.5 blocks, clamped to 2.25-4 damage
-				set {_dist} to distance between {_a} and {_v}
-				set {_dmg} to (max health of {_v}) * 0.25
-				if classLevel({_a}, "RB") >= 2:
-					if {_dist} >= 7.5:
-						set {_dmg} to (max health of {_v}) * 0.3
-				if {_dmg} > 4:
-					set {_dmg} to 4
-				else if {_dmg} < 2.25:
-					set {_dmg} to 2.25
+			if {_other} = "RB-PASSIVE": # Longshot passive arrow — 2.5 base +0.25 per heart of the victim's max health over Rapid's own (cap 4), see rapid.sk
+				set {_dmg} to rbPassiveDamage({_a}, {_v})
 			else if {_other} = "RB": # base ultimate's rapid-fire arrows — 0.4 R-AD base, scales up to 0.6 R-AD at >= 7.5 blocks
 				if (distance between {_a} and {_v}) >= 7.5:
 					set {_dmg} to {_dmg}*1.5 # bridges 0.4 up to 0.6 (0.6 / 0.4 = 1.5x)
@@ -49,19 +51,20 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 			set {_cbCap} to 2 + skirmisherTacBonus({_a})
 			if {_dmg} > {_cbCap}:
 				set {_dmg} to {_cbCap}
-	else if {class::%{_a}'s uuid%} is "RS": # class-checked (not just the flag) so a stale ult flag on some other class can't swallow that class's own branch further down
-		if {godlike-ULT-USE::%{_a}'s uuid%::RS} is set:
-			set {_temp} to rsCHECK({_a}, {_v}, {_cause})
-			if {_temp} is set: # 19-balance-stats.sk — Soul Collector's perk bonus only fires on some of RS's melee hits (blinded victim + perk owned); only those specific hits count as ULT, not every RS swing while the ult is merely active
-				set {balance-abilitySource::%{_a}'s uuid%} to "ULT"
 	else if {class::%{_a}'s uuid%} is "GD": # class-checked like RS above
 		if {_cause} = "attack": # ONLY a real melee hit may trigger/consume the Ghost's empowered hit. This used to run for every damage cause, and the generic non-melee branch of the damage event (fire, fall, poison, a lunge's flat damage...) resolves the attacker from the victim's "last attacker" metadata — so while the ult was up, ANY damage tick on someone the Ghost had recently hit fired the execute without a swing
 			if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
 				set {_temp} to gdCHECK({_a}, {_v})
 	else if {class::%{_a}'s uuid%} is "FH": # attacker
 		if {_cause} = "attack":
-			if {_dmg} > 3.375: # hammer smash — melee damage cap, equal to its crit damage (0.75 x the 4.5 attack multiplier)
-				set {_dmg} to 3.375
+			if fall distance of {_a} > 1.5: # hammer smash (a melee hit landed while falling — the same condition vanilla uses for a mace smash): flat 3.75 damage, however far the fall
+				set {_dmg} to 3.75
+			else if {_dmg} > 3: # ordinary swing — capped at its crit damage (0.75 x the 4 attack multiplier), so nothing else inflates it
+				set {_dmg} to 3
+			if {_a} is a player:
+				if classLevel({_a}, "FH") >= 2: # Perk 1 (Restorative Smash) — a hammer smash (a melee hit landed while falling, the same condition vanilla uses for a mace smash) heals 1 heart
+					if fall distance of {_a} > 1.5:
+						heal {_a} by 1
 	else if {class::%{_a}'s uuid%} is "EA": # Executioner — executioner.sk
 		if {_cause} = "attack":
 			if {godlike-ULT-USE::%{_a}'s uuid%::EA} is set: # Death's Toll — this melee hit consumes the charge and overrides the damage, then ends the ultimate (the charge loop in executioner.sk polls this flag every tick and stops once it's gone)
@@ -101,15 +104,21 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 				delete {ea-tacBuff::%{_a}'s uuid%}
 				eaRedstoneEffect({_v}) # executioner.sk
 			eaMarkCheck({_a}, {_v}) # executioner.sk — Executioner's Mark; just registers the victim for the real-health check on the global 1-second ticker, no health math happens here
-	else if {class::%{_v}'s uuid%} is "FH": # victim — kept LAST in the chain: while it sat above the EA branch, every Executioner hit on a Frankenstein matched this branch first and the EA ult never fired
-		if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
-			if {_cause} = "projectile":
-				set {_temp} to fhULT({_a}, {_v}, {_dmg})
 	if {_temp} is set: # checks if any addon changed the damage
 		if {_temp} > 0:
 			set {_dmg} to {_dmg}+{_temp}
 		else if {_temp} = 0: # a value of exactly 0 means the addon fully overrides {_dmg}
 			set {_dmg} to {_temp}
+
+	# Frankenstein's ultimate reflects projectiles — checked HERE, after the attacker's own modifiers, instead of inside the attacker chain above: every attacker class with its own branch (Rapid, Viking, Zeus, Cyberpunk, Mighty, Ghost...) matched first and never reached the old victim-side check, so their projectiles were never reflected (Rapid's ult arrows are the case that showed it). The reflected hit is half of this final damage, and Frankenstein takes none of it.
+	if {_cause} = "projectile":
+		if {class::%{_v}'s uuid%} is "FH":
+			if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
+				if {_a} is set:
+					if {_a} is not {_v}:
+						set {_temp} to fhULT({_a}, {_v}, {_dmg})
+						if {_temp} is set:
+							set {_dmg} to {_temp}
 
 	# 19-balance-stats.sk — DoT damage (fire-tick from Mighty's Fire Pit/Ninja's ignites/Rapid's Overheat, and wither from Reaper's passive) doesn't happen synchronously with the ability effect that started it, so the class file tags the VICTIM (setFireSource(), despite the name, is reused for any timed DoT) instead of the attacker; bridge that over to the attacker-keyed tag dmgStats()/recordDamageBySource() actually reads, for exactly this one hit
 	if {_cause} is "fire" or "fire_tick" or "fire tick" or "wither" or "poison":
@@ -118,13 +127,13 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 
 	# Damage Reductions
 	if {_cause} is "lightning":
-		if {class::%{_a}'s uuid%} is "ZT": # Zeus's lightning (tactical + ultimate): 1.5 base, +0.25 for every heart the hit target has over Zeus's own max health, capped at 3 — replaces the old flat 0.6x of vanilla lightning (which also came out to 1.5)
+		if {class::%{_a}'s uuid%} is "ZT": # Zeus's lightning (tactical + ultimate): 1.5 base, +0.25 for every heart the hit target has over Zeus's own max health, capped at 2.5 — replaces the old flat 0.6x of vanilla lightning (which also came out to 1.5)
 			set {_over} to (max health of {_v}) - (max health of {_a})
 			if {_over} < 0:
 				set {_over} to 0
 			set {_dmg} to 1.5 + (0.25 * {_over})
-			if {_dmg} > 3:
-				set {_dmg} to 3
+			if {_dmg} > 2.5:
+				set {_dmg} to 2.5
 			if {class::%{_v}'s uuid%} is "ZT": # Zeus-on-Zeus keeps the 60%% lightning resistance
 				set {_dmg} to {_dmg}*0.4
 		else if {class::%{_v}'s uuid%} is "ZT":
@@ -162,12 +171,20 @@ function mobMeleeCHECK(a: living entity, dmg: number) :: number: # weak, config-
 		set {_isOurMob} to true
 	if metadata value "isMajorBoss" of {_a} is set:
 		set {_isOurMob} to true
+	if metadata value "testBoss" of {_a} is set: # 22-boss-test.sk prototypes
+		set {_isOurMob} to true
+	if metadata value "tbClone" of {_a} is set:
+		set {_isOurMob} to true
 	if {_isOurMob} is true:
 		if metadata value "specialAttack" of {_a} isn't set:
 			return random number between {config::mob::melee-damage-min} and {config::mob::melee-damage-max}
 	return {_dmg}
 
 function dmgStats(a: living entity, v: living entity, dmg: number, cause: text): # persistent + current-match damage tracking
+	if metadata value "testBoss" of {_a} is set: # 22-boss-test.sk prototypes never touch stats
+		stop
+	if metadata value "tbClone" of {_a} is set:
+		stop
 	if metadata value "protoRole" of {_a} is set: # 21-prototype-core.sk — prototype bosses/summons never touch player stats (and shouldn't mint stat variables for throwaway entity UUIDs)
 		stop
 	if {_a} != {_v}:

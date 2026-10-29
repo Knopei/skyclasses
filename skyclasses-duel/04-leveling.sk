@@ -92,9 +92,6 @@ function maxHealth(p: player):
 	set {_uuid} to {_p}'s uuid
 	set {_class} to {class::%{_uuid}%}
 	set {_health} to 0
-	if {_class} = "FH":
-		if classLevel({_p}, "FH") >= 2: # Perk 1 (The Biggest Boy)
-			add 1 to {_health}
 	if classCategory({_class}) is "JUGGERNAUT": # 02-class-data.sk — Juggernaut's level 0 category buff. FH's old standalone "+1 baseline Big Boy" heart is folded into this (FH is a Juggernaut), rather than stacking a second +1 on top of it
 		add 1 to {_health}
 	# FIX: this used to check a stale {general-perk::%uuid%::owned::*} list left

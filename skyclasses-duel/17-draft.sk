@@ -142,7 +142,7 @@ function runClassDraft(p1: player, p2: player):
 		wait 2 seconds
 
 		delete {_thisGameBanned::*}
-		loop 2 times: # fixed at 2 random bans now (was {config::draft::ban-count}) — each player then gets one ban of their own mid-draft, see the order below
+		loop {config::draft::ban-count} times: # random bans — set in 00-config.sk (currently meant to be 2); each player then gets one ban of their own mid-draft, see the order below
 			if draftCheckContinue({_p1}, {_p2}) is false:
 				stop
 			if {draftDeck::*} isn't set:
