@@ -15,6 +15,15 @@ function updateAttacker(a: living entity, v: living entity):
 		else if {_v} is a living entity:
 			set metadata value "attacker" of {_v} to {_a}
 
+function effMaxHealth(e: living entity) :: number: # max health for the abilities/passives that compare max health (Mighty tac, Zeus lightning, Rapid passive, Viking ult): an active absorption shield counts as extra max health — up to 2 hearts of absorption = +1, more than 2 hearts = +2
+	set {_m} to max health of {_e}
+	set {_ab} to ({_e}.getAbsorptionAmount()) / 2 # the API counts absorption in health points (2 per heart)
+	if {_ab} > 2:
+		add 2 to {_m}
+	else if {_ab} > 0:
+		add 1 to {_m}
+	return {_m}
+
 function directAttack(v: living entity):
 	# Cancels Ghost's (GD) mid-ultimate empowered-next-hit flag if the ultimate
 	# fires from something other than the empowered attack itself (e.g. a tactical
@@ -84,6 +93,66 @@ on skript stop:
 # would loop drawing particles forever.
 on projectile hit:
 	set metadata value "hit" of event-projectile to true
+
+# ---- CLASS ARROW HIT FIXES ----
+import:
+	java.lang.Integer
+
+# 1) Bounce-offs: an arrow that reaches a target still inside its post-hit invulnerability window (e.g. right after a melee hit)
+#    deals nothing and BOUNCES off — vanilla's behaviour when the hurt is refused. Class arrows (anything a class file tagged with a
+#    "type") clear the target's invulnerability the moment they hit, so they always land. Rapid's ultimate arrows ("RB") are left
+#    out on purpose: 08-damage.sk gives them their own 10-tick window as a rate limit on the rapid fire.
+on projectile hit with priority lowest:
+	if event-projectile is an arrow:
+		set {_type} to metadata value "type" of event-projectile
+		if {_type} is set:
+			if {_type} is not "RB":
+				if victim is a living entity:
+					if victim is not an armor stand:
+						set victim's invulnerability time to 0 ticks
+
+# 2) Point-blank pass-throughs: an arrow only registers hits along the path it travels each tick, so when the target is within
+#    ~1.5 blocks the arrow can START inside their (slightly enlarged) hitbox and fly straight through without a hit. When a player
+#    shoots an arrow with an enemy that close in front of them, the arrow is placed just in front of that enemy one tick later (same
+#    speed and direction), so it enters their hitbox from outside and lands as a normal vanilla hit — every on-hit effect still applies.
+on shoot:
+	if projectile is an arrow:
+		if shooter is a player: # class arrows only — arrows from mobs (Pillager bolts, skeletons) or with no shooter (Arrow Rain) aren't touched
+			set {_s} to shooter
+			set {_ar} to projectile
+			{_ar}.setTicksLived(Integer.parseInt("10")) # "fully aged" from the start: since 1.21.6 a projectile's hit margin grows with its age (about 0 when fresh, 0.3 blocks once
+			# grown — ProjectileUtil.computeMargin), which made close-range shots much harder than long ones. 10 ticks old = the full 0.3 margin right away,
+			# like every arrow had before 1.21.6. (parseInt gives a real Java int — setTicksLived wants one.)
+			set {_dir} to velocity of {_ar}
+			if vector length of {_dir} > 0.01:
+				set vector length of {_dir} to 1
+				set {_eye} to eye location of {_s}
+				set {_best} to 99
+				loop all living entities in radius 2.5 around {_eye}:
+					if loop-entity is not {_s}:
+						if loop-entity is not an armor stand:
+							set {_to} to vector from {_eye} to ((location of loop-entity) offset by vector(0, 1, 0))
+							set {_d} to vector length of {_to}
+							if {_d} > 0.01:
+								set vector length of {_to} to 1
+								if ({_to} dot {_dir}) > 0.6: # roughly in front of where the arrow is heading
+									if {_d} < {_best}:
+										set {_best} to {_d}
+										set {_near} to loop-entity
+				if {_near} is set:
+					set {_v} to velocity of {_ar}
+					wait 1 tick
+					if {_ar} is valid:
+						if metadata value "hit" of {_ar} isn't set: # it really did fly through
+							if {_near} is alive:
+								set {_back} to {_v}
+								set vector length of {_back} to 0.9
+								set {_bx} to 0 - (x component of {_back})
+								set {_by} to 0 - (y component of {_back})
+								set {_bz} to 0 - (z component of {_back})
+								set {_at} to ((location of {_near}) offset by vector(0, 1, 0)) offset by vector({_bx}, {_by}, {_bz})
+								teleport {_ar} to {_at}
+								set velocity of {_ar} to {_v}
 
 # Non-blocking trail-particle tracker — for a class that fires several
 # projectiles in a row (ninja.sk's tac, rapid.sk's ult), drawing each

@@ -21,9 +21,9 @@
 #   slams it forward in the direction the player is looking; if the ult times out it tips back and fades away. Built from an
 #   item_display entity (see eaUltFx below). /eatest plays only this visual; /eafx tunes it. {ea-useAxeFx} (in "on load")
 #   switches back to the old particle semicircles.
-# Perk 2 (level 3) "Execution": Death's Toll's damage becomes a percent of
-#   the target's max health per charge level (25/50/75%), floored at the
-#   flat 2.5/5/7.5 tiers so it never does less than the un-perked version.
+# Perk 2 (level 3) "Execution": Death's Toll deals +1 damage for every heart of
+#   max health the target has over Executioner's own, on top of its 2.5/5/7.5
+#   charge tiers, counting at most 4 hearts (+4 max — 11.5 at full charge) — see 08-damage.sk's EA branch.
 # ============================================
 
 import:

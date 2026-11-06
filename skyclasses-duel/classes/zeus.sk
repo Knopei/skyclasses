@@ -120,8 +120,6 @@ on drop of trident with priority low: # ULTIMATE
 						if loop-entity is not an armor stand:
 							updateAttacker(player, loop-entity)
 							if distance between loop-entity and {_strike::%{_r}%} <= 2:
-								if loop-entity is an iron golem:
-									damage loop-entity by 1.5
 								add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
 				setAbilitySourceTimed(player, "ULT", 10) # 19-balance-stats.sk — matches the extinguishMobsFor() window below
 				strike lightning at {_strike::%{_r}%}

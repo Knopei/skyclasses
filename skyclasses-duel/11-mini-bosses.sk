@@ -32,14 +32,26 @@ on load:
 
 # ---- LIFECYCLE (called from 10-match-manager.sk) ----
 
+function miniBossChunks(loc: number, load: boolean): # keeps the 3x3 chunks around a camp loaded for the whole match. Without this, a camp nobody is near gets
+	# unloaded with its mobs still in it: the watchdog then sees them as "not alive", treats the camp as cleared and starts the respawn hologram over a camp
+	# that was never cleared (and at respawn time the duplicate guard can't see the unloaded mobs, so a second set could appear on top of them).
+	set {_c} to {config::arena::miniboss-spawn::%{_loc}%}
+	if {_c} is set:
+		set {_offs::*} to vector(-16, 0, -16), vector(-16, 0, 0), vector(-16, 0, 16), vector(0, 0, -16), vector(0, 0, 0), vector(0, 0, 16), vector(16, 0, -16), vector(16, 0, 0) and vector(16, 0, 16)
+		loop {_offs::*}:
+			set {_p} to {_c} offset by loop-value
+			{_p}.getChunk().setForceLoaded({_load})
+
 function startMiniBossTimers():
 	loop integers between 1 and {config::miniboss::locations}:
+		miniBossChunks(loop-value, true)
 		set {minibossActive::%loop-value%} to true
 		delete {minibossRespawnAt::%loop-value%}
 		spawnMiniBoss(loop-value)
 
 function stopMiniBossTimers():
 	loop integers between 1 and {config::miniboss::locations}:
+		miniBossChunks(loop-value, false)
 		delete {minibossActive::%loop-value%}
 		delete {minibossRespawnAt::%loop-value%}
 		loop {minibossmobs::%loop-value%::*}:
@@ -78,6 +90,7 @@ function spawnMiniBoss(loc: number):
 		set helmet of {_mob} to unbreakable chainmail helmet of unbreaking 1 # prevents burning in daylight — the item is "chainmail helmet", not "chain helmet"; "unbreakable" alone also doesn't parse as a valid item type in this codebase (every other "unbreakable X" item pairs it with "of unbreaking N", per 02-class-data.sk etc.)
 		add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
 		set metadata value "minibossLoc" of {_mob} to {_loc}
+		{_mob}.setRemoveWhenFarAway(false) # never naturally despawns when no player is near
 		mobDeactivate({_mob}) # 01-utils.sk — passive until a player hits it
 		add {_mob} to {minibossmobs::%{_loc}%::*}
 		miniBossAttackLoop({_mob})
@@ -97,6 +110,7 @@ function spawnMiniBoss(loc: number):
 			updateMobHealthName({_mob}, "Crawler")
 			add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
 			set metadata value "minibossLoc" of {_mob} to {_loc}
+			{_mob}.setRemoveWhenFarAway(false) # never naturally despawns when no player is near
 			mobDeactivate({_mob}) # 01-utils.sk
 			add {_mob} to {minibossmobs::%{_loc}%::*}
 

@@ -47,7 +47,7 @@ on load:
 	set {classlevel-desc::VBA::1::*} to "&8&oLittle Rage but more furious."
 	set {classlevel-category::VBA::2} to "Passive Upgrade"
 	set {classlevel-name::VBA::2} to "&6Joyful to Furious"
-	set {classlevel-desc::VBA::2::*} to "&8&oRefines the health-scaling damage" and "&8&oformula into more dramatic tiers."
+	set {classlevel-desc::VBA::2::*} to "&8&oWhile Little Rage is active, +0.25" and "&8&odamage per heart of max health your" and "&8&oopponent has over yours (max 4)."
 	set {classlevel-category::VBA::3} to "Ultimate Upgrade"
 	set {classlevel-name::VBA::3} to "&6Victim Chase"
 	set {classlevel-desc::VBA::3::*} to "&8&oWhile the ultimate is active, empowers" and "&8&othe tactical's on-hit speed from 2 to 3."
@@ -180,7 +180,7 @@ on load:
 	set {classlevel-desc::EA::2::*} to "&8&oExecutioner's Mark now triggers at" and "&8&o4 hearts or below instead of 3."
 	set {classlevel-category::EA::3} to "Ultimate Upgrade"
 	set {classlevel-name::EA::3} to "&6Execution"
-	set {classlevel-desc::EA::3::*} to "&8&oDeath's Toll instead deals a percent" and "&8&oof the target's max health, never" and "&8&oless than its base damage."
+	set {classlevel-desc::EA::3::*} to "&8&oDeath's Toll deals +1 damage for every" and "&8&oheart of max health your opponent" and "&8&ohas over yours (max 4)."
 
 	# ---- STATIC DISPLAY ITEMS ----
 	set {browser::caption} to enchanted book of infinity 1 named "&6&lClass Browser" with lore "" and "&8&oBrowse every class's kit, mastery" and "&8&oprogress, and level unlocks." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable

@@ -267,7 +267,7 @@ on damage of living entity: # Malicious Dart hit effect — the damage itself (w
 		if name of attacker's held item contains "%{wc}%Cyberpunk Blade":
 			cbPSS(attacker, victim, 5)
 
-function cbCalcCooldownULT(p: player) :: timespan: # per-charge recharge time
+function cbCalcCooldownULT(p: player) :: timespan: # per-charge recharge time (Spell Caster doesn't apply — its cooldown cut only affects ultimates with a 50+ second cooldown)
 	if classLevel({_p}, "CB") >= 3: # Perk 2 (Overclock)
 		return {perk-var::CB::overclock}
 	else:
@@ -301,6 +301,9 @@ function cbULT(p: player, id: string): # background charge-recharge loop — see
 on drop of diamond sword with priority low: # ULTIMATE (Cyber Glitch)
 	if name of event-item contains "%{wc}%Cyberpunk Blade":
 		cancel event
+		if classLevel(player, "CB") < 1: # the ultimate unlocks at class level 1, like every other class (this check was missing)
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
 		cbPhase(player, "ult") # MANA + CHARGE CHECK IN FUNCTION
 
 function cbUltParticle(oldLoc: location, newLoc: location):

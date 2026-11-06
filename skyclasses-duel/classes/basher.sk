@@ -1,8 +1,7 @@
 # ============================================
 # BASHER (BS) — Basher Shield
 # Tactical: always available (channeled block). Ultimate: unlocks at class level 1.
-# Passive "Stamina Recharge" (bash refunds stamina) is handled centrally in
-#   04-leveling.sk's maxHealth() function, not in this file.
+# Passive "Stamina Recharge": a bash that hits refunds stamina — bsPSS(), called at the end of bsBash() below.
 # Perk 1 (level 2) "Resilient Basher": bigger stamina refund on bash.
 # Perk 2 (level 3) "Unsteady Grounds": increases the ultimate's per-tick damage
 #   from 1.5 to 1.75 and its stamina-pause duration from 1.25s to 1.75s.

@@ -2,10 +2,10 @@
 # RAPID (RB/RD) — Rapid Bow / Rapid Dagger
 # Tactical: always available. Ultimate: unlocks at class level 1.
 # Passive "Longshot" — every 4th attack is empowered (3 landed melee hits charge it, the XP bar shows the progress). When it is ready:
-#   - an attack that LANDS as melee deals its normal damage PLUS the health-difference bonus (0.25 per heart over, no flat base, capped at +1.5)
+#   - an attack that LANDS as melee deals its normal damage PLUS the health-difference bonus (0.25 per heart over, no flat base, counting at most 4 hearts: +1 max)
 #   - an attack that doesn't land (swing at nothing / too far) fires an empowered arrow instead
 #   Empowered damage (both ways, rbPassiveDamage() below): 2.5 base, +0.25 for every heart of max health the victim has OVER Rapid's own
-#   max health (capped at 4 — the old passive's clamp, kept so bosses / jungle mobs don't take huge hits).
+#   max health, counting at most 4 hearts (3.5 max).
 # Perk 1 (level 2) "Hit and Run": speed 2 for 2 seconds whenever one of Rapid's arrows (passive or ultimate) hits a player or mob.
 # Perk 2 (level 3) "Overheat": arrows ignite near the end of the rapid-fire ultimate.
 #
@@ -21,7 +21,7 @@ on right click with stone sword: # TACTICAL (dagger form)
 			play sound "entity_generic_drink" with volume 1 and pitch 1 at player
 			add potion effect of speed 3 for 0.5 seconds to potion effects of player
 			wait 0.5 seconds
-			add potion effect of speed 2 for 2.5 seconds to potion effects of player
+			add potion effect of speed 2 for 2 seconds to potion effects of player
 
 on drop of stone sword with priority low: # ULTIMATE
 	if name of event-item is "%{wc}%Rapid Dagger":
@@ -129,13 +129,13 @@ on damage of living entity: # arrow hit effects — Perk 1 (Hit and Run) speed f
 					setFireSource(victim, "ULT", 4) # 19-balance-stats.sk — Overheat only ignites arrows during the rapid-fire ultimate
 					set fire to victim for 4 seconds
 
-function rbPassiveDamage(a: living entity, v: living entity) :: number: # empowered passive damage — 2.5 + 0.25 per heart of the victim's max health over Rapid's own, capped at 4. Used by the arrow (08-damage.sk's RB-PASSIVE branch) and by the empowered melee hit (08-damage.sk's RB attack branch)
+function rbPassiveDamage(a: living entity, v: living entity) :: number: # empowered passive damage — 2.5 + 0.25 per heart of the victim's max health over Rapid's own, counting at most 4 hearts (3.5 max). Used by the arrow (08-damage.sk's RB-PASSIVE branch) and by the empowered melee hit (08-damage.sk's RB attack branch)
 	set {_d} to 2.5
-	set {_over} to (max health of {_v}) - (max health of {_a})
+	set {_over} to effMaxHealth({_v}) - effMaxHealth({_a}) # 01-utils.sk — absorption counts as max health
+	if {_over} > 4: # counts at most 4 hearts over
+		set {_over} to 4
 	if {_over} > 0:
-		set {_d} to 2.5 + (0.25 * {_over})
-	if {_d} > 4:
-		set {_d} to 4
+		set {_d} to 2.5 + (0.25 * {_over}) # 3.5 max
 	return {_d}
 
 function rbPSS(p: player): # PASSIVE "Longshot" arrow — fired by the "on left click" hook below when the passive is ready and the attack did NOT land as melee; its damage is applied by 08-damage.sk's dmgUpdate() when it lands, keyed off its "RB-PASSIVE" metadata type
