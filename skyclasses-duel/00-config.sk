@@ -27,7 +27,7 @@ on load:
 	set {config::pvpkill::xp-reward} to 10 # kill's worth of XP toward the killer's active class from defeating the opponent
 	set {config::xp-threshold::1} to 10 # kills needed to reach level 1 (unlocks ultimate)
 	set {config::xp-threshold::2} to 50 # kills needed to reach level 2 (unlocks perk 1)
-	set {config::xp-threshold::3} to 100 # kills needed to reach level 3 (max, unlocks perk 2)
+	set {config::xp-threshold::3} to 110 # XP needed to reach level 3 (max, unlocks perk 2)
 
 	# ---- DEATH COOLDOWN (per-class swap lockout after dying on that class) ----
 	set {config::deathcd::base} to 3 # seconds - plain number now, needed for clean math in the cooldown bossbars
@@ -47,12 +47,15 @@ on load:
 	set {config::miniboss::individual::max-health} to 12 # Marauder
 	set {config::miniboss::pack::max-health} to 4 # Crawlers - per individual spider, not the pack total
 
-	# ---- MAJOR BOSS (1 fixed location) ----
-	set {config::majorboss::max-health} to 30 # Iron Golem
-	set {config::majorboss::max-spawns} to 5 # total spawns over a match (design target: 3-5)
-	set {config::majorboss::interval} to 3 minutes # time between spawns, starting from match start
-	set {config::majorboss::interval-seconds} to 180 # same value as above in plain seconds — needed for the respawn-countdown hologram's timestamp math; keep in sync if you change the interval
-	set {config::majorboss::xp-reward} to 10 # counts as 10 kills' worth of XP toward the killer's active class — a much bigger swing than a mini-boss
+	# ---- MAJOR BOSSES (1 fixed location, one at a time — 12-major-boss.sk) ----
+	# Boss health, abilities and buff sizes are set in 12-major-boss.sk itself.
+	set {config::majorboss::interval-seconds} to 180 # time between spawns, starting from match start (the next one never comes sooner than 60 s after the last one died/despawned)
+	set {config::majorboss::low-xp-reward} to 10 # Evoker / Vindicator / Pillager — plus 1 extra life
+	set {config::majorboss::high-xp-reward} to 20 # Harbinger / Magmaroth / Doomhoof — plus a buff on all 3 of the killer's classes
+
+	# ---- FROG (12-major-boss.sk) ----
+	set {config::frog::xp-reward} to 6
+	set {config::frog::vision-seconds} to 60 # how long the opponent's name tag stays visible to the Frog's catcher
 
 	# ---- XP PHASES (wall-clock seconds elapsed since match start — used for the Early/Mid/Late-Game XP stats) ----
 	set {config::xpphase::early-end} to 300 # before this = early game (5 minutes)
@@ -102,6 +105,13 @@ on load:
 	set {config::arena::miniboss-spawn::4} to location(-8.5, -44.5, 12.5, world "arena_1", 270, 0) # facing east
 
 	set {config::arena::majorboss-spawn} to location(0.5, -44.5, 0.5, world "arena_1", 180, 0) # facing north
+
+	# Frog spawn points (12-major-boss.sk) — a random one each time, never the same one twice in a row. 3 blocks out from the boss spawn
+	# on each side (just outside its 3x3 platform hole), at floor level.
+	set {config::arena::frog-spawn::1} to location(-2.5, -45, 0.5, world "arena_1")
+	set {config::arena::frog-spawn::2} to location(3.5, -45, 0.5, world "arena_1")
+	set {config::arena::frog-spawn::3} to location(0.5, -45, -2.5, world "arena_1")
+	set {config::arena::frog-spawn::4} to location(0.5, -45, 3.5, world "arena_1")
 	set {config::arena::deathmode-spawn} to location(0.5, -10, 0.5, world "arena_1") # center-top of the map — where a player is frozen while choosing their respawn class, regardless of where they actually died
 
 	# ---- SECRET DOORS (tripwire hook activated, see 16-world-rules.sk) ----

@@ -139,6 +139,7 @@ on inventory close: # while respawning, closing this menu (for any reason) retur
 # Cyberpunk's phase is instant, so it uses perkPhaseReduction() below instead (a flat half second, no airborne check).
 # Calling it again while it's already running just restarts the grace window — the one running loop keeps going until landing.
 function perkDashReduction(p: player):
+	set {lastMoveAbility::%{_p}'s uuid%} to unix timestamp of now # 12-major-boss.sk — Magmaroth's Fury reads this (every movement ability calls this function, whatever the perk)
 	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
 		set {_uuid} to {_p}'s uuid
 		set {rd-hold::%{_uuid}%} to now # (re)starts the grace window in which being on the ground doesn't end the reduction yet
@@ -164,6 +165,7 @@ function perkDashReduction(p: player):
 
 # Reinforced Movement for Cyberpunk's phase (cyberpunk.sk): half a second of reduction from the moment the ultimate is used, no airborne check.
 function perkPhaseReduction(p: player):
+	set {lastMoveAbility::%{_p}'s uuid%} to unix timestamp of now # 12-major-boss.sk — Magmaroth's Fury
 	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
 		set {_uuid} to {_p}'s uuid
 		if {rd-active::%{_uuid}%} is set: # an airborne-reduction loop is already covering this
@@ -210,6 +212,9 @@ function ultCooldownFor(p: player, base: timespan) :: timespan:
 		if {_secs} >= 50: # only ultimates with a cooldown of 50 seconds or more are shortened (Cyberpunk's 12-second charges are not)
 			set {_off} to round(({_secs} * {gp-ultCDReduction}) / 100) # 15%% of the cooldown, rounded to the nearest whole second BEFORE it is taken off (e.g. 10.5s -> 11s off)
 			set {_cd} to {_base} - ("%{_off}% seconds" parsed as a timespan)
+	if soulOf({_p}) is "mixed": # 12-major-boss.sk — Raid Soul (one of each low-level boss): a further 10%% off the base cooldown, rounded to the nearest second
+		set {_off2} to round(({_base} / 1 second) * 0.1)
+		set {_cd} to {_cd} - ("%{_off2}% seconds" parsed as a timespan)
 	return {_cd}
 
 # Enchanted Consumables and Quick Fuse are applied directly in 07-consumables.sk,

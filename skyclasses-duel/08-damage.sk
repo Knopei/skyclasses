@@ -115,6 +115,19 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 		if {balance-fireSource::%{_v}'s uuid%} is set:
 			set {balance-abilitySource::%{_a}'s uuid%} to {balance-fireSource::%{_v}'s uuid%}
 
+	# 12-major-boss.sk — boss buffs and Vengeance
+	set {_mfIgnite} to false
+	if {_a} is a player:
+		if {_a} is not {_v}:
+			if {_cause} is not "fire" or "fire_tick" or "fire tick" or "wither" or "poison" or "fall" or "void":
+				if hlBuffOf({_a}) is "magmaroth": # Magmaroth's Fury: +0.5 within 2 s of a movement ability (the same ones Reinforced Movement tracks — 06-perks-general.sk)
+					if {lastMoveAbility::%{_a}'s uuid%} is set:
+						if ((unix timestamp of now) - {lastMoveAbility::%{_a}'s uuid%}) <= 2:
+							add 0.5 to {_dmg}
+					set {_mfIgnite} to true
+			if metadata value "isMajorBoss" of {_v} is set: # Vengeance: -20%% per low-level boss this player has slain, until a soul is claimed
+				set {_dmg} to {_dmg} * vengeanceMult({_a})
+
 	# Damage Reductions
 	if {_cause} is "lightning":
 		if {class::%{_a}'s uuid%} is "ZT": # Zeus's lightning (tactical + ultimate): 1.5 base, +0.25 for every heart the hit target has over Zeus's own max health, capped at 2.5 — replaces the old flat 0.6x of vanilla lightning (which also came out to 1.5)
@@ -131,9 +144,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 			if {godlike-ULT-USE::%{_a}'s uuid%::ZT} is set:
 				set {_zUlt} to true
 			if {_zUlt} is true: # the ultimate's lightning does a flat 1 per strike to bosses
-				if metadata value "isMajorBoss" of {_v} is set:
-					set {_dmg} to 1
-				else if metadata value "testBoss" of {_v} is set:
+				if metadata value "isMajorBoss" of {_v} is set: # every boss body (test bosses too)
 					set {_dmg} to 1
 			if {class::%{_v}'s uuid%} is "ZT": # Zeus-on-Zeus keeps the 60%% lightning resistance
 				set {_dmg} to {_dmg}*0.4
@@ -150,6 +161,11 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 	if {isShielding::%{_v}'s uuid%} is set:
 		if {_v}.isBlocking():
 			bsCHECK({_v}, {_dmg}, {_cause})
+
+	if {_mfIgnite} is true: # Magmaroth's Fury: a hit that leaves the enemy at 1.5 hearts or less sets them on fire for 3 seconds
+		if {_v} is alive:
+			if ((health of {_v}) - {_dmg}) <= 1.5:
+				set fire to {_v} for 3 seconds
 
 	if {_cause} is "fall":
 		set {_dmg} to 0 # fall damage is disabled entirely; Nimble Feet's extra landing-stun cancel lives in 06-perks-general.sk
@@ -172,9 +188,7 @@ function mobMeleeCHECK(a: living entity, dmg: number) :: number: # weak, config-
 		set {_isOurMob} to true
 	if metadata value "isMajorBoss" of {_a} is set:
 		set {_isOurMob} to true
-	if metadata value "testBoss" of {_a} is set: # 22-boss-test.sk prototypes
-		set {_isOurMob} to true
-	if metadata value "tbClone" of {_a} is set:
+	if metadata value "mbClone" of {_a} is set: # 12-major-boss.sk — the Evoker's clones (every boss body carries "isMajorBoss", checked above)
 		set {_isOurMob} to true
 	if {_isOurMob} is true:
 		if metadata value "specialAttack" of {_a} isn't set:
@@ -182,9 +196,9 @@ function mobMeleeCHECK(a: living entity, dmg: number) :: number: # weak, config-
 	return {_dmg}
 
 function dmgStats(a: living entity, v: living entity, dmg: number, cause: text): # persistent + current-match damage tracking
-	if metadata value "testBoss" of {_a} is set: # 22-boss-test.sk prototypes never touch stats
+	if metadata value "testBoss" of {_a} is set: # /testboss bosses (22-boss-test.sk) never touch stats
 		stop
-	if metadata value "tbClone" of {_a} is set:
+	if metadata value "mbClone" of {_a} is set:
 		stop
 	if metadata value "protoRole" of {_a} is set: # 21-prototype-core.sk — prototype bosses/summons never touch player stats (and shouldn't mint stat variables for throwaway entity UUIDs)
 		stop
@@ -192,11 +206,12 @@ function dmgStats(a: living entity, v: living entity, dmg: number, cause: text):
 		if {_dmg} < 10:
 			if {_cause} is not "void" or "suffocation":
 				set {_class} to {class::%{_a}'s uuid%}
-				if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
-					add {_dmg} to {damage::%{_a}'s uuid%} # lifetime total (account stats)
-					add {_dmg} to {class-damage::%{_a}'s uuid%::%{_class}%} # lifetime per-class (account stats / mastery)
-				add {_dmg} to {matchdamage::%{_a}'s uuid%} # current-match total
-				add {_dmg} to {matchdamage::%{_a}'s uuid%::%{_class}%} # current-match per-class, read by 14-stats.sk's end-of-match summary
+				if {_a} is a player: # only players have damage stats (a boss's hits used to mint stat variables under the boss's own entity UUID)
+					if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
+						add {_dmg} to {damage::%{_a}'s uuid%} # lifetime total (account stats)
+						add {_dmg} to {class-damage::%{_a}'s uuid%::%{_class}%} # lifetime per-class (account stats / mastery)
+					add {_dmg} to {matchdamage::%{_a}'s uuid%} # current-match total
+					add {_dmg} to {matchdamage::%{_a}'s uuid%::%{_class}%} # current-match per-class, read by 14-stats.sk's end-of-match summary
 
 				if {_a} is a player: # Player Damage Dealt — only counts player-vs-player hits
 					if {_v} is a player:
@@ -212,6 +227,8 @@ function dmgStats(a: living entity, v: living entity, dmg: number, cause: text):
 					if {testMatch} isn't set:
 						add {_dmg} to {damagetaken::%{_v}'s uuid%}
 						add {_dmg} to {class-damagetaken::%{_v}'s uuid%::%{_vClass}%}
+					if {inMatch::%{_v}'s uuid%} is set:
+						add {_dmg} to {matchdamagetaken::%{_v}'s uuid%::%{_vClass}%} # current-match per class, for 14-stats.sk's match summary
 
 on damage of living entity:
 	if attacker is a player:
@@ -278,6 +295,8 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 					set {_w} to (uncolored line 1 of lore of attacker's held item)
 					set {_dmgMult} to {weapons::%{_w}%::AD}
 					if {_w} is set:
+						if hlBuffOf(attacker) is "harbinger": # 12-major-boss.sk — Harbinger's Might: melee damage multiplier +0.5 (x4 -> x4.5, x5 -> x5.5)
+							add 0.5 to {_dmgMult}
 						set {_vbaUlt} to false
 						if {class::%attacker's uuid%} is "VBA":
 							if {godlike-ULT-USE::%attacker's uuid%::VBA} is set: # Viking ultimate (Big Rage): x8 multiplier, and crits add nothing — a full swing is 4, the most it can do

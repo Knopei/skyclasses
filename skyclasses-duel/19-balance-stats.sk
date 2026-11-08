@@ -112,7 +112,7 @@ function balRecentAgg(): # sums every counter of every completed slot into {bala
 	set {_n} to 0
 	loop {menu::classlist::*}:
 		set {_c} to loop-value
-		set {_cn::*} to "mana-spent", "class-games", "class-kills", "firstkill-sum", "firstkill-count", "firstdeath-sum", "firstdeath-count", "draft-available", "draft-picked", "carry-kills-top", and "carry-bosses-top"
+		set {_cn::*} to "mana-spent", "class-games", "class-kills", "firstkill-sum", "firstkill-count", "firstdeath-sum", "firstdeath-count", "draft-available", "draft-picked", "carry-kills-top", "carry-bosses-top", "bosses-low", and "bosses-high"
 		set {_k} to 1
 		while {_k} <= size of {_cn::*}:
 			add 1 to {_n}
@@ -464,6 +464,7 @@ function openBalanceMainMenu(p: player):
 	set slot 15 of metadata tag "balance main" of {_p} to (experience bottle named "&a&lLevel vs. Lives Left" with lore "" and "&7Average lives remaining when a" and "&7class reaches level 1, 2, and 3." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 16 of metadata tag "balance main" of {_p} to (golden apple named "&c&lConsumable Pick Rate & K/D" with lore "" and "&7How often each consumable is set" and "&7as a default, and K/D while the" and "&7window after eating one is open." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 20 of metadata tag "balance main" of {_p} to (glowstone dust named "&e&lGeneral Perk Pick Rate & K/D" with lore "" and "&7How often each perk is set as a" and "&7default, and K/D while it's the" and "&7active perk." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 22 of metadata tag "balance main" of {_p} to (wither skeleton skull named "&4&lBosses per Game" with lore "" and "&7Average low-level and high-level" and "&7bosses slain per game, per class" and "&7and per class category." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 21 of metadata tag "balance main" of {_p} to (totem of undying named "&d&lK/D by Level" with lore "" and "&7A class's kill/death ratio before" and "&7level 2, at level 2, and at level 3 —" and "&7shows whether leveling up actually" and "&7makes a class stronger." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	open (metadata tag "balance main" of {_p}) to {_p}
@@ -495,6 +496,8 @@ on inventory click:
 			openBalancePerkPage(player, {_recent})
 		else if {_slot} is 21:
 			openBalanceLevelKDPage(player, {_recent})
+		else if {_slot} is 22:
+			openBalanceBossesPage(player, {_recent})
 		else:
 			set {_opened} to false
 		if {_opened} is true:
@@ -540,6 +543,11 @@ on inventory click:
 	else if event-inventory = (metadata tag "balance perk" of player):
 		cancel event
 		if index of event-slot is 31:
+			openBalanceMainMenu(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "balance bosses" of player):
+		cancel event
+		if index of event-slot is 40: # this page is 5 rows, so its back button sits lower
 			openBalanceMainMenu(player)
 			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
 	else if event-inventory = (metadata tag "balance levelkd" of player):
@@ -797,6 +805,58 @@ function openBalanceDraftCarryPage(p: player, recent: boolean):
 		set slot 30 of metadata tag "balance draftcarry" of {_p} to balRecentInfoIcon()
 	open (metadata tag "balance draftcarry" of {_p}) to {_p}
 
+# ---- BOSSES PER GAME (12-major-boss.sk) ----
+
+function recordBossKill(class: text, tier: text): # called from 12-major-boss.sk when a boss is slain — tier "low" or "high"; the class is the killer's active class
+	if {testMatch} is set: # a test duel (/testduel) records no balance-dashboard stats at all
+		stop
+	balAdd("bosses-%{_tier}%", {_class}, 1)
+
+# ---- PAGE: Bosses per Game ----
+# Per class: low-level / high-level bosses slain ÷ games that class was in a loadout ({balance-class-games}). Per category: the same, summed over
+# the category's classes (bosses slain by its classes ÷ total class-games of its classes).
+
+function openBalanceBossesPage(p: player, recent: boolean):
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Bosses per Game (Recent)"
+	else:
+		set {_title} to "Bosses per Game (Lifetime)"
+	set metadata tag "balance bosses" of {_p} to chest inventory with 5 rows named {_title}
+	set slot (integers between 0 and 44) of metadata tag "balance bosses" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance bosses" of {_p} to black stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "balance bosses" of {_p} to black stained glass pane named " "
+
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25 # 14 slots — one per class in {menu::classlist::*} (05-class-menu.sk)
+	loop {menu::classlist::*}:
+		set {_class} to loop-value
+		set {_slot} to {_slots::%loop-index%}
+		set {_games} to bgv("class-games", {_class}, {_recent})
+		set {_low} to bgv("bosses-low", {_class}, {_recent})
+		set {_high} to bgv("bosses-high", {_class}, {_recent})
+		set {_lore::*} to "" and "&7Avg Low-Level Bosses/Game: %bavg({_low}, {_games})%" and "&7Avg High-Level Bosses/Game: %bavg({_high}, {_games})%" and "&8&o(%{_low}% low / %{_high}% high in %{_games}% games)" and ""
+		set slot {_slot} of metadata tag "balance bosses" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+	set {_cats::*} to "STRIKER", "JUGGERNAUT" and "SKIRMISHER"
+	set {_catSlots::*} to 29, 31 and 33
+	loop {_cats::*}:
+		set {_cat} to loop-value
+		set {_cs} to {_catSlots::%loop-index%}
+		set {_games} to 0
+		set {_low} to 0
+		set {_high} to 0
+		loop {category-classes::%{_cat}%::*}: # 02-class-data.sk
+			add bgv("class-games", loop-value-2, {_recent}) to {_games}
+			add bgv("bosses-low", loop-value-2, {_recent}) to {_low}
+			add bgv("bosses-high", loop-value-2, {_recent}) to {_high}
+		set {_lore::*} to "" and "&7Avg Low-Level Bosses/Game: %bavg({_low}, {_games})%" and "&7Avg High-Level Bosses/Game: %bavg({_high}, {_games})%" and "&8&o(per class-game: %{_low}% low / %{_high}% high" and "&8&oin %{_games}% class-games)" and ""
+		set slot {_cs} of metadata tag "balance bosses" of {_p} to (categoryIcon({_cat}) with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 02-class-data.sk
+
+	set slot 40 of metadata tag "balance bosses" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 39 of metadata tag "balance bosses" of {_p} to balRecentInfoIcon()
+	open (metadata tag "balance bosses" of {_p}) to {_p}
+
 # ---- PAGE: Level vs. Lives Left ----
 
 function openBalanceLevelLivesPage(p: player, recent: boolean):
@@ -1050,6 +1110,8 @@ command /resetbalancestats:
 		# delete {balance-perk-picks::*}
 		# delete {balance-carry-kills-top::*}
 		# delete {balance-carry-bosses-top::*}
+		# delete {balance-bosses-low::*}
+		# delete {balance-bosses-high::*}
 		# delete {balance-levelup-lives-sum::*}
 		# delete {balance-levelup-lives-count::*}
 		# delete {balance-levelkd-kills::*}

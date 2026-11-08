@@ -75,7 +75,21 @@ function updateCombatBar(p: player):
 				set {_pct} to 0
 			if {combatBarShown::%{_p}'s uuid%} isn't set:
 				delete boss bar with id "combat-%{_p}'s uuid%" # a brand-new combat always starts from a fresh bar, so a stale one (old style/viewers from an earlier match or script version) can never carry over
-			set {_bar} to boss bar with id "combat-%{_p}'s uuid%" with title "&7[Lvl %{_level}%] &f%{class-name::%{_class}%}%" with color white
+			set {_title} to "&7[Lvl %{_level}%] &f%{class-name::%{_class}%}%"
+			set {_icons} to "" # 12-major-boss.sk / 21-tablist.sk icons for this player's buffs, in order: high-level boss buff, soul, Seer's Eye
+			set {_hb} to hlBuffOf({_p})
+			if {_hb} is not "":
+				set {_icons} to "%{_icons}% %{tabIcon::buff::%{_hb}%}%"
+			if {soulType::%{_p}'s uuid%} is set:
+				set {_icons} to "%{_icons}% %{tabIcon::soul::%{soulType::%{_p}'s uuid%}%}%"
+			if frogVisionActive({_p}) is true:
+				set {_icons} to "%{_icons}% %{tabIcon::frogeye}%"
+			if {_icons} is not "": # no buffs -> the plain title
+				set {_title} to "%{_title}% %{_icons}%" # two spaces before the first icon ({_icons} starts with one), one between icons
+			set {_bar} to boss bar with id "combat-%{_p}'s uuid%" with title {_title} with color white
+			set {_legacy} to {_title}
+			replace all "&" with "§" in {_legacy}
+			{_bar}.setTitle({_legacy}) # makes sure an existing bar's title updates too (level / buffs change mid-fight)
 			set {_protected} to false # shielded or damage-resistant right now -> the bar turns yellow until that wears off
 			if (absorption amount of {_p}) > 0: # Paladin's tactical shield, Frankenstein's ultimate shield
 				set {_protected} to true
@@ -128,6 +142,13 @@ function updateNameVisibility(p: player):
 			if {_opp} is set:
 				if "%active potion effects of {_opp}%" contains "blindness":
 					set {_hide} to true
+		if {_hide} is true: # 12-major-boss.sk — Frog's Eye: the opponent caught the Frog, so this player's name stays visible to them (not while invisible or respawning)
+			set {_fopp} to {matchOpponent::%{_p}'s uuid%}
+			if {_fopp} is set:
+				if frogVisionActive({_fopp}) is true:
+					if {respawning::%{_p}'s uuid%} isn't set:
+						if "%active potion effects of {_p}%" doesn't contain "invisibility":
+							set {_hide} to false
 	if {_hide} is true:
 		if {nameHidden::%{_p}'s uuid%} isn't set:
 			nameHide({_p})

@@ -113,7 +113,7 @@ on load:
 	# ---- ABILITY COSTS & COOLDOWNS ----
 	# AS = attack speed modifier, TAC-COST = tactical mana cost, ULT-COST = ultimate mana cost, ULT-CD = ultimate cooldown
 	set {weapons::VBA::AS} to -2
-	set {weapons::VBA::TAC-COST} to 45
+	set {weapons::VBA::TAC-COST} to 40
 	set {weapons::VBA::ULT-COST} to 55
 	set {weapons::VBA::ULT-CD} to 80 seconds
 
@@ -146,7 +146,7 @@ on load:
 
 	set {weapons::NS::AS} to -2
 	set {weapons::NK::AS} to -2
-	set {weapons::NS::TAC-COST} to 45
+	set {weapons::NS::TAC-COST} to 35
 	set {weapons::NS::ULT-COST} to 60
 	set {weapons::NS::ULT-CD} to 70 seconds
 
@@ -167,7 +167,7 @@ on load:
 	set {weapons::RS::M-TAC-COST} to 45 # medium-range grapple hit
 	set {weapons::RS::L-TAC-COST} to 55 # long-range grapple hit
 	set {weapons::RS::ULT-COST} to 60
-	set {weapons::RS::ULT-CD} to 60 seconds
+	set {weapons::RS::ULT-CD} to 70 seconds
 
 	set {weapons::ZT::AS} to -2
 	set {weapons::ZT::TAC-COST} to 45
@@ -175,15 +175,15 @@ on load:
 	set {weapons::ZT::ULT-CD} to 80 seconds
 
 	set {weapons::CB::AS} to -2
-	set {weapons::CB::TAC-COST} to 45
+	set {weapons::CB::TAC-COST} to 40
 	set {weapons::CB::ULT-COST} to 45
-	set {weapons::CB::ULT-CD} to 12 seconds # not a typo — Cyberpunk's ultimate is a short, repeatable phase-dash on a 2-charge system (see cyberpunk.sk's cbULT()), not a single big-impact ultimate like every other class, so the "cooldown" here is really the per-charge recharge time
-	set {perk-var::CB::overclock} to 8 seconds # Perk 2 (Overclock) — reduced per-charge recharge time
+	set {weapons::CB::ULT-CD} to 8 seconds # (was 12) not a typo — Cyberpunk's ultimate is a short, repeatable phase-dash on a 2-charge system (see cyberpunk.sk's cbULT()), not a single big-impact ultimate like every other class, so the "cooldown" here is really the per-charge recharge time
+	set {perk-var::CB::overclock} to 6 seconds # (was 8) Perk 2 (Overclock) — reduced per-charge recharge time
 
 	set {weapons::TS::AS} to -2
 	set {weapons::TS::TAC-COST} to 45
 	set {weapons::TS::ULT-COST} to 60
-	set {weapons::TS::ULT-CD} to 60 seconds
+	set {weapons::TS::ULT-CD} to 70 seconds
 
 	set {weapons::EA::AS} to -2
 	set {weapons::EA::TAC-COST} to 55
@@ -196,7 +196,7 @@ on load:
 	set {weapons::VBA::R-AD} to 0.5
 	# (weapons::VBA::AD-PERK removed — Joyful to Furious no longer lowers the multiplier)
 
-	set {weapons::DS::AD} to 4.5
+	set {weapons::DS::AD} to 4 # same as Paladin (was 4.5)
 	set {weapons::FH::AD} to 4 # same as Paladin (hammer smashes are a flat 3.75 instead — see the FH branch of dmgUpdate() in 08-damage.sk)
 	set {weapons::GD::AD} to 4.5
 	set {weapons::BS::AD} to 4.5
@@ -251,7 +251,7 @@ on load:
 	wait 1 tick
 	set {class-display::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&e&lPASSIVE" and "&3Pitch Fork" and "&8&oExtended your trident forward dealing" and "&8&odamage in front of you, every 4th hit." and "" and "&e&lTACTICAL" and "&bEmpowered Throw &7[RIGHT] &9🧪%{weapons::ZT::TAC-COST}%" and "&8&oThrow your trident and strike lightning" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&bThunderstorm &7[DROP] &9🧪%{weapons::ZT::ULT-COST}% &f⌚%formatCooldown({weapons::ZT::ULT-CD})%" and "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance." and ""
 	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oRegenerate health while below 5 hearts." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
-	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow half health, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis, does a large" and "&8&opercent of the enemies current health." and ""
+	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow half health, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis deals 2.5 damage," and "&8&o+0.5 for every second invisible (max 4.5)." and ""
 	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&oGain attack damage the lower" and "&8&oyour health." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oFor a short time, every melee hit" and "&8&odeals 4 damage (crits add nothing)." and ""
 	set {class-display::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&e&lPASSIVE" and "&4Life Steal" and "&8&oHeal when damaging enemies." and "" and "&e&lTACTICAL" and "&cBlood Beam &7[RIGHT] &9🧪%{weapons::DS::TAC-COST}%" and "&8&oTarget a enemy to damage and heal from." and "" and "&e&lULTIMATE" and "&4Blood Harvest &7[DROP] &9🧪%{weapons::DS::ULT-COST}% &f⌚%formatCooldown({weapons::DS::ULT-CD})%" and "&8&oAutomatically shoot Blood Beams at all" and "&8&onearby enemies." and ""
 	set {class-display::MH} to mace named "&eClass: %{class-color::MH}%&l%{class-name::MH}%" with lore "" and "&e&lPASSIVE" and "&cHammer Down" and "&8&oYour weapon allows you to do smash" and "&8&oattacks." and "" and "&e&lTACTICAL" and "&3Explode &7[RIGHT] &9🧪%{weapons::MH::TAC-COST}%" and "&8&oCreate an explosion at your location damaging" and "&8&oand knocking up any enemies nearby." and "" and "&e&lULTIMATE" and "&bMighty Leap &7[DROP] &9🧪%{weapons::MH::ULT-COST}% &f⌚%formatCooldown({weapons::MH::ULT-CD})%" and "&8&oLeap high into the air and create a big explosion" and "&8&oupon landing that damages and pushes enemies away" and "&8&o+ &7[DROP] &8&oWhile airborne to directional dash." and ""

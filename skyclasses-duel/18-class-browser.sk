@@ -74,7 +74,7 @@ on load:
 
 	set {classlevel-category::GD::1} to "Unlocks Ultimate"
 	set {classlevel-name::GD::1} to "&4Ghost"
-	set {classlevel-desc::GD::1::*} to "&8&oGain immense speed and invisibility" and "&8&o+ your next attack while invis does a" and "&8&olarge percent of the enemy's health."
+	set {classlevel-desc::GD::1::*} to "&8&oGain immense speed and invisibility" and "&8&o+ your next attack while invis deals 2.5" and "&8&odamage, +0.5 per second invisible (max 4.5)."
 	set {classlevel-category::GD::2} to "Tactical Upgrade"
 	set {classlevel-name::GD::2} to "&6Lunge Master"
 	set {classlevel-desc::GD::2::*} to "&8&oReduces the tactical's mana cost."
@@ -147,7 +147,7 @@ on load:
 	set {classlevel-desc::TS::1::*} to "&8&oSummon a directional tornado that" and "&8&opushes and damages enemies."
 	set {classlevel-category::TS::2} to "Passive Upgrade"
 	set {classlevel-name::TS::2} to "&6Lingering Winds"
-	set {classlevel-desc::TS::2::*} to "&8&oAirborne's speed buff lasts 2" and "&8&oseconds instead of 1.5."
+	set {classlevel-desc::TS::2::*} to "&8&oAirborne's speed buff lasts 1.5" and "&8&oseconds instead of 1.25."
 	set {classlevel-category::TS::3} to "Ultimate Upgrade"
 	set {classlevel-name::TS::3} to "&6Category 5"
 	set {classlevel-desc::TS::3::*} to "&8&oIncreases the distance Tornado" and "&8&otravels."
@@ -429,6 +429,8 @@ function classStatisticsIcon(p: player, class: text, recent: boolean) :: item: #
 		set {_dt} to bd({sv-r::%{_uuid}%::c::%{_class}%::dt})
 		set {_jg} to bd({sv-r::%{_uuid}%::c::%{_class}%::jg})
 		set {_bs} to bd({sv-r::%{_uuid}%::c::%{_class}%::bs})
+		set {_bl} to bd({sv-r::%{_uuid}%::c::%{_class}%::bl})
+		set {_bh} to bd({sv-r::%{_uuid}%::c::%{_class}%::bh})
 		set {_ks} to bd({sv-r::%{_uuid}%::c::%{_class}%::mxks})
 		set {_foot::*} to "" and "&e> Last 30 Games &7(%bd({sv-r::%{_uuid}%::n})% played)" and "&7[CLICK] Show lifetime" and ""
 	else:
@@ -442,11 +444,13 @@ function classStatisticsIcon(p: player, class: text, recent: boolean) :: item: #
 		set {_dt} to bd({class-damagetaken::%{_uuid}%::%{_class}%})
 		set {_jg} to bd({class-jungleslain::%{_uuid}%::%{_class}%})
 		set {_bs} to bd({class-bossesslain::%{_uuid}%::%{_class}%})
+		set {_bl} to bd({class-bossesslain-low::%{_uuid}%::%{_class}%})
+		set {_bh} to bd({class-bossesslain-high::%{_uuid}%::%{_class}%})
 		set {_ks} to bd({class-ks::%{_uuid}%::%{_class}%::top})
 		set {_foot::*} to "" and "&b> Lifetime" and "&7[CLICK] Show last 30 games" and ""
 	set {_ckd} to safeDivide({_k}, {_d}) # 14-stats.sk
 	set {_cwinrate} to safeDivide({_w}, {_g}) * 100
-	set {_lore::*} to "" and "&7Games: &e%{_g}% &7(&a%{_w}%W &7- &c%{_l}%L&7)" and "&7Win Rate: &e%{_cwinrate}%%%" and "&7Kills: &e%{_k}% &7Deaths: &e%{_d}% &7K/D: &e%{_ckd}%" and "&7Damage: &e%formatNumber({_dmg})%" and "&7Player Damage: &e%formatNumber({_pd})%" and "&7Damage Taken: &e%formatNumber({_dt})%" and "&7Jungle Slain: &e%{_jg}% &7Bosses: &e%{_bs}%" and "&7Best Killstreak: &e%{_ks}%"
+	set {_lore::*} to "" and "&7Games: &e%{_g}% &7(&a%{_w}%W &7- &c%{_l}%L&7)" and "&7Win Rate: &e%{_cwinrate}%%%" and "&7Kills: &e%{_k}% &7Deaths: &e%{_d}% &7K/D: &e%{_ckd}%" and "&7Damage: &e%formatNumber({_dmg})%" and "&7Player Damage: &e%formatNumber({_pd})%" and "&7Damage Taken: &e%formatNumber({_dt})%" and "&7Jungle Slain: &e%{_jg}% &7Bosses: &e%{_bs}%" and "&7Low-Level Bosses: &e%{_bl}%" and "&7High-Level Bosses: &e%{_bh}%" and "&7Best Killstreak: &e%{_ks}%"
 	add {_foot::*} to {_lore::*}
 	return (book named "&fClass Statistics" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 

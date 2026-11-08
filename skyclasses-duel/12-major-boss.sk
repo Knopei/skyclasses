@@ -1,19 +1,90 @@
 # ============================================
-# MAJOR BOSS
-# 1 fixed location. Spawns a limited number of times over the match, spaced
-# out by a fixed interval. Reward: a random permanent general perk, or a life
-# back — rolled the moment someone lands the first hit (not at kill time), so
-# a bossbar can preview it to both players; the same rolled reward is what
-# actually gets granted on the kill. Also increments {majorbosses-claimed},
-# which 04-leveling.sk reads to scale the death-cooldown formula.
+# MAJOR BOSSES
+# One boss at a time, at the major boss spawn point ({config::arena::majorboss-spawn}).
 #
-# An Iron Golem with 3 telegraphed, dodgeable special attacks: Fortify (self
-# buff), Ground Slam (AOE around itself), and Rock Throw (ranged, locks onto
-# a player's position at cast time — dodge by moving away during the
-# telegraph). Passive until hit (see 01-utils.sk's mobActivate/mobDeactivate)
-# and its ordinary melee touch is deliberately weak (see 08-damage.sk) — only
-# these 3 special attacks, flagged via "specialAttack" metadata, hit hard.
+# SCHEDULE (same timers as the old Iron Golem):
+#   - the first boss 3 minutes after the match starts; after that each one is due 3 minutes after the previous one spawned, but never
+#     sooner than 60 seconds after the previous one died or despawned. No spawn limit.
+#   - a countdown hologram over the spawn point names the boss that is coming; the platform hole fills 1 second before it spawns and
+#     collapses after a real kill (opens instantly on a timeout despawn)
+#   - a boss lasts 2 minutes (+30 seconds if it is being fought), then despawns with no reward
+#
+# TIERS:
+#   - LOW-LEVEL (Evoker, Vindicator, Pillager) until a player has slain 3 of them — that player claims a SOUL and from then on only
+#     HIGH-LEVEL bosses (Harbinger, Magmaroth, Doomhoof) spawn, until the match ends. The first high-level boss is due 3 minutes after
+#     the soul is claimed. Each spawn is a random type of its tier, never the same type twice in a row.
+#   - low-level reward: {config::majorboss::low-xp-reward} XP + 1 extra life
+#   - high-level reward: {config::majorboss::high-xp-reward} XP + a buff on all 3 of the killer's classes (each class loses it when it
+#     dies, and every buff ends when the next boss spawns)
+#   - VENGEANCE (until a soul is claimed): each low-level boss a player has slain makes them deal 20%% less damage to bosses (08-damage.sk)
+#
+# SOULS (permanent for the rest of the match, the soul holder only):
+#   Evoker (2+ of your 3 were Evokers): +10%% mana regeneration (03-resources.sk)
+#   Vindicator: +20%% stamina regeneration (03-resources.sk)
+#   Pillager: grenades recharge 50%% faster — 15 s instead of 30 s; with Quick Fuse 10 s instead of 15 s (07-consumables.sk)
+#   one of each: ultimate cooldowns -10%% (06-perks-general.sk / cyberpunk.sk)
+#
+# HIGH-LEVEL BUFFS:
+#   Harbinger: melee attack damage multiplier +0.5 (08-damage.sk)
+#   Magmaroth: +0.5 damage on hits within 2 s of a movement ability, and a hit that leaves an enemy at 1.5 hearts or less ignites them
+#              for 3 s (08-damage.sk; movement tracked in 06-perks-general.sk)
+#   Doomhoof: +1 max health (04-leveling.sk) and permanent Regeneration I (ticker below)
+#
+# THE SEERHOPPER (a frog, not a boss): spawns at one of 4 spots around the boss spawn ({config::arena::frog-spawn::1-4}, never the same one twice in a
+# row) 30 s after the match starts, and 30 s after a boss dies/despawns when the next
+# boss is still 60+ s away at that moment. It despawns 15 s before the next boss spawns. Catching it: 6 XP + "Seer's Eye" — your
+# opponent's name tag stays visible to you (through walls) for 60 s, except while they are invisible (20-combat.sk).
+#
+# Every boss body carries "isMajorBoss" (08-damage.sk's weak melee + Zeus's ult, 20-combat.sk), "bossType" (its AI type), "mbBossId"
+# (one id per boss — Magmaroth's cubes and Doomhoof's two halves share it) and "mbBar" (its bossbar id). /testboss (22-boss-test.sk)
+# spawns the same bosses tagged "testBoss": no rewards, no soul, no schedule.
 # ============================================
+
+import:
+	org.bukkit.Bukkit
+	com.destroystokyo.paper.entity.ai.GoalType
+	org.bukkit.attribute.Attribute
+	org.bukkit.entity.EntityType
+	com.destroystokyo.paper.entity.ai.VanillaGoal
+	org.bukkit.entity.Spellcaster$Spell as MBSpell
+	org.bukkit.EntityEffect
+	java.lang.Float
+	org.bukkit.ChatColor
+	java.lang.Integer
+	org.bukkit.entity.Frog$Variant as FrogVariant
+	org.bukkit.event.entity.SlimeSplitEvent
+	org.bukkit.event.entity.EntityPotionEffectEvent
+	net.minecraft.world.entity.ai.memory.MemoryModuleType
+	net.minecraft.util.Unit
+
+on load:
+	set {mbTypeName::evoker} to "Evoker"
+	set {mbTypeName::vindicator} to "Vindicator"
+	set {mbTypeName::pillager} to "Pillager"
+	set {mbTypeName::harbinger} to "Harbinger"
+	set {mbTypeName::magmaroth} to "Magmaroth"
+	set {mbTypeName::doomhoof} to "Doomhoof"
+	set {mbSoulName::evoker} to "&5Evoker Soul &7(+10%% mana regeneration)"
+	set {mbSoulName::vindicator} to "&7Vindicator Soul &7(+20%% stamina regeneration)"
+	set {mbSoulName::pillager} to "&8Pillager Soul &7(grenades recharge 50%% faster)"
+	set {mbSoulName::mixed} to "&dRaid Soul &7(ultimate cooldowns -10%%)"
+	set {mbBuffName::harbinger} to "&3Harbinger's Might &7(melee damage multiplier +0.5)"
+	set {mbBuffName::magmaroth} to "&6Magmaroth's Fury &7(+0.5 damage within 2 s of a movement ability; hits that leave an enemy at 1.5 hearts or less ignite them)"
+	set {mbClaimName::evoker} to "&5Evoker Soul" # short names for the "<player> has claimed ..." line
+	set {mbClaimName::vindicator} to "&7Vindicator Soul"
+	set {mbClaimName::pillager} to "&8Pillager Soul"
+	set {mbClaimName::mixed} to "&dRaid Soul"
+	set {mbClaimName::harbinger} to "&3Harbinger's Might"
+	set {mbClaimName::magmaroth} to "&6Magmaroth's Fury"
+	set {mbClaimName::doomhoof} to "&cDoomhoof's Vigor"
+	set {mbBossIcon::evoker} to "&5✦" # bossbar icons — the same symbols as the TAB table (21-tablist.sk)
+	set {mbBossIcon::vindicator} to "&7⚔"
+	set {mbBossIcon::pillager} to "&8➶"
+	set {mbBossIcon::harbinger} to "&3☠"
+	set {mbBossIcon::magmaroth} to "&6♨"
+	set {mbBossIcon::doomhoof} to "&c✚"
+	set {mbBossIcon::doomhoof-rider} to "&c✚"
+	set {mbBuffName::doomhoof} to "&cDoomhoof's Vigor &7(+1 max health and Regeneration I)"
 
 # ---- LIFECYCLE (called from 10-match-manager.sk) ----
 
@@ -22,230 +93,77 @@ function startMajorBossTimer():
 	set {majorbossLastDespawn} to 0
 	set {majorbossLastSpawnStart} to unix timestamp of now # baseline for the very first interval
 	set {majorbossActive} to true
-	clearMajorBossRespawnHolo() # 12-major-boss.sk — in case one's somehow left over
+	mbResetMatchState()
+	set {frogDueAt} to (unix timestamp of now) + 30 # the first Frog, 30 s in
+	clearMajorBossRespawnHolo()
 
 function stopMajorBossTimer():
 	delete {majorbossActive}
-	if {majorbossmob} is set:
-		if {majorbossmob} is alive:
-			kill {majorbossmob}
+	if {majorbossId} is set:
+		mbRemoveBoss({majorbossId})
+	mbBarClear("majorboss-bar")
+	mbRemoveFrog(false)
 	delete {majorbossmob}
-	clearMajorBossBar() # 12-major-boss.sk
-	clearMajorBossRespawnHolo() # 12-major-boss.sk
-	clearMajorBossHole() # 12-major-boss.sk — instant open, no animation; a match being force-ended mid-fight shouldn't leave the platform filled for the next one
+	delete {majorbossId}
+	clearMajorBossRespawnHolo()
+	clearMajorBossHole() # instant open, no animation; a match being force-ended mid-fight shouldn't leave the platform filled for the next one
+	mbClearHighBuffs()
+	mbResetMatchState()
 
-# ---- SPAWNING ----
-
-function spawnMajorBoss():
-	set {majorbossLastSpawnStart} to unix timestamp of now # re-anchors the countdown hologram's "next interval" math to this spawn
-	clearMajorBossRespawnHolo() # 12-major-boss.sk
-	fillMajorBossHole() # 12-major-boss.sk — safety net: the periodic checker below already fills this 1 second before calling here, but guarantee it's filled regardless (idempotent — refilling already-filled blocks is harmless)
-	set {_spawnloc} to {config::arena::majorboss-spawn}
-	broadcast "&4&lAn Iron Golem awakens..."
-	spawn 1 iron golem at {_spawnloc}
-	set {_mob} to last spawned iron golem
-	set max health of {_mob} to {config::majorboss::max-health} # 00-config.sk
-	set health of {_mob} to {config::majorboss::max-health}
-	set display name of {_mob} to "&4&lIron Golem"
-	add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
-	set metadata value "isMajorBoss" of {_mob} to true
-	mobDeactivate({_mob}) # 01-utils.sk — passive until a player hits it
-	set {majorbossmob} to {_mob}
-	majorBossLeashLoop({_mob}, {_spawnloc})
-	majorBossAttackLoop({_mob})
-	majorBossLifetimeTimer({_mob})
-
-function majorBossLifetimeTimer(mob: living entity): # despawns the boss if it isn't killed in time, so the next one can spawn on schedule
-	wait 2 minutes
-	if {_mob} is alive:
-		if {_mob}.isAware(): # still being actively fought — give it a bit more time to be finished off
-			wait 30 seconds
-		if {_mob} is alive: # still not dead — force despawn, no kill credit or reward
-			broadcast "&4&lThe Iron Golem grows restless and vanishes..."
-			set metadata value "forcedDespawn" of {_mob} to true # tells "on death of an iron golem" this wasn't a real kill, so the previewed reward is never granted even if a player had already hit it
-			kill {_mob}
-			clearMajorBossBar() # 12-major-boss.sk
-			clearMajorBossHole() # 12-major-boss.sk — no kill happened, so just open the hole back up immediately rather than running the slain-only collapse animation
-			set {majorbossLastDespawn} to unix timestamp of now
-			delete {majorbossmob}
-
-on damage of an iron golem with priority high: # tracks who hit the boss first, for Boss Steal detection on death — priority high ensures 08-damage.sk's normal-priority melee attacker-tracking has already run
-	if metadata value "isMajorBoss" of victim is set:
-		set {_attacker} to metadata value "attacker" of victim # set by updateAttacker() — works for melee, abilities, and grenades alike, unlike the native "attacker" value which only populates for direct melee hits
-		if {_attacker} is a player:
-			if metadata value "firstDamager" of victim isn't set:
-				set metadata value "firstDamager" of victim to {_attacker}
-				showMajorBossBar({_attacker}) # 12-major-boss.sk — first hit only: rolls the reward and shows the bar to both match participants
-		wait 1 tick # health isn't actually applied yet at the moment this event fires
-		updateMajorBossBar()
-
-function majorBossLeashLoop(mob: living entity, spawnloc: location):
-	while {_mob} is alive:
-		bossLeashCheck({_mob}, {_spawnloc}, {config::majorboss::leash-radius}, {config::majorboss::leash-heal-percent}) # 01-utils.sk
-		wait 2 seconds
-
-# ---- SPECIAL ATTACKS (telegraphed, dodgeable — cycles randomly between the 3) ----
-
-function majorBossAttackLoop(mob: living entity):
-	while {_mob} is alive:
-		set {_wait} to a random integer between 10 and 15
-		set {_wait} to "%{_wait}% seconds" parsed as a timespan
-		wait {_wait}
-		if {_mob} is alive:
-			set {_nearby::*} to all players in radius 12 around {_mob}
-			if {_nearby::*} is set:
-				set {_attack} to random integer between 1 and 3
-				if {_attack} = 1:
-					majorBossGroundSlam({_mob})
-				else if {_attack} = 2:
-					majorBossRockThrow({_mob})
-				else:
-					majorBossFortify({_mob})
-
-function majorBossFortify(mob: living entity): # self-buff, telegraphed but not directly dangerous
-	play sound "ENTITY_IRON_GOLEM_REPAIR" at volume 3 and pitch 1 at location of {_mob}
-	set {_shapes::circle} to a circle with radius 2
-	set particle of {_shapes::*} to 1 of dust particle using dustOption(gray, 1.2)
-	loop 20 times: # 1 second telegraph
-		draw shapes {_shapes::*} at location of {_mob}
-		wait 1 tick
-	if {_mob} is alive:
-		add potion effect of resistance 1 without particles for 6 seconds to potion effects of {_mob}
-		play sound "ENTITY_IRON_GOLEM_REPAIR" at volume 3 and pitch 1.5 at location of {_mob}
-
-function majorBossGroundSlam(mob: living entity): # telegraph, then a large AOE burst centered on the boss
-	set {_loc} to location of {_mob}
-	play sound "ENTITY_IRON_GOLEM_ATTACK" at volume 3 and pitch 0.6 at {_loc}
-	set {_shapes::circle} to a circle with radius 4
-	set particle of {_shapes::*} to 1 of dust particle using dustOption(gray, 1.2)
-	loop 40 times: # 2 second telegraph
-		draw shapes {_shapes::*} at {_loc}
-		wait 1 tick
-	if {_mob} is alive:
-		play sound "ENTITY_GENERIC_EXPLODE" at volume 3 and pitch 0.5 at {_loc}
-		set metadata value "specialAttack" of {_mob} to true # 08-damage.sk skips the melee-nerf override when this is set
-		loop all players in radius 4 around {_loc}:
-			damage loop-player by (random number between 1 and 3)
-			markCombat(loop-player) # 20-combat.sk — special attacks damage by hand, so they never reach dmgUpdate() with the boss as the attacker
-			push loop-player upward at speed 0.7
-		delete metadata value "specialAttack" of {_mob}
-
-function majorBossRockThrow(mob: living entity): # locks onto a player's position at cast time — telegraph, then impact there
-	set {_target} to a random player out of (all players in radius 12 around {_mob})
-	if {_target} is set:
-		set {_impactLoc} to location of {_target} # locked in now, not tracked — dodge by moving away
-		play sound "ENTITY_IRON_GOLEM_ATTACK" at volume 3 and pitch 1 at location of {_mob}
-		set {_shapes::line} to a line from location of {_mob} to {_impactLoc}
-		set particle of {_shapes::line} to 1 of dust particle using dustOption(gray, 1)
-		loop 25 times: # 1.25 second telegraph
-			draw shape {_shapes::line} at location of {_mob}
-			wait 1 tick
-		if {_mob} is alive:
-			play sound "ENTITY_GENERIC_EXPLODE" at volume 2 and pitch 1.2 at {_impactLoc}
-			draw 20 of block particle using stone at {_impactLoc} with extra 0.3
-			set metadata value "specialAttack" of {_mob} to true
-			loop all players in radius 2 around {_impactLoc}:
-				damage loop-player by (random number between 1 and 3)
-				markCombat(loop-player) # 20-combat.sk — special attacks damage by hand, so they never reach dmgUpdate() with the boss as the attacker
-			delete metadata value "specialAttack" of {_mob}
-
-# ---- DEATH / REWARD ----
-
-on death of an iron golem:
-	if metadata value "isMajorBoss" of victim is set:
-		if metadata value "forcedDespawn" of victim isn't set: # skip the reward entirely on a forced timeout despawn — majorBossLifetimeTimer() already handled that case
-			set {_killer} to metadata value "attacker" of victim # set by updateAttacker() — works for melee, abilities, and grenades alike
-			if {_killer} is a player:
-				if {inMatch::%{_killer}'s uuid%} is set: # ignore kills from anyone not actually in an active match (e.g. a bystander/admin in the arena)
-					set {_class} to {class::%{_killer}'s uuid%}
-					add 1 to {majorbosses-claimed} # 04-leveling.sk reads this for the death-cooldown formula — a gameplay-affecting counter, kept unconditional even in a test duel so the death-cooldown formula still behaves like a real match
-					add 1 to {matchobjectives::%{_killer}'s uuid%}
-					if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
-						add 1 to {bossesslain::%{_killer}'s uuid%}
-						add 1 to {class-bossesslain::%{_killer}'s uuid%::%{_class}%}
-					add 1 to {matchbosskills::%{_killer}'s uuid%::%{_class}%} # 19-balance-stats.sk reads this at match end for the boss carry-rate stat (that function itself no-ops during a test duel)
-					addClassKill({_killer}, {_class}, {config::majorboss::xp-reward}) # 04-leveling.sk
-
-					set {_firstDamager} to metadata value "firstDamager" of victim
-					if {_firstDamager} is set:
-						if {_firstDamager} isn't {_killer}:
-							if {testMatch} isn't set:
-								add 1 to {bosssteals::%{_killer}'s uuid%}
-								add 1 to {class-bosssteals::%{_killer}'s uuid%::%{_class}%}
-							send "&d&lBOSS STEAL! &7You claimed a boss %{_firstDamager}% had already started fighting." to {_killer}
-
-					grantMajorBossReward({_killer})
-					broadcast "&4&lThe Iron Golem has fallen to &c%{_killer}%&4!"
-		clearMajorBossBar() # 12-major-boss.sk
-		set {majorbossLastDespawn} to unix timestamp of now
-		delete {majorbossmob}
-		if metadata value "forcedDespawn" of victim isn't set: # real kill only — a forced despawn already opened the hole immediately in majorBossLifetimeTimer(), no animation
-			collapseMajorBossHole() # 12-major-boss.sk — runs its own 3-second sequence; placed last so it doesn't delay the state cleanup above
-
-function grantMajorBossReward(p: player): # extra life is the only reward now — general perks moved to their own selectable system (06-perks-general.sk)
-	grantExtraLife({_p})
-
-function grantExtraLife(p: player):
-	add 1 to {lifepool::%{_p}'s uuid%}
-	send "&a&lEXTRA LIFE! &7You now have &c%{lifepool::%{_p}'s uuid%}% &7lives." to {_p}
-	updateMatchSidebar({_p}) # 10-match-manager.sk
-
-# ---- REWARD PREVIEW + BOSSBAR ----
-
-function showMajorBossBar(p: player): # called once, on the boss's first hit
-	set {_bar} to boss bar with id "majorboss-bar" with title "&4&lIron Golem &7— Reward: &c&lExtra Life" with color red
-	set bar style of {_bar} to segmented 10
-	set bar progress of {_bar} to 100
-	add {_p} to {_bar}
-	set {_opponent} to {matchOpponent::%{_p}'s uuid%}
-	if {_opponent} is set:
-		add {_opponent} to {_bar}
-
-function updateMajorBossBar(): # called after every hit, once health has actually been applied
-	if {majorbossmob} is set:
-		if {majorbossmob} is alive:
-			set {_pct} to ((health of {majorbossmob}) / (max health of {majorbossmob})) * 100
-			set bar progress of boss bar with id "majorboss-bar" to {_pct}
-
-function clearMajorBossBar(): # called on kill, forced despawn, or the timer being stopped entirely
+function mbResetMatchState(): # souls, low-level kill counts, buffs, the Frog's reward — nothing carries from one match into the next
+	delete {soulHolder}
+	delete {soulType::*}
+	delete {lowKills::*}
+	delete {hlBuff::*}
+	delete {frogVision::*}
+	delete {frogDueAt}
+	delete {frogLastSpot}
+	delete {majorbossLastType}
+	delete {majorbossNextType}
+	delete {majorbossTier}
+	delete {majorbossFirst}
+	delete {majorbossForced}
 	loop all players:
-		remove loop-player from boss bar with id "majorboss-bar"
-	delete boss bar with id "majorboss-bar"
+		if {hlRegen::%loop-player's uuid%} is set:
+			remove regeneration from active potion effects of loop-player
+			delete {hlRegen::%loop-player's uuid%}
 
-# ---- SPAWN SCHEDULING + RESPAWN COUNTDOWN HOLOGRAM ----
-# One periodic checker drives both concerns: it decides when the boss's next
-# spawn is due (respecting the fixed interval and the 1-minute minimum gap
-# after a despawn) and either shows a countdown hologram above its spawn
-# point or, once the countdown reaches zero, actually spawns it. Doing both
-# here — rather than one long-lived delayed loop sitting through the whole
-# match, as this used to be — avoids the deep, ever-growing nested-delay
-# chain that was the likely cause of the boss never coming back after being
-# killed once. Uses the same "respawnHolo" metadata tag as the mini-boss
-# holograms, so it's covered by the same hit/damage protection already set
-# up in 11-mini-bosses.sk.
+# ---- SCHEDULE ----
+
+function mbNextSpawnAt() :: number: # when the next boss is due: 3 minutes after the last spawn, but at least 60 s after the last death/despawn
+	set {_at} to {majorbossLastSpawnStart} + {config::majorboss::interval-seconds}
+	set {_gap} to {majorbossLastDespawn} + 60
+	if {_gap} > {_at}:
+		set {_at} to {_gap}
+	return {_at}
+
+function mbRollType(): # picks the next boss (into {majorbossNextType}): the tier from the soul state, never the same type twice in a row
+	if {soulHolder} is set:
+		set {_pool::*} to "harbinger", "magmaroth" and "doomhoof"
+	else:
+		set {_pool::*} to "evoker", "vindicator" and "pillager"
+	if {majorbossLastType} is set:
+		remove {majorbossLastType} from {_pool::*}
+	set {majorbossNextType} to a random element out of {_pool::*}
 
 every 1 seconds:
 	if {majorbossActive} is set:
-		if {majorbossmob} is set:
-			clearMajorBossRespawnHolo() # boss is alive right now
-		else if {majorbossSpawnCount} >= {config::majorboss::max-spawns}:
-			clearMajorBossRespawnHolo() # no spawns left this match
+		if {majorbossId} is set:
+			clearMajorBossRespawnHolo() # a boss is alive right now
 		else if {majorbossLastSpawnStart} is set:
-			set {_scheduledAt} to {majorbossLastSpawnStart} + {config::majorboss::interval-seconds}
-			set {_minGapAt} to {majorbossLastDespawn} + 60
-			set {_nextSpawnAt} to {_scheduledAt}
-			if {_minGapAt} > {_nextSpawnAt}:
-				set {_nextSpawnAt} to {_minGapAt}
-			set {_remaining} to {_nextSpawnAt} - (unix timestamp of now)
-			set {_remaining} to floor({_remaining}) # unix timestamps here can carry sub-second precision, which showed up as decimals in the hologram
+			if {majorbossNextType} isn't set:
+				mbRollType()
+			set {_remaining} to floor(mbNextSpawnAt() - (unix timestamp of now)) # unix timestamps carry sub-second precision — floor keeps the hologram whole
 			if {_remaining} > 0:
 				updateMajorBossRespawnHolo({_remaining})
-				if {_remaining} = 1: # exactly 1 second before spawnMajorBoss() fires below — fill the hole now so the boss spawns standing on solid ground
+				if {_remaining} = 1: # exactly 1 second before the spawn — fill the hole now so the boss spawns standing on solid ground
 					fillMajorBossHole()
-			else: # countdown's up — spawn it
+			else:
 				clearMajorBossRespawnHolo()
-				add 1 to {majorbossSpawnCount}
-				spawnMajorBoss()
+				set {_type} to {majorbossNextType}
+				delete {majorbossNextType}
+				spawnMajorBoss({_type})
+		mbFrogTick()
 	else:
 		clearMajorBossRespawnHolo() # no match currently using this timer
 
@@ -254,9 +172,12 @@ function updateMajorBossRespawnHolo(remainingSeconds: number):
 		spawn 1 armor stand at ({config::arena::majorboss-spawn} offset by vector(0, 2.5, 0))
 		set {majorbossRespawnHolo} to last spawned armor stand
 		add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,NoBasePlate:1,Marker:1b}" to nbt compound of {majorbossRespawnHolo}
-		set metadata value "respawnHolo" of {majorbossRespawnHolo} to true
+		set metadata value "respawnHolo" of {majorbossRespawnHolo} to true # same hit/damage protection as the jungle camp holograms (11-mini-bosses.sk)
 	if {majorbossRespawnHolo} is alive:
-		set name of {majorbossRespawnHolo} to "&4&lIron Golem &7spawns in &f%{_remainingSeconds}%s"
+		set {_name} to "Boss"
+		if {majorbossNextType} is set:
+			set {_name} to {mbTypeName::%{majorbossNextType}%}
+		set name of {majorbossRespawnHolo} to "&4&l%{_name}% &7spawns in &f%{_remainingSeconds}%s"
 	else:
 		delete {majorbossRespawnHolo}
 
@@ -265,6 +186,2260 @@ function clearMajorBossRespawnHolo():
 		if {majorbossRespawnHolo} is alive:
 			kill {majorbossRespawnHolo}
 		delete {majorbossRespawnHolo}
+
+# ---- SPAWNING ----
+
+function mbSpawnBoss(type: text, loc: location, test: boolean) :: living entity: # creates the boss (frozen, passive) and tags every body of it; mbStart() runs its entrance + AI
+	if {_type} is "evoker":
+		spawn 1 evoker at {_loc}
+		set {_mob} to last spawned evoker
+		mbSetup({_mob}, "evoker", 25, 2, "Evoker", 1.25) # slowness 2
+	else if {_type} is "vindicator":
+		spawn 1 vindicator at {_loc}
+		set {_mob} to last spawned vindicator
+		set {_mob}'s tool to iron axe
+		mbSetup({_mob}, "vindicator", 25, 2, "Vindicator", 1.25)
+	else if {_type} is "pillager":
+		spawn 1 pillager at {_loc}
+		set {_mob} to last spawned pillager
+		set {_mob}'s tool to crossbow of multishot 1
+		mbSetup({_mob}, "pillager", 25, 1, "Pillager", 1.25)
+	else:
+		set {_mob} to mbSpawnHigh({_type}, {_loc}) # harbinger / magmaroth / doomhoof
+	set {_id} to "%{_mob}'s uuid%"
+	if {_test} is true:
+		set {_bar} to "testboss-%{_id}%"
+	else:
+		set {_bar} to "majorboss-bar"
+	add {_mob} to {_bodies::*}
+	set {_rider} to metadata value "mbRider" of {_mob}
+	if {_rider} is set:
+		add {_rider} to {_bodies::*}
+	loop {_bodies::*}:
+		set metadata value "mbBossId" of loop-value to {_id}
+		set metadata value "mbBar" of loop-value to {_bar}
+		if {_test} is true:
+			set metadata value "testBoss" of loop-value to true
+	if {_type} is "magmaroth":
+		set {mbMagma::%{_id}%::barMax} to 25 # the large form; becomes 24 when it splits
+	delete {mbBarShown::%{_bar}%}
+	delete boss bar with id {_bar}
+	return {_mob}
+
+function spawnMajorBoss(type: text):
+	set {majorbossLastSpawnStart} to unix timestamp of now # re-anchors the "next interval" math to this spawn
+	clearMajorBossRespawnHolo()
+	fillMajorBossHole() # safety net: the checker already filled it 1 second ago (refilling is harmless)
+	mbRemoveFrog(true) # should already be gone (it leaves 15 s before a spawn) — guaranteed here
+	mbClearHighBuffs() # every high-level buff ends when the next boss spawns
+	set {majorbossLastType} to {_type}
+	if {_type} is "evoker" or "vindicator" or "pillager":
+		set {majorbossTier} to "low"
+	else:
+		set {majorbossTier} to "high"
+	delete {majorbossFirst}
+	delete {majorbossForced}
+	mbBarClear("majorboss-bar")
+	set {_loc} to {config::arena::majorboss-spawn}
+	set {_mob} to mbSpawnBoss({_type}, {_loc}, false)
+	set {majorbossmob} to {_mob}
+	set {majorbossId} to metadata value "mbBossId" of {_mob}
+	add 1 to {majorbossSpawnCount}
+	majorBossLifetimeTimer({majorbossId}) # has its own waits — returns at once
+	mbStart({_mob}, {_loc}) # entrance, leash and brain
+
+function majorBossLifetimeTimer(id: text): # despawns the boss if it isn't killed in time, so the next one can come on schedule
+	wait 2 minutes
+	if {majorbossId} is {_id}:
+		set {_aware} to false # (inlined rather than a returning function — this runs after a wait)
+		loop all living entities in world {config::arena::world-name}:
+			if metadata value "mbBossId" of loop-entity is {_id}:
+				if metadata value "mbAggro" of loop-entity is set:
+					set {_aware} to true
+		if {_aware} is true: # still being fought — a bit more time to finish it
+			wait 30 seconds
+		if {majorbossId} is {_id}: # still not dead — despawn, no reward
+			set {majorbossForced} to true
+			broadcast " "
+			broadcast "%{mbBossIcon::%{majorbossLastType}%}% &4&l%{mbTypeName::%{majorbossLastType}%}% &cgrows restless and vanishes..."
+			broadcast " "
+			mbRemoveBoss({_id})
+			mbBarClear("majorboss-bar")
+			clearMajorBossHole() # no kill, so the hole simply opens again (the collapse animation is for real kills)
+			set {majorbossLastDespawn} to unix timestamp of now
+			delete {majorbossmob}
+			delete {majorbossId}
+			mbScheduleFrog()
+
+function mbRemoveBoss(id: text): # removes every body of a boss, plus any clones / candles / rain arrows, WITHOUT a death event (no reward)
+	loop all entities in world {config::arena::world-name}:
+		if metadata value "mbBossId" of loop-entity is {_id}:
+			if loop-entity is alive: # (the body whose death event is running right now is left alone)
+				loop-entity.remove()
+		else if metadata value "mbClone" of loop-entity is set:
+			loop-entity.remove()
+		else if metadata value "mbProp" of loop-entity is set:
+			loop-entity.remove()
+	set {mbMagma::%{_id}%::done} to true # ends Magmaroth's brain loop if it was this one
+	delete {mbMagma::%{_id}%::bodies::*}
+
+# ---- BOSSBAR (the boss's health bar) ----
+# Red, titled with the boss's name; shown to the player who lands the first hit and their opponent. Doomhoof's bar is its shared pool;
+# Magmaroth's tracks the large form, then refills and tracks the 3 medium cubes together.
+
+function mbFirstHit(v: living entity, p: player):
+	set {_bar} to metadata value "mbBar" of {_v}
+	if {_bar} is set:
+		if {mbBarShown::%{_bar}%} isn't set:
+			set {mbBarShown::%{_bar}%} to true
+			add {_p} to {mbBarViewers::%{_bar}%::*} # each viewer gets their OWN bar (id "<bar>-<uuid>"), since the Vengeance part of the title differs per player
+			set {_opp} to {matchOpponent::%{_p}'s uuid%}
+			if {_opp} is set:
+				add {_opp} to {mbBarViewers::%{_bar}%::*}
+			if metadata value "testBoss" of {_v} isn't set:
+				if metadata value "mbBossId" of {_v} is {majorbossId}:
+					set {majorbossFirst} to {_p} # for Boss Steal
+		mbBarUpdate({_v})
+
+function mbBarUpdate(e: living entity):
+	set {_bar} to metadata value "mbBar" of {_e}
+	if {_bar} isn't set:
+		stop
+	if {mbBarShown::%{_bar}%} isn't set:
+		stop
+	set {_g} to metadata value "mbGroup" of {_e}
+	if {_g} is set: # Magmaroth: all of its cubes together
+		set {_hp} to 0
+		loop {mbMagma::%{_g}%::bodies::*}:
+			if loop-value is alive:
+				add (health of loop-value) to {_hp}
+		set {_max} to {mbMagma::%{_g}%::barMax}
+	else:
+		set {_hp} to 0
+		if {_e} is alive:
+			set {_hp} to health of {_e}
+		set {_max} to max health of {_e}
+		set {_pair} to metadata value "mbPair" of {_e}
+		if {_pair} is set: # Doomhoof: the shared pool is whichever half is lower
+			if {_pair} is alive:
+				if health of {_pair} < {_hp}:
+					set {_hp} to health of {_pair}
+	if {_max} isn't set:
+		stop
+	set {_pct} to ({_hp} / {_max}) * 100
+	if {_pct} > 100:
+		set {_pct} to 100
+	if {_pct} < 0:
+		set {_pct} to 0
+	set {_type} to metadata value "bossType" of {_e}
+	set {_nm} to metadata value "mbName" of {_e}
+	set {_title} to "%{mbBossIcon::%{_type}%}% &4&l%{_nm}%"
+	set {_low} to false
+	if {_type} is "evoker" or "vindicator" or "pillager":
+		set {_low} to true
+	loop {mbBarViewers::%{_bar}%::*}:
+		set {_v} to loop-value
+		if {_v} is online:
+			set {_t} to {_title}
+			if {_low} is true: # Vengeance: this viewer's damage reduction against bosses
+				set {_vm} to vengeanceMult({_v})
+				if {_vm} < 1:
+					set {_red} to round((1 - {_vm}) * 100)
+					set {_t} to "%{_t}% &6(%{_red}%%% ⛨)"
+			set {_b} to boss bar with id "%{_bar}%-%{_v}'s uuid%" with title {_t} with color red
+			set {_legacy} to {_t}
+			replace all "&" with "§" in {_legacy}
+			{_b}.setTitle({_legacy}) # makes sure an existing bar's title updates too (Vengeance changes)
+			set bar style of {_b} to segmented 10
+			add {_v} to {_b}
+			set bar progress of {_b} to {_pct}
+
+function mbBarClear(bar: text):
+	loop {mbBarViewers::%{_bar}%::*}:
+		set {_vid} to "%{_bar}%-%loop-value's uuid%"
+		if loop-value is online:
+			remove loop-value from boss bar with id {_vid}
+		delete boss bar with id {_vid}
+	delete {mbBarViewers::%{_bar}%::*}
+	loop all players: # the old shared bar id, in case one is left over
+		remove loop-player from boss bar with id {_bar}
+	delete boss bar with id {_bar}
+	delete {mbBarShown::%{_bar}%}
+
+function updateMajorBossBar(): # kept for 01-utils.sk's shared leash code
+	if {majorbossmob} is alive:
+		mbBarUpdate({majorbossmob})
+
+on damage of living entity with priority high: # first hit opens the bossbar; every hit refreshes it
+	if metadata value "mbBossId" of victim is set:
+		set {_att} to metadata value "attacker" of victim
+		if {_att} is a player:
+			mbFirstHit(victim, {_att})
+		wait 1 tick # health isn't applied yet when this fires
+		mbBarUpdate(victim)
+
+# ---- DEFEAT / REWARDS ----
+
+function mbBossDefeated(v: living entity): # called once per boss, from its death hook (the last cube for Magmaroth, either half for Doomhoof)
+	set {_id} to metadata value "mbBossId" of {_v}
+	set {_bar} to metadata value "mbBar" of {_v}
+	set {_type} to metadata value "bossType" of {_v}
+	if {_type} is "doomhoof-rider":
+		set {_type} to "doomhoof"
+	set {_name} to {mbTypeName::%{_type}%}
+	if {_bar} is set:
+		mbBarClear({_bar})
+	if metadata value "testBoss" of {_v} is set:
+		broadcast " "
+		broadcast "&4&l[TEST] %{_name}% has been defeated. &7(no rewards)"
+		broadcast " "
+		stop
+	if {_id} isn't {majorbossId}: # not the current scheduled boss (a leftover) — nothing to give
+		stop
+	set {_killer} to metadata value "attacker" of {_v} # set by updateAttacker() — melee, abilities and grenades alike
+	if {_killer} is a player:
+		if {inMatch::%{_killer}'s uuid%} is set: # never a bystander / admin
+			set {_class} to {class::%{_killer}'s uuid%}
+			add 1 to {majorbosses-claimed} # 04-leveling.sk's death-cooldown formula (kept even in a test duel)
+			add 1 to {matchobjectives::%{_killer}'s uuid%}
+			if {testMatch} isn't set:
+				add 1 to {bossesslain::%{_killer}'s uuid%}
+				add 1 to {class-bossesslain::%{_killer}'s uuid%::%{_class}%}
+				add 1 to {bossesslain-type::%{_killer}'s uuid%::%{_type}%} # 14-stats.sk — per boss type
+				add 1 to {bossesslain-%{majorbossTier}%::%{_killer}'s uuid%} # by tier (bossesslain-low / bossesslain-high)
+				add 1 to {class-bossesslain-%{majorbossTier}%::%{_killer}'s uuid%::%{_class}%}
+			add 1 to {matchbosskills::%{_killer}'s uuid%::%{_class}%} # 19-balance-stats.sk boss carry rate
+			recordBossKill({_class}, {majorbossTier}) # 19-balance-stats.sk — Bosses per Game page
+			add 1 to {matchbosses-%{majorbossTier}%::%{_killer}'s uuid%} # 14-stats.sk's match summary
+			if {majorbossFirst} is set:
+				if {majorbossFirst} isn't {_killer}:
+					if {testMatch} isn't set:
+						add 1 to {bosssteals::%{_killer}'s uuid%}
+						add 1 to {class-bosssteals::%{_killer}'s uuid%::%{_class}%}
+						add 1 to {bosssteals-%{majorbossTier}%::%{_killer}'s uuid%} # 14-stats.sk — by tier
+					add 1 to {matchbosssteals::%{_killer}'s uuid%} # match summary
+					set {_steal} to true
+			set {_base} to {config::majorboss::high-xp-reward}
+			if {majorbossTier} is "low":
+				set {_base} to {config::majorboss::low-xp-reward}
+			set {_bonus} to catchupXP({_killer}, {_base}) # 04-leveling.sk — XP catch-up: +1 per 10 total XP behind the opponent (max +50%%)
+			if {majorbossTier} is "low":
+				addClassKill({_killer}, {_class}, {config::majorboss::low-xp-reward} + {_bonus}) # 04-leveling.sk
+				grantExtraLife({_killer})
+				set {_hadSoul} to false
+				if {soulHolder} is set:
+					set {_hadSoul} to true
+				mbRecordLowKill({_killer}, {_type})
+				set {_claim} to "&aan Extra Life"
+				if {_hadSoul} is false:
+					if {soulType::%{_killer}'s uuid%} is set: # this kill claimed the soul
+						set {_claim} to "&aan Extra Life &7and the %{mbClaimName::%{soulType::%{_killer}'s uuid%}%}%"
+			else:
+				addClassKill({_killer}, {_class}, {config::majorboss::high-xp-reward} + {_bonus})
+				mbGrantHighBuff({_killer}, {_type})
+				set {_claim} to {mbClaimName::%{_type}%}
+			# chat: blank line, "<boss> has fallen to <player>" (the killer alone also sees their catch-up XP), "<player> has claimed <reward>", blank line
+			set {_fallen} to "&4&l%{_name}% &chas fallen to &6%{_killer}%&c!"
+			broadcast " "
+			loop all players:
+				if loop-player is {_killer}:
+					if {_bonus} > 0:
+						send "%{_fallen}% &b(+%{_bonus}% catch-up XP)" to loop-player
+					else:
+						send {_fallen} to loop-player
+				else:
+					send {_fallen} to loop-player
+			broadcast "&6%{_killer}% &7has claimed %{_claim}%&7."
+			if {_steal} is set:
+				send "&d&lBOSS STEAL! &7You claimed a boss %{majorbossFirst}% had already started fighting." to {_killer}
+			broadcast " "
+	set {majorbossLastDespawn} to unix timestamp of now
+	delete {majorbossmob}
+	delete {majorbossId}
+	mbRemoveBoss({_id}) # leftover clones / candles / arrows
+	mbScheduleFrog()
+	collapseMajorBossHole() # its own 3-second sequence — last, so nothing above waits on it
+
+function grantExtraLife(p: player):
+	add 1 to {lifepool::%{_p}'s uuid%} # (announced by the "has claimed" line in mbBossDefeated)
+	updateMatchSidebar({_p}) # 10-match-manager.sk
+	set {_opp} to {matchOpponent::%{_p}'s uuid%}
+	if {_opp} is set:
+		updateMatchSidebar({_opp})
+
+# ---- SOULS ----
+
+function mbRecordLowKill(p: player, type: text):
+	set {_u} to {_p}'s uuid
+	add 1 to {lowKills::%{_u}%}
+	add 1 to {lowKills::%{_u}%::%{_type}%}
+	if {soulHolder} is set:
+		stop
+	if {lowKills::%{_u}%} >= 3:
+		set {_soul} to "mixed" # one of each
+		loop "evoker", "vindicator" and "pillager":
+			if {lowKills::%{_u}%::%loop-value%} >= 2:
+				set {_soul} to loop-value
+		set {soulHolder} to {_p}
+		set {soulType::%{_u}%} to {_soul}
+		set {majorbossLastSpawnStart} to unix timestamp of now # the first high-level boss is due 3 minutes from now (the 60 s gap still applies)
+		delete {majorbossNextType} # re-rolled from the high-level tier
+		play sound "UI_TOAST_CHALLENGE_COMPLETE" at volume 1 and pitch 1 to all players in world {config::arena::world-name} # (announced by the "has claimed" line in mbBossDefeated)
+
+function soulOf(p: player) :: text: # the player's soul type ("evoker", "vindicator", "pillager", "mixed"), or "" without one
+	if {soulType::%{_p}'s uuid%} is set:
+		return {soulType::%{_p}'s uuid%}
+	return ""
+
+function soulUltCD(p: player, base: timespan) :: timespan: # Raid Soul (one of each): ultimate cooldowns -10%%, rounded to the nearest second like Spell Caster
+	if soulOf({_p}) is "mixed":
+		set {_secs} to {_base} / 1 second
+		set {_off} to round({_secs} * 0.1)
+		return {_base} - ("%{_off}% seconds" parsed as a timespan)
+	return {_base}
+
+function vengeanceMult(p: entity) :: number: # 08-damage.sk — damage multiplier for a player's hits on a boss: -20%% per low-level boss they have slain, until a soul is claimed
+	if {soulHolder} is set:
+		return 1
+	if {_p} is a player:
+		set {_n} to {lowKills::%{_p}'s uuid%}
+		if {_n} is set:
+			set {_m} to 1 - (0.2 * {_n})
+			if {_m} < 0:
+				set {_m} to 0
+			return {_m}
+	return 1
+
+# ---- HIGH-LEVEL BUFFS ----
+
+function hlBuffOf(p: entity) :: text: # the high-level buff on the player's CURRENT class, or ""
+	if {_p} is a player:
+		set {_c} to {class::%{_p}'s uuid%}
+		if {_c} is set:
+			if {hlBuff::%{_p}'s uuid%::%{_c}%} is set:
+				return {hlBuff::%{_p}'s uuid%::%{_c}%}
+	return ""
+
+function mbGrantHighBuff(p: player, type: text):
+	set {_u} to {_p}'s uuid
+	loop integers between 1 and 3:
+		set {_c} to {loadout::%{_u}%::%loop-value%}
+		if {_c} is set:
+			set {hlBuff::%{_u}%::%{_c}%} to {_type}
+	if {_type} is "doomhoof":
+		maxHealth({_p}, false) # 04-leveling.sk — +1 max health, without the usual top-up heal
+		heal {_p} by 1 # the new heart starts full
+
+function mbClearHighBuffs(): # every buff ends (next boss spawned / match over)
+	loop all players:
+		set {_u} to loop-player's uuid
+		if {hlBuff::%{_u}%::*} is set:
+			set {_hadDoom} to false
+			if hlBuffOf(loop-player) is "doomhoof":
+				set {_hadDoom} to true
+			delete {hlBuff::%{_u}%::*}
+			if {_hadDoom} is true:
+				if {inMatch::%{_u}%} is set:
+					if {respawning::%{_u}%} isn't set:
+						maxHealth(loop-player, false) # back to normal max health (no heal)
+	delete {hlBuff::*}
+
+every 1 seconds: # Doomhoof's Vigor: permanent Regeneration I while the current class has it
+	loop all players:
+		set {_u} to loop-player's uuid
+		if hlBuffOf(loop-player) is "doomhoof":
+			if {respawning::%{_u}%} isn't set:
+				if loop-player doesn't have potion effect regeneration:
+					add potion effect of regeneration 1 without particles for 99999 seconds to potion effects of loop-player
+					set {hlRegen::%{_u}%} to true
+		else if {hlRegen::%{_u}%} is set:
+			remove regeneration from active potion effects of loop-player
+			delete {hlRegen::%{_u}%}
+
+# ---- THE FROG ----
+
+function mbScheduleFrog(): # after a boss dies/despawns: a Frog in 30 s if the next boss is still 60+ s away by then
+	if {majorbossActive} is set:
+		set {_frogAt} to (unix timestamp of now) + 30
+		if (mbNextSpawnAt() - {_frogAt}) >= 60:
+			set {frogDueAt} to {_frogAt}
+
+function mbFrogTick(): # called every second by the schedule checker
+	if {arenaFrogMob} is set:
+		if {arenaFrogMob} is not alive:
+			delete {arenaFrogMob}
+	if {frogDueAt} is set:
+		if (unix timestamp of now) >= {frogDueAt}:
+			delete {frogDueAt}
+			if {arenaFrogMob} isn't set:
+				if {majorbossId} isn't set:
+					set {_spots::*} to 1, 2, 3 and 4
+					if {frogLastSpot} is set:
+						remove {frogLastSpot} from {_spots::*}
+					set {frogLastSpot} to a random element out of {_spots::*}
+					set {arenaFrogMob} to mbSpawnFrog({config::arena::frog-spawn::%{frogLastSpot}%}, false)
+	if {arenaFrogMob} is set:
+		if {majorbossId} is set:
+			mbRemoveFrog(true)
+		else if (mbNextSpawnAt() - (unix timestamp of now)) <= 15: # it leaves 15 s before the next boss
+			mbRemoveFrog(true)
+
+function mbRemoveFrog(announce: boolean):
+	if {arenaFrogMob} is set:
+		if {arenaFrogMob} is alive:
+			draw 15 of cloud at location of {arenaFrogMob} with offset vector(0.3, 0.2, 0.3) with extra 0.02
+			{arenaFrogMob}.remove()
+			if {_announce} is true:
+				broadcast " "
+				broadcast "&6The Seerhopper hops away..."
+				broadcast " "
+		delete {arenaFrogMob}
+
+function mbFrogName(f: living entity):
+	if {_f} is alive:
+		set display name of {_f} to "&6Seerhopper &c%health of {_f}%❤"
+
+function mbFrogCaught(f: living entity):
+	if metadata value "testBoss" of {_f} is set:
+		broadcast " "
+		broadcast "&6&l[TEST] The Seerhopper was caught! &7(no rewards)"
+		broadcast " "
+		stop
+	delete {arenaFrogMob}
+	set {_killer} to metadata value "attacker" of {_f}
+	if {_killer} is a player:
+		if {inMatch::%{_killer}'s uuid%} is set:
+			set {_fc} to {class::%{_killer}'s uuid%}
+			addClassKill({_killer}, {_fc}, {config::frog::xp-reward}) # 04-leveling.sk
+			if {testMatch} isn't set: # 14-stats.sk — the Frog is its own tracker AND a jungle mob
+				add 1 to {frogscaught::%{_killer}'s uuid%}
+				add 1 to {jungleslain::%{_killer}'s uuid%}
+				add 1 to {class-jungleslain::%{_killer}'s uuid%::%{_fc}%}
+			add 1 to {matchjungleslain::%{_killer}'s uuid%}
+			add 1 to {matchobjectives::%{_killer}'s uuid%}
+			add 1 to {matchfrogs::%{_killer}'s uuid%} # match summary
+			set {frogVision::%{_killer}'s uuid%} to (unix timestamp of now) + {config::frog::vision-seconds} # 20-combat.sk reads this
+			broadcast " "
+			broadcast "&6&lThe Seerhopper was caught by &e%{_killer}%&6!"
+			broadcast "&6%{_killer}% &7has claimed the &6Seer's Eye&7." # same claim line as the bosses
+			broadcast " "
+			mbFrogArrow({_killer}) # runs on its own for 3 seconds
+
+function mbFrogArrow(p: player): # Seer's Eye: a 2.5-block orange particle arrow in front of the catcher, pointing at the opponent (or, while the
+	# opponent is dead / respawning / invisible, at the opponent's spawn point). Shown only to the catcher for 3 seconds and re-aimed every 2 ticks.
+	set {_opp} to {matchOpponent::%{_p}'s uuid%}
+	if {_opp} isn't set:
+		stop
+	set {_uid} to {_p}.getUniqueId()
+	set {_k} to 0
+	while {_k} < 30:
+		add 1 to {_k}
+		set {_pl} to Bukkit.getPlayer({_uid}) # FIX: looked up fresh every tick, and its position read straight from Bukkit — the arrow kept drawing where the Seerhopper died instead of following the catcher
+		if {_pl} isn't set:
+			stop loop
+		if {inMatch::%{_p}'s uuid%} isn't set:
+			stop loop
+		set {_aim} to {playerSpawn::%{_opp}'s uuid%}
+		if {_opp} is online:
+			if {respawning::%{_opp}'s uuid%} isn't set:
+				if "%active potion effects of {_opp}%" doesn't contain "invisibility":
+					set {_aim} to location of {_opp}
+		if {_aim} is set:
+			set {_base} to {_pl}.getLocation()
+			add 1.1 to y-coord of {_base}
+			set {_dir} to vector from {_base} to ({_aim} offset by vector(0, 1.1, 0))
+			set y component of {_dir} to 0
+			if vector length of {_dir} > 0.01:
+				set vector length of {_dir} to 1
+				set {_dx} to x component of {_dir}
+				set {_dz} to z component of {_dir}
+				set {_start} to {_base} offset by vector({_dx} * 0.6, 0, {_dz} * 0.6) # starts just in front of the player
+				set {_d} to 0
+				while {_d} <= 2.5: # the shaft
+					draw 1 of dust using dustOption(orange, 0.8) at ({_start} offset by vector({_dx} * {_d}, 0, {_dz} * {_d})) for {_p}
+					add 0.25 to {_d}
+				set {_tip} to {_start} offset by vector({_dx} * 2.5, 0, {_dz} * 2.5)
+				loop -1 and 1: # the head: two barbs angled 35 degrees back from the tip
+					set {_a} to 180 + (35 * loop-value)
+					set {_bx} to ({_dx} * cos({_a})) - ({_dz} * sin({_a}))
+					set {_bz} to ({_dx} * sin({_a})) + ({_dz} * cos({_a}))
+					set {_e} to 0.15
+					while {_e} <= 0.7:
+						draw 1 of dust using dustOption(orange, 0.8) at ({_tip} offset by vector({_bx} * {_e}, 0, {_bz} * {_e})) for {_p}
+						add 0.15 to {_e}
+		wait 2 ticks
+
+function frogVisionActive(p: player) :: boolean: # 20-combat.sk
+	if {frogVision::%{_p}'s uuid%} is set:
+		if (unix timestamp of now) < {frogVision::%{_p}'s uuid%}:
+			return true
+	return false
+
+# ---- SETUP / LIFECYCLE ----
+
+function mbSetup(mob: living entity, type: text, hp: number, slow: number, name: text, scale: number):
+	set max health of {_mob} to {_hp}
+	set health of {_mob} to {_hp}
+	{_mob}.getAttribute(Attribute.SCALE).setBaseValue({_scale})
+	{_mob}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(0.8) # 80%% — only vanilla knockback; scripted pushes (push / set velocity) ignore it
+	set metadata value "bossType" of {_mob} to {_type}
+	set metadata value "mbName" of {_mob} to {_name}
+	set metadata value "mbSlow" of {_mob} to {_slow}
+	mbBaseSlow({_mob})
+	set display name of {_mob} to "&4&l%{_name}%" # names only (no health) — the bossbar is the health bar
+	set metadata value "isMajorBoss" of {_mob} to true # the tag 08-damage.sk (weak melee, Zeus's ult) and 20-combat.sk (combat state) look for
+	{_mob}.setRemoveWhenFarAway(false)
+	if {_mob} is an evoker or a vindicator or a pillager: # never a patrol captain — no banner on its head
+		{_mob}.setPatrolLeader(false)
+		set helmet of {_mob} to air
+	mbPrep({_mob}) # keeps vanilla movement/attack/look AI (natural), removes only vanilla targeting (+ the Evoker's vex-summon spell)
+	mbFreeze({_mob}) # passive until hit
+
+function mbLowRise(at: location, type: text): # ~1 s particle entrance for the low-level bosses: a spiral rising around the spawn point, then a burst
+	set {_k} to 0
+	while {_k} < 20:
+		add 1 to {_k}
+		set {_a} to {_k} * 36
+		set {_y} to {_k} * 0.1
+		set {_p1} to {_at} offset by vector(1.2 * cos({_a}), {_y}, 1.2 * sin({_a}))
+		set {_p2} to {_at} offset by vector(0 - (1.2 * cos({_a})), {_y}, 0 - (1.2 * sin({_a})))
+		if {_type} is "evoker": # purple magic
+			draw 3 of witch at {_p1} with extra 0
+			draw 3 of witch at {_p2} with extra 0
+			draw 2 of enchant at {_at} with offset vector(0.6, 1, 0.6) with extra 0.5
+		else if {_type} is "vindicator": # steel and sparks
+			draw 2 of dust using dustOption(gray, 1.2) at {_p1}
+			draw 2 of dust using dustOption(gray, 1.2) at {_p2}
+			draw 1 of crit at {_p1} with extra 0.05
+		else: # pillager — smoke and gunpowder sparks
+			draw 2 of smoke at {_p1} with extra 0.01
+			draw 2 of smoke at {_p2} with extra 0.01
+			draw 1 of dust using dustOption(rgb(60, 60, 60), 1) at {_p1}
+		wait 1 tick
+	if {_type} is "evoker":
+		draw 30 of witch at ({_at} offset by vector(0, 1, 0)) with offset vector(0.8, 1, 0.8) with extra 0.1
+		draw 20 of dust using dustOption(purple, 1.4) at ({_at} offset by vector(0, 1, 0)) with offset vector(0.8, 1, 0.8)
+	else if {_type} is "vindicator":
+		draw 6 of sweep_attack at ({_at} offset by vector(0, 1, 0)) with offset vector(0.8, 0.5, 0.8) with extra 0
+		draw 20 of crit at ({_at} offset by vector(0, 1, 0)) with offset vector(0.8, 0.8, 0.8) with extra 0.2
+	else:
+		draw 25 of large_smoke at ({_at} offset by vector(0, 0.8, 0)) with offset vector(0.8, 0.6, 0.8) with extra 0.03
+		draw 10 of firework at ({_at} offset by vector(0, 1, 0)) with offset vector(0.5, 0.5, 0.5) with extra 0.05
+
+function mbStart(mob: living entity, spawnloc: location):
+	set metadata value "mbSpawn" of {_mob} to {_spawnloc}
+	set {_type} to metadata value "bossType" of {_mob}
+	set {_pre} to ""
+	if metadata value "testBoss" of {_mob} is set:
+		set {_pre} to "&4&l[TEST] "
+	if {_type} is "evoker":
+		broadcast " " # blank lines around boss spawn messages
+		broadcast "%{_pre}%&4&lAn Evoker conjures itself into the arena..."
+		broadcast " "
+		play sound "ENTITY_EVOKER_PREPARE_SUMMON" at volume 3 and pitch 1 at {_spawnloc}
+		mbLowRise({_spawnloc}, "evoker")
+	else if {_type} is "vindicator":
+		broadcast " " # blank lines around boss spawn messages
+		broadcast "%{_pre}%&4&lA Vindicator hefts its axe..."
+		broadcast " "
+		play sound "ENTITY_VINDICATOR_CELEBRATE" at volume 3 and pitch 0.8 at {_spawnloc}
+		mbLowRise({_spawnloc}, "vindicator")
+	else if {_type} is "pillager":
+		broadcast " " # blank lines around boss spawn messages
+		broadcast "%{_pre}%&4&lA Pillager loads its crossbow..."
+		broadcast " "
+		play sound "ENTITY_PILLAGER_CELEBRATE" at volume 3 and pitch 0.8 at {_spawnloc}
+		mbLowRise({_spawnloc}, "pillager")
+	else:
+		mbHighAnnounce({_mob}, {_type}, {_spawnloc}) # HIGH-LEVEL section below
+	mbLeashLoop({_mob}, {_spawnloc})
+	if {_type} is "magmaroth":
+		mbMagmaBrain(metadata value "mbGroup" of {_mob}, {_spawnloc}) # HIGH-LEVEL section below — one brain for the whole cube family
+	else:
+		mbBrain({_mob}, {_spawnloc})
+
+function mbBaseSlow(mob: living entity): # (re)applies the boss's own permanent slowness — abilities that temporarily raise it call this afterwards
+	if {_mob} is alive:
+		remove slowness from active potion effects of {_mob}
+		set {_lvl} to metadata value "mbSlow" of {_mob}
+		add potion effect of slowness {_lvl} without particles for 999999 seconds to potion effects of {_mob}
+
+# Leash: same behavior as the real bosses — too far from the spawn point and it teleports back, heals, and goes passive again.
+function mbLeashLoop(mob: living entity, spawnloc: location):
+	while {_mob} is alive:
+		wait 2 seconds
+		if {_mob} is alive:
+			if metadata value "mbBusy" of {_mob} isn't set: # not mid-ability (the dash / float move it on purpose)
+				if distance between {_mob} and {_spawnloc} > {config::majorboss::leash-radius}:
+					set {_riders::*} to passengers of {_mob} # a teleport is refused while something rides the mob (Doomhoof's pillager) — unmount, move both, remount
+					if {_riders::*} is set:
+						eject passengers of {_mob}
+					teleport {_mob} to {_spawnloc}
+					set velocity of {_mob} to vector(0, 0, 0)
+					loop {_riders::*}:
+						teleport loop-value to {_spawnloc}
+						make loop-value ride {_mob}
+						mbDeaggro(loop-value)
+					set {_new} to (health of {_mob}) + ((max health of {_mob}) * ({config::majorboss::leash-heal-percent} / 100))
+					if {_new} > max health of {_mob}:
+						set {_new} to max health of {_mob}
+					set health of {_mob} to {_new}
+					mbDeaggro({_mob})
+					mbBarUpdate({_mob}) # the leash heal shows on the bossbar
+					play sound "ENTITY_ENDERMAN_TELEPORT" at volume 3 and pitch 0.5 at {_spawnloc}
+					draw 20 of portal at {_spawnloc} with extra 0.3
+
+function mbStrip(e: living entity): # removes every vanilla goal + target goal, so only this file moves, targets and attacks
+	Bukkit.getMobGoals().removeAllGoals({_e})
+	Bukkit.getMobGoals().removeAllGoals({_e}, GoalType.TARGET)
+	{_e}.setCanPickupItems(false)
+
+function mbPrep(e: living entity): # vanilla AI stays (walking, melee, looking around, the Vindicator drawing its axe), but it never picks targets itself — the brain hands it one after it is hit
+	Bukkit.getMobGoals().removeAllGoals({_e}, GoalType.TARGET)
+	{_e}.setCanPickupItems(false)
+	if metadata value "bossType" of {_e} is "evoker": # strip the vanilla vex-summon spell (Magic Spears replaces it). Its 5-second cast was what froze the Evoker with its
+		# arms up: the vexes it summoned were cancelled by the safety net below, so it just stood there. The fang attack, flee, stroll and look goals stay.
+		Bukkit.getMobGoals().removeGoal({_e}, VanillaGoal.EVOKER_SUMMON_SPELL)
+
+function mbHalt(e: living entity): # wipes any leftover movement: the current path, the brain's walk target (Warden / Frog), and the move
+	# controller's last target (walking to its own spot cancels it). Without this, a mob that was frozen mid-step — by an ability or the
+	# leash — would keep walking toward its old destination once unfrozen (the Vindicator's old "walks forward with no target" bug).
+	{_e}.getPathfinder().stopPathfinding()
+	{_e}.getHandle().getBrain().eraseMemory(MemoryModuleType.WALK_TARGET)
+	{_e}.getPathfinder().moveTo(location of {_e})
+	# The real culprit: the move controller keeps its last "walk here" point even after the path is cleared (a path to the spot it is already
+	# standing on usually isn't even created). Point it at the boss's own position, so the next AI tick it "arrives" at once and stops.
+	set {_hx} to (x-coord of {_e}) + 0.0
+	set {_hy} to (y-coord of {_e}) + 0.0
+	set {_hz} to (z-coord of {_e}) + 0.0
+	{_e}.getHandle().getMoveControl().setWantedPosition({_hx}, {_hy}, {_hz}, 1.0)
+	set {_v} to velocity of {_e}
+	set velocity of {_e} to vector(0, y component of {_v}, 0)
+
+function mbStopMoving(e: living entity): # for the jungle mobs (01-utils.sk's mobDeactivate): clears the path / move target and the leftover walking
+	# input that a paused mob keeps using (see mbFreeze below) — without touching its movement speed, so it walks normally once woken up again
+	mbHalt({_e})
+	set {_zero} to Float.valueOf("0")
+	{_e}.getHandle().setZza({_zero})
+	{_e}.getHandle().setXxa({_zero})
+	{_e}.getHandle().setYya({_zero})
+	{_e}.getHandle().setSpeed({_zero})
+	{_e}.getHandle().setJumping(false)
+
+function mbFreeze(e: living entity): # stand completely still: AI paused (no melee, no walking) and movement speed 0 (so leftover walking input can't slide it)
+	{_e}.setAware(false)
+	mbHalt({_e})
+	# THE actual cause of "still walks while it should stand still": a mob walks using a forward/sideways input plus a cached walking speed
+	# that its movement controller writes every AI tick. Pausing the AI stops those from being updated — but the LAST values stay, so the
+	# body keeps walking with them (the movement-speed attribute isn't read again while the AI is paused). Zero them directly.
+	set {_zero} to Float.valueOf("0")
+	{_e}.getHandle().setZza({_zero})
+	{_e}.getHandle().setXxa({_zero})
+	{_e}.getHandle().setYya({_zero})
+	{_e}.getHandle().setSpeed({_zero})
+	{_e}.getHandle().setJumping(false)
+	set {_attr} to {_e}.getAttribute(Attribute.MOVEMENT_SPEED)
+	if metadata value "mbSpeedBase" of {_e} isn't set:
+		set metadata value "mbSpeedBase" of {_e} to {_attr}.getBaseValue()
+	{_attr}.setBaseValue(0.0)
+
+function mbUnfreeze(e: living entity): # back to normal (only while aggro'd — a passive boss stays frozen)
+	if {_e} is alive:
+		if metadata value "mbAggro" of {_e} is set:
+			set {_b} to metadata value "mbSpeedBase" of {_e}
+			if {_b} is set:
+				set {_b2} to {_b} + 0.0
+				{_e}.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue({_b2})
+				delete metadata value "mbSpeedBase" of {_e}
+			mbHalt({_e}) # start fresh — no stale path from before the freeze
+			{_e}.setAware(true)
+			set {_tt} to mbTarget({_e}, 40)
+			if {_tt} is set:
+				{_e}.setTarget({_tt})
+
+function mbDeaggro(mob: living entity):
+	delete metadata value "mbAggro" of {_mob}
+	delete metadata value "mbNextAt" of {_mob}
+	delete metadata value "mbFangAt" of {_mob}
+	if metadata value "bossType" of {_mob} is "evoker":
+		{_mob}.setSpell(MBSpell.NONE)
+		{_mob}.setGravity(true)
+	{_mob}.setTarget({_none})
+	mbFreeze({_mob})
+
+function mbAggro(mob: living entity, att: player): # first hit wakes the boss: the first ability is 3-10 seconds away
+	if metadata value "mbAggro" of {_mob} isn't set:
+		set metadata value "mbAggro" of {_mob} to true
+		set metadata value "mbNextAt" of {_mob} to (unix timestamp of now) + (random number between 3 and 6)
+		set metadata value "mbFangAt" of {_mob} to (unix timestamp of now) + 2
+		mbUnfreeze({_mob})
+		{_mob}.setTarget({_att})
+
+
+
+# ---- DAMAGE / DEATH HOOKS ----
+
+on damage of an evoker, a vindicator or a pillager with priority high:
+	if metadata value "bossType" of victim is set:
+		set {_att} to metadata value "attacker" of victim # set by updateAttacker() — melee, abilities and grenades alike
+		if {_att} is a player:
+			mbAggro(victim, {_att})
+
+on damage of an evoker with priority lowest: # the Evoker's clones vanish to ANY damage
+	if metadata value "mbClone" of victim is set:
+		cancel event
+		draw 20 of large_smoke at location of victim with offset vector(0.4, 0.8, 0.4) with extra 0.02
+		play sound "ENTITY_ILLUSIONER_MIRROR_MOVE" at volume 2 and pitch 1.5 at location of victim
+		delete victim
+
+on damage of player with priority lowest: # evoker fangs — the test Evoker's vanilla fang attack AND its clones' scripted fangs: every bite is 0.5-1 damage
+	if attacker is set:
+		if "%type of attacker%" contains "fang":
+			set {_o} to attacker.getOwner()
+			set {_ours} to false
+			if metadata value "mbFang" of attacker is set:
+				set {_ours} to true
+			else if {_o} is set:
+				if metadata value "bossType" of {_o} is set:
+					set {_ours} to true
+				else if metadata value "mbClone" of {_o} is set:
+					set {_ours} to true
+			if {_ours} is true:
+				cancel event
+				if {_o} is a living entity:
+					updateAttacker({_o}, victim)
+				damage victim by (random number between 0.5 and 1)
+
+on shoot: # tags the test Pillager's crossbow bolts (every multishot arrow) so the hook below can set their damage
+	if shooter is set:
+		if metadata value "bossType" of shooter is "pillager" or "doomhoof-rider": # the low-level Pillager and Doomhoof's rider
+			set metadata value "mbArrow" of projectile to shooter
+			trackProjectileTrail(projectile) # 01-utils.sk — spark trail
+
+on damage of player with priority lowest: # test Pillager arrows: crossbow bolts 0.5-1 each, Arrow Rain arrows 1 each
+	if event-projectile is set:
+		set {_src} to metadata value "mbArrow" of event-projectile
+		set {_lo} to 0.5
+		set {_hi} to 1
+		if {_src} isn't set:
+			set {_src} to metadata value "mbRain" of event-projectile
+			set {_lo} to 1
+			set {_hi} to 1
+		if {_src} is set:
+			cancel event
+			if {_src} is a living entity:
+				updateAttacker({_src}, victim)
+			damage victim by (random number between {_lo} and {_hi})
+			kill event-projectile
+
+on damage of living entity with priority lowest: # the Pillager's bolts and Arrow Rain never hurt the test bosses themselves
+	if victim is not a player:
+		if metadata value "bossType" of victim is set:
+			if event-projectile is set:
+				if metadata value "mbArrow" of event-projectile is set:
+					cancel event
+				else if metadata value "mbRain" of event-projectile is set:
+					cancel event
+
+on death of an evoker, a vindicator or a pillager:
+	if metadata value "bossType" of victim is set:
+		clear drops # no totem / emeralds
+		set {_type} to metadata value "bossType" of victim
+		if {_type} is "evoker" or "vindicator" or "pillager": # (Doomhoof's rider is handled in the HIGH-LEVEL section)
+			mbBossDefeated(victim) # rewards, soul, cleanup
+	else if metadata value "mbClone" of victim is set:
+		clear drops
+
+on spawn of a vex: # safety net: a test Evoker never summons vanilla vexes
+	loop all living entities in radius 6 around event-entity:
+		if metadata value "bossType" of loop-entity is "evoker":
+			cancel event
+			stop
+
+# ---- SHARED HELPERS ----
+
+function mbValid(p: player) :: boolean: # a player a boss may target: survival/adventure, not invisible, not frozen in the respawn menu
+	if gamemode of {_p} is not survival:
+		if gamemode of {_p} is not adventure:
+			return false
+	if {_p} is invisible:
+		return false
+	if {_p} has potion effect invisibility:
+		return false
+	if {respawning::%{_p}'s uuid%} is set:
+		return false
+	return true
+
+function mbTarget(mob: living entity, radius: number) :: player: # nearest valid player in range (see mbValid)
+	set {_bestDist} to 99999
+	loop all players in radius {_radius} around {_mob}:
+		if mbValid(loop-player) is true:
+			set {_d} to distance between loop-player and {_mob}
+			if {_d} < {_bestDist}:
+				set {_bestDist} to {_d}
+				set {_best} to loop-player
+	return {_best}
+
+function mbHit(src: living entity, p: player, lo: number, hi: number): # updateAttacker() (01-utils.sk) first, so 08-damage.sk knows who hit (shields, damage numbers, kill credit)
+	updateAttacker({_src}, {_p})
+	damage {_p} by (random number between {_lo} and {_hi})
+
+function mbFace(mob: living entity, t: living entity): # turn head + body to look at the target's eyes (rotation only — it teleports to its own position, so only call it while standing still)
+	set {_v} to vector from ({_mob}.getEyeLocation()) to ({_t}.getEyeLocation())
+	set {_l} to location of {_mob}
+	{_l}.setDirection({_v})
+	teleport {_mob} to {_l}
+
+function mbStop(mob: living entity): # cancel the current path
+	{_mob}.getPathfinder().stopPathfinding()
+
+function mbFlatDir(a: living entity, b: living entity) :: vector: # unit vector from a to b on the ground plane
+	set {_v} to vector from {_a} to {_b}
+	set y component of {_v} to 0
+	if vector length of {_v} < 0.01:
+		return vector(0, 0, 1)
+	set vector length of {_v} to 1
+	return {_v}
+
+function mbGround(l: location) :: location: # drops a location onto the floor below it (for fangs and ground telegraphs)
+	set {_n} to 0
+	while {_n} < 8:
+		add 1 to {_n}
+		if block at ({_l} offset by vector(0, -1, 0)) is air:
+			set {_l} to {_l} offset by vector(0, -1, 0)
+		else:
+			set {_n} to 99
+	return {_l}
+
+function mbDrawRingRGB(loc: location, radius: number, r: number, g: number, b: number): # a ring in a fixed color (end-of-telegraph flashes)
+	set {_at} to {_loc} offset by vector(0, 0.15, 0)
+	set {_shapes::ring} to a circle with radius {_radius}
+	set particle of {_shapes::ring} to 1 of dust particle using dustOption(rgb({_r}, {_g}, {_b}), 1.2)
+	draw shapes {_shapes::*} at {_at}
+
+function mbDrawRing(loc: location, radius: number, t: number): # telegraph ring: gray at t = 0, red at t = 1 (the closer the attack, the redder)
+	set {_f} to {_t}
+	if {_f} > 1:
+		set {_f} to 1
+	set {_r} to floor(128 + (127 * {_f}))
+	set {_g} to floor(128 - (128 * {_f}))
+	set {_at} to {_loc} offset by vector(0, 0.15, 0)
+	set {_shapes::ring} to a circle with radius {_radius}
+	set particle of {_shapes::ring} to 1 of dust particle using dustOption(rgb({_r}, {_g}, {_g}), 1)
+	draw shapes {_shapes::*} at {_at}
+
+# ---- EVOKER ----
+# No melee. Basic attack: its VANILLA fang attack (the damage hook above makes each bite 0.5-1). Abilities: Magic Spears, Clones.
+# Its vanilla vex-summon spell is removed (mbPrep).
+
+# Magic Spears: rises 4 blocks (vex-summon pose), a small ring follows its target with a 0.4 second lag for 2 seconds (gray -> red), then
+# 5 purple spears land around where the ring ended: 1 damage each + slowness I for 3 seconds. Leave the ring to dodge.
+function mbEvokerSpears(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		set {_startY} to y-coord of {_mob}
+		{_mob}.setGravity(false)
+		{_mob}.setSpell(MBSpell.SUMMON_VEX)
+		play sound "ENTITY_EVOKER_PREPARE_SUMMON" at volume 3 and pitch 1 at location of {_mob}
+		loop 10 times: # rise 4 blocks
+			if {_mob} is alive:
+				set {_l} to location of {_mob}
+				add 0.4 to y-coord of {_l}
+				teleport {_mob} to {_l}
+				wait 1 tick
+		set {_i} to 0
+		while {_i} < 40: # 2 second telegraph; the ring is 8 ticks (0.4 s) behind the target (standard delayed-tracking lag)
+			if {_mob} isn't alive:
+				stop loop
+			add 1 to {_i}
+			if {_t} is alive:
+				set {_hist::%{_i}%} to location of {_t}
+			set {_idx} to {_i} - 8
+			if {_idx} < 1:
+				set {_idx} to 1
+			set {_center} to {_hist::%{_idx}%}
+			if {_center} is set:
+				mbDrawRing({_center}, 2, {_i} / 40)
+			if mod({_i}, 5) = 0:
+				if {_t} is alive:
+					mbFace({_mob}, {_t})
+			wait 1 tick
+		if {_mob} is alive:
+			if {_center} is set:
+				loop 5 times: # the spears
+					set {_ox} to random number between -1.5 and 1.5
+					set {_oz} to random number between -1.5 and 1.5
+					set {_land} to {_center} offset by vector({_ox}, 0, {_oz})
+					set {_from} to (location of {_mob}) offset by vector(0, 1.6, 0)
+					mbSpear({_mob}, {_from}, {_land}) # returns at once, so the spears overlap
+					play sound "ENTITY_EVOKER_CAST_SPELL" at volume 1 and pitch 1.6 at location of {_mob}
+					loop 3 times: # the telegraph turns purple, matching the spears, while they land
+						mbDrawRingRGB({_center}, 2, 150, 40, 200)
+						wait 1 tick
+			wait 10 ticks
+			{_mob}.setSpell(MBSpell.NONE)
+			set {_down} to ((y-coord of {_mob}) - {_startY}) / 10
+			loop 10 times: # float back down
+				if {_mob} is alive:
+					set {_l} to location of {_mob}
+					subtract {_down} from y-coord of {_l}
+					teleport {_mob} to {_l}
+					wait 1 tick
+			{_mob}.setGravity(true)
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+function mbSpear(mob: living entity, fromLoc: location, landLoc: location): # one purple spear flying to its landing point, damaging whoever stands there
+	set {_v} to vector from {_fromLoc} to {_landLoc}
+	set {_len} to vector length of {_v}
+	if {_len} > 0.1:
+		set vector length of {_v} to {_len} / 8
+		set {_h} to {_fromLoc}
+		loop 8 times:
+			set {_h} to {_h} ~ {_v}
+			draw 3 of witch at {_h} with offset vector(0.05, 0.05, 0.05) with extra 0
+			draw 2 of dust_color_transition using dustTransition(purple, magenta, 1) at {_h} with offset vector(0.05, 0.05, 0.05) with extra 0
+			wait 1 tick
+	loop all players in radius 1.3 around {_landLoc}:
+		if abs((y-coord of loop-player) - (y-coord of {_landLoc})) <= 2.5:
+			mbHit({_mob}, loop-player, 1, 1)
+			add potion effect of slowness 1 without particles for 3 seconds to potion effects of loop-player
+	draw 15 of witch at {_landLoc} with offset vector(0.3, 0.2, 0.3) with extra 0.1
+	play sound "ENTITY_EVOKER_FANGS_ATTACK" at volume 1 and pitch 1.4 at {_landLoc}
+
+# Clones: two default-size copies appear on either side (1 s purple-swirl telegraph). Each one is a real evoker that can't move and only
+# has its vanilla FANG spell; it targets the boss's target, casts one vanilla fang attack and vanishes ~1.5 s after its fangs appear
+# (or after 5 s if it never managed to cast). Any damage makes a clone vanish. The boss stands still while its clones are out.
+function mbEvokerClones(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		mbFace({_mob}, {_t})
+		{_mob}.setSpell(MBSpell.DISAPPEAR)
+		play sound "ENTITY_EVOKER_PREPARE_WOLOLO" at volume 3 and pitch 1 at location of {_mob}
+		set {_v} to vector from {_mob} to {_t}
+		set y component of {_v} to 0
+		if vector length of {_v} < 0.01:
+			set {_v} to vector(0, 0, 1)
+		set vector length of {_v} to 3
+		set {_ax} to 0 - (z component of {_v}) # 3 blocks to the boss's left and right of its line to the target
+		set {_az} to x component of {_v}
+		set {_bx} to 0 - {_ax}
+		set {_bz} to 0 - {_az}
+		set {_spots::1} to (location of {_mob}) offset by vector({_ax}, 0, {_az})
+		set {_spots::2} to (location of {_mob}) offset by vector({_bx}, 0, {_bz})
+		loop 10 times: # 1 second telegraph: purple swirl where the clones will appear
+			draw 4 of witch at {_spots::1} with offset vector(0.4, 0.9, 0.4) with extra 0.05
+			draw 4 of witch at {_spots::2} with offset vector(0.4, 0.9, 0.4) with extra 0.05
+			wait 2 ticks
+		if {_mob} is alive:
+			loop {_spots::*}:
+				spawn 1 evoker at loop-value
+				set {_c} to last spawned evoker
+				set metadata value "mbClone" of {_c} to true
+				set display name of {_c} to display name of {_mob} # looks like the real one
+				{_c}.setRemoveWhenFarAway(false)
+				{_c}.setPatrolLeader(false) # no banner
+				set helmet of {_c} to air
+				{_c}.setCanPickupItems(false)
+				Bukkit.getMobGoals().removeAllGoals({_c}, GoalType.TARGET)
+				Bukkit.getMobGoals().removeGoal({_c}, VanillaGoal.EVOKER_SUMMON_SPELL) # fangs are its only spell
+				{_c}.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.0) # can't move, only attack
+				{_c}.setTarget({_t})
+				add {_c} to {_clones::*}
+				draw 20 of large_smoke at loop-value with offset vector(0.4, 0.8, 0.4) with extra 0.02
+			play sound "ENTITY_ILLUSIONER_MIRROR_MOVE" at volume 2 and pitch 1 at location of {_mob}
+			set {_k} to 0
+			while {_k} < 100: # wait until both clones are gone (the fang hook below despawns each after its cast), at most 5 s
+				add 1 to {_k}
+				set {_left} to 0
+				loop {_clones::*}:
+					if loop-value is valid:
+						add 1 to {_left}
+						if {_t} is alive:
+							loop-value.setTarget({_t})
+				if {_left} = 0:
+					stop loop
+				wait 1 tick
+		loop {_clones::*}: # anything still here (never cast, or the boss died) goes now
+			if loop-value is valid:
+				draw 20 of large_smoke at location of loop-value with offset vector(0.4, 0.8, 0.4) with extra 0.02
+				loop-value.remove()
+		if {_mob} is alive:
+			{_mob}.setSpell(MBSpell.NONE)
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+on spawn of evoker fangs: # a clone's vanilla fang attack just fired — it despawns once the bites are done (one attack only)
+	set {_o} to event-entity.getOwner()
+	if {_o} is set:
+		if metadata value "mbClone" of {_o} is set:
+			if metadata value "mbCloneFired" of {_o} isn't set:
+				set metadata value "mbCloneFired" of {_o} to true
+				wait 30 ticks
+				if {_o} is valid:
+					draw 20 of large_smoke at location of {_o} with offset vector(0.4, 0.8, 0.4) with extra 0.02
+					play sound "ENTITY_ILLUSIONER_MIRROR_MOVE" at volume 1.5 and pitch 1.4 at location of {_o}
+					{_o}.remove()
+
+# ---- VINDICATOR ----
+# Normal melee (0.5-1) with native pathfinding. Abilities: Axe Slam, Dash. Both stop it in place while they wind up.
+
+# Axe Slam: stops, marks a radius-3 circle 2.5 blocks in front (gray -> red over 1.2 s), then slams: 2-3 damage + slowness I for 3 seconds.
+function mbVindicatorSlam(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		mbFace({_mob}, {_t})
+		set {_fv} to mbFlatDir({_mob}, {_t}) # direction is locked now
+		set {_fx} to x component of {_fv}
+		set {_fz} to z component of {_fv}
+		set {_fwd} to {_fv}
+		set vector length of {_fwd} to 2.5
+		set {_c} to mbGround((location of {_mob}) ~ {_fwd}) # centre of the slam: 2.5 blocks ahead, on the floor
+		set {_pivot} to (location of {_mob}) offset by vector(0, 2.6, 0)
+		play sound "ENTITY_VINDICATOR_CELEBRATE" at volume 2 and pitch 0.6 at location of {_mob}
+		set {_i} to 0
+		while {_i} < 24: # windup: the axe is held HIGH overhead (particle axe) while the ring reddens
+			if {_mob} isn't alive:
+				stop loop
+			add 1 to {_i}
+			mbDrawRing({_c}, 3, {_i} / 24)
+			mbDrawAxe({_pivot}, vector(0, 1, 0), 3) # straight up
+			wait 1 tick
+		if {_mob} is alive:
+			set {_deg} to 0
+			loop 4 times: # the swing: the axe arcs down toward the centre
+				add 30 to {_deg}
+				set {_dir} to vector({_fx} * sin({_deg}), cos({_deg}), {_fz} * sin({_deg}))
+				mbDrawAxe({_pivot}, {_dir}, 3)
+				wait 1 tick
+			{_mob}.swingMainHand()
+			play sound "ENTITY_GENERIC_EXPLODE" at volume 2 and pitch 0.7 at {_c}
+			play sound "ITEM_AXE_STRIP" at volume 2 and pitch 0.5 at {_c}
+			play sound "BLOCK_ANVIL_LAND" at volume 1.5 and pitch 0.6 at {_c}
+			draw 3 of explosion at {_c} with offset vector(1.5, 0.1, 1.5) with extra 0
+			draw 40 of block particle using stone at {_c} with offset vector(1.5, 0.2, 1.5) with extra 0.3
+			loop all players in radius 3.5 around {_c}:
+				if abs((y-coord of loop-player) - (y-coord of {_c})) <= 2.5:
+					set {_dx} to (x-coord of loop-player) - (x-coord of {_c})
+					set {_dz} to (z-coord of loop-player) - (z-coord of {_c})
+					if sqrt(({_dx} * {_dx}) + ({_dz} * {_dz})) <= 3:
+						mbHit({_mob}, loop-player, 2, 3)
+						add potion effect of slowness 1 without particles for 3 seconds to potion effects of loop-player
+			loop 3 times: # shockwave rings rolling outward along the ground
+				set {_sr} to loop-number * 1.2
+				set {_shapes::wave} to a circle with radius {_sr}
+				set particle of {_shapes::wave} to 1 of dust particle using dustOption(gray, 1.4)
+				draw shapes {_shapes::*} at ({_c} offset by vector(0, 0.2, 0))
+				wait 2 ticks
+			wait 6 ticks
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+function mbDrawAxe(pivot: location, dir: vector, size: number): # a gray particle axe: handle from the pivot along dir, head across the tip
+	set {_h} to {_dir}
+	loop 6 times:
+		set vector length of {_h} to loop-number * 0.5
+		set {_pt} to {_pivot} ~ {_h}
+		draw 1 of dust using dustOption(brown, 1.1) at {_pt}
+	set vector length of {_h} to 3
+	set {_tip} to {_pivot} ~ {_h}
+	loop 5 times:
+		set {_hp} to {_tip} offset by vector((loop-number - 3) * 0.18, (loop-number - 3) * 0.12, 0)
+		draw 2 of dust using dustOption(gray, 1.5) at {_hp}
+	draw 1 of crit at {_tip} with offset vector(0.2, 0.2, 0.2) with extra 0.1
+
+# Dash: stops and charges for 1.5 s. A dotted line runs from it to where its target was 0.4 s ago (it lags behind, gray -> red as the
+# dash nears). Then it dashes along the line as it was at that moment (up to 12 blocks, 1.5 blocks per tick, stops at walls / near the
+# leash edge), dealing 1-2 damage to every player it passes through (once each).
+function mbVindicatorDash(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		set {_spawn} to metadata value "mbSpawn" of {_mob}
+		mbFace({_mob}, {_t})
+		play sound "ENTITY_VINDICATOR_CELEBRATE" at volume 2 and pitch 0.6 at location of {_mob}
+		play sound "ENTITY_RAVAGER_ROAR" at volume 1 and pitch 1.6 at location of {_mob}
+		set {_dir} to vector(0, 0, 1)
+		set {_len} to 2
+		set {_i} to 0
+		while {_i} < 30: # 1.5 second charge
+			if {_mob} isn't alive:
+				stop loop
+			add 1 to {_i}
+			if {_t} is alive:
+				set {_hist::%{_i}%} to location of {_t}
+			set {_idx} to {_i} - 8 # 8 ticks = 0.4 s behind the target (the standard lag for delayed-tracking telegraphs)
+			if {_idx} < 1:
+				set {_idx} to 1
+			set {_aim} to {_hist::%{_idx}%}
+			set {_origin} to (location of {_mob}) offset by vector(0, 0.3, 0)
+			if {_aim} is set:
+				set {_d2} to vector from {_origin} to ({_aim} offset by vector(0, 0.3, 0))
+				set y component of {_d2} to 0
+				if vector length of {_d2} >= 0.01:
+					set {_len} to vector length of {_d2}
+					set {_dir} to {_d2}
+			if {_len} < 2:
+				set {_len} to 2
+			if {_len} > 12:
+				set {_len} to 12
+			set {_f} to {_i} / 30
+			set {_r} to floor(128 + (127 * {_f}))
+			set {_g} to floor(128 - (128 * {_f}))
+			set {_step} to {_dir}
+			set {_dots} to floor({_len} * 2)
+			loop {_dots} times: # dotted line, 0.5 block apart
+				set vector length of {_step} to loop-number * 0.5
+				set {_pt} to {_origin} ~ {_step}
+				draw 1 of dust using dustOption(rgb({_r}, {_g}, {_g}), 1.2) at {_pt}
+			if mod({_i}, 5) = 0:
+				draw 6 of cloud at location of {_mob} with offset vector(0.3, 0.1, 0.3) with extra 0.02 # pawing the ground
+				set {_fl} to location of {_mob}
+				{_fl}.setDirection({_dir})
+				teleport {_mob} to {_fl} # turn to face the (lagging) line
+			wait 1 tick
+		if {_mob} is alive:
+			set vector length of {_dir} to 1.5
+			set {_steps} to ceil({_len} / 1.5)
+			{_mob}.swingMainHand()
+			play sound "ITEM_TRIDENT_RIPTIDE_1" at volume 2 and pitch 0.8 at location of {_mob}
+			play sound "ENTITY_BREEZE_WIND_BURST" at volume 1.5 and pitch 0.7 at location of {_mob}
+			set {_cur} to location of {_mob}
+			loop {_steps} times:
+				if {_mob} is alive:
+					set {_next} to {_cur} ~ {_dir}
+					set {_ok} to true
+					if (block at {_next}).isPassable() is false:
+						set {_ok} to false
+					if (block at ({_next} offset by vector(0, 1, 0))).isPassable() is false:
+						set {_ok} to false
+					if distance between {_next} and {_spawn} > ({config::majorboss::leash-radius} * 0.9):
+						set {_ok} to false
+					if {_ok} is false:
+						stop loop
+					{_next}.setDirection({_dir})
+					teleport {_mob} to {_next}
+					set {_cur} to {_next}
+					draw 2 of sweep_attack at ({_next} offset by vector(0, 1.2, 0)) with offset vector(0.3, 0.3, 0.3) with extra 0
+					draw 4 of cloud at {_next} with offset vector(0.3, 0.2, 0.3) with extra 0.02
+					draw 3 of crit at ({_next} offset by vector(0, 1, 0)) with offset vector(0.3, 0.4, 0.3) with extra 0.1
+					loop all players in radius 2 around {_next}:
+						if abs((y-coord of loop-player) - (y-coord of {_next})) <= 2.5:
+							if {_hit::*} doesn't contain loop-player:
+								add loop-player to {_hit::*}
+								mbHit({_mob}, loop-player, 1, 2)
+								play sound "ENTITY_PLAYER_ATTACK_KNOCKBACK" at volume 2 and pitch 0.8 at location of loop-player
+					wait 1 tick
+			wait 10 ticks # recovery
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+# ---- PILLAGER ----
+# A pillager with a Multishot crossbow and its normal vanilla AI (keeps its distance and shoots; each bolt is 0.5-1 damage — see the
+# arrow hook above). Abilities: Flashbang, Arrow Rain.
+
+# Flashbang: lobs a gray candle at its target. Once it lands, a ring around the candle (radius 5) shows, gray -> red by the end of its 2.5 s fuse, then it
+# bursts: wither II + blindness for 3 seconds to every player inside. The Pillager can move again as soon as the candle is thrown.
+function mbPillagerFlashbang(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		mbFace({_mob}, {_t})
+		play sound "ENTITY_PILLAGER_AMBIENT" at volume 2 and pitch 0.8 at location of {_mob}
+		wait 8 ticks # wind-up
+		if {_mob} is alive:
+			{_mob}.swingMainHand()
+			play sound "ENTITY_SNOWBALL_THROW" at volume 2 and pitch 0.6 at location of {_mob}
+			set {_from} to {_mob}.getEyeLocation()
+			set {_v} to vector from {_from} to (location of {_t})
+			set {_d} to vector length of {_v}
+			set y component of {_v} to 0
+			if vector length of {_v} < 0.01:
+				set {_v} to vector(0, 0, 1)
+			set vector length of {_v} to ({_d} * 0.055) + 0.15 # rough lob that lands near the target on flat ground
+			set y component of {_v} to 0.35
+			drop 1 gray candle at {_from} without velocity
+			set {_e} to last dropped item
+			{_e}.setPickupDelay(32767)
+			set metadata value "mbProp" of {_e} to true
+			set velocity of {_e} to {_v}
+			mbUnfreeze({_mob})
+			set {_i} to 0
+			while {_i} < 50: # 2.5 second fuse
+				if {_e} isn't valid:
+					stop loop
+				add 1 to {_i}
+				if {_e}.isOnGround() is true: # no ring while it is still in the air
+					mbDrawRing(location of {_e}, 5, {_i} / 50)
+				if mod({_i}, 3) = 0:
+					draw 1 of large_smoke at location of {_e} with extra 0.02
+				if mod({_i}, 10) = 0:
+					play sound "BLOCK_NOTE_BLOCK_HAT" at volume 1.5 and pitch 1.5 at location of {_e}
+				wait 1 tick
+			if {_e} is valid:
+				set {_at} to location of {_e}
+				{_e}.remove()
+				mbFlashEndRing({_at}) # the telegraph turns black as it bursts
+				play sound "ENTITY_FIREWORK_ROCKET_BLAST" at volume 3 and pitch 1.4 at {_at}
+				play sound "BLOCK_GLASS_BREAK" at volume 2 and pitch 1.6 at {_at}
+				draw 60 of end_rod at ({_at} offset by vector(0, 0.5, 0)) with offset vector(2.2, 0.8, 2.2) with extra 0.15
+				draw 45 of dust using dustOption(white, 2) at ({_at} offset by vector(0, 0.8, 0)) with offset vector(2.2, 0.8, 2.2)
+				draw 30 of large_smoke at {_at} with offset vector(1.8, 0.5, 1.8) with extra 0.05
+				loop all players in radius 5 around {_at}:
+					if abs((y-coord of loop-player) - (y-coord of {_at})) <= 2.5:
+						updateAttacker({_mob}, loop-player)
+						add potion effect of wither 2 for 3 seconds to potion effects of loop-player
+						add potion effect of blindness 1 for 3 seconds to potion effects of loop-player
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+function mbFlashEndRing(at: location): # the Flashbang ring turning black for half a second as it goes off
+	loop 5 times:
+		mbDrawRingRGB({_at}, 5, 15, 15, 15)
+		wait 2 ticks
+
+# Arrow Rain: blows a horn; a ring (radius 4.5) follows its target for 0.6 s, then locks in place and reddens for 0.6 s; then 72 arrows
+# rain down inside it over ~1.6 s, 1 damage each (the hit invulnerability window stops every arrow landing on the same player).
+function mbPillagerArrowRain(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		mbFace({_mob}, {_t})
+		set {_mob}'s tool to goat horn
+		{_mob}.swingMainHand()
+		play sound "ITEM_GOAT_HORN_SOUND_2" at volume 4 and pitch 1 at location of {_mob} # the "Seek" goat horn
+		set {_i} to 0
+		while {_i} < 24: # 12 ticks (0.6 s) following the target, then 12 ticks (0.6 s) locked (was 1 s + 0.75 s)
+			if {_mob} isn't alive:
+				stop loop
+			add 1 to {_i}
+			if {_i} <= 12:
+				if {_t} is alive:
+					set {_c} to mbGround(location of {_t})
+			if {_c} is set:
+				mbDrawRing({_c}, 4.5, {_i} / 24)
+			wait 1 tick
+		if {_mob} is alive:
+			set {_mob}'s tool to crossbow of multishot 1
+		mbUnfreeze({_mob})
+		if {_c} is set:
+			loop 72 times: # 72 arrows over ~1.6 s, spread evenly over the circle (2.25x the old 32 for 2.25x the area — same density)
+				set {_ang} to random number between 0 and 360
+				set {_rad} to 4.5 * sqrt(random number between 0 and 1)
+				set {_ox} to {_rad} * cos({_ang})
+				set {_oz} to {_rad} * sin({_ang})
+				set {_from} to {_c} offset by vector({_ox}, 12, {_oz})
+				set pitch of {_from} to -90 # spawn it already pointing straight down (an arrow's pitch is the reverse of a player's)
+				spawn 1 arrow at {_from}
+				set {_ar} to last spawned arrow
+				set metadata value "mbRain" of {_ar} to {_mob}
+				set metadata value "mbProp" of {_ar} to true
+				set velocity of {_ar} to vector(0, -1.8, 0)
+				trackProjectileTrail({_ar}) # 01-utils.sk — spark trail until it lands
+				add {_ar} to {_arrows::*}
+				if mod(loop-number, 9) = 0: # 9 arrows every 2 ticks — the same ~1.6 s as before
+					play sound "ENTITY_ARROW_SHOOT" at volume 1.5 and pitch 0.8 at ({_c} offset by vector(0, 6, 0))
+					mbDrawRing({_c}, 4.5, 1)
+					wait 2 ticks
+			wait 40 ticks
+			loop {_arrows::*}: # clean up the ones stuck in the ground
+				if loop-value is valid:
+					loop-value.remove()
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+# ---- THE BRAIN: one loop per boss, ticking every 5 ticks ----
+
+function mbBrain(mob: living entity, spawnloc: location):
+	while {_mob} is alive:
+		wait 5 ticks
+		if {_mob} is alive:
+			if metadata value "mbAggro" of {_mob} is set:
+				set {_type} to metadata value "bossType" of {_mob}
+				set {_t} to mbTarget({_mob}, 40)
+				if {_t} isn't set: # nobody to fight (target died / left / out of range): drop the target and stand still — clearing the path and
+					# walking "to itself" also cancels any leftover walking input, so it doesn't keep stepping forward
+					if metadata value "mbIdle" of {_mob} isn't set:
+						if metadata value "mbBusy" of {_mob} isn't set:
+							set metadata value "mbIdle" of {_mob} to true
+							{_mob}.setTarget({_none})
+							mbHalt({_mob})
+							set {_rider} to metadata value "mbRider" of {_mob}
+							if {_rider} is alive: # Doomhoof's pillager stops shooting too
+								{_rider}.setTarget({_none})
+					if metadata value "bossType" of {_mob} is "harbinger": # the Warden fights by anger, not by target — drop it for every player
+						loop all players in radius 40 around {_mob}:
+							{_mob}.clearAnger(loop-player)
+				else:
+					delete metadata value "mbIdle" of {_mob}
+					if metadata value "mbBusy" of {_mob} isn't set:
+						# --- movement / basic attack: vanilla AI walks, looks and (Vindicator) swings — the brain only keeps its target set ---
+						set {_cur} to {_mob}.getTarget()
+						if {_cur} is not {_t}:
+							{_mob}.setTarget({_t})
+						if {_type} is "evoker": # vanilla evoker movement (backs away from players, strolls) and vanilla fangs
+							if distance between {_mob} and {_spawnloc} > ({config::majorboss::leash-radius} * 0.7): # it backs away from players — steer it home before it backs out of its leash and resets
+								{_mob}.getPathfinder().moveTo({_spawnloc})
+						# (vindicator / pillager: nothing to do — their vanilla attack goals chase / shoot; damage is normalized elsewhere)
+						if {_type} is "harbinger" or "doomhoof":
+							mbHighMove({_mob}, {_type}, {_t}) # HIGH-LEVEL section below — Warden anger / Doomhoof's rider target
+						# --- abilities: one at a time, 8-10 s apart, only with a player within 12 blocks ---
+						set {_nextAt} to metadata value "mbNextAt" of {_mob}
+						if (unix timestamp of now) >= {_nextAt}:
+							if {_nextAt} is set:
+								set {_near} to mbTarget({_mob}, 12)
+								if {_near} is set:
+									set metadata value "mbNextAt" of {_mob} to (unix timestamp of now) + (random number between 8 and 10)
+									set {_r} to random integer between 1 and 2
+									if {_type} is "evoker":
+										if {_r} = 1:
+											mbEvokerSpears({_mob})
+										else:
+											mbEvokerClones({_mob})
+									else if {_type} is "vindicator":
+										if {_r} = 1:
+											mbVindicatorSlam({_mob})
+										else:
+											mbVindicatorDash({_mob})
+									else if {_type} is "pillager":
+										if {_r} = 1:
+											mbPillagerFlashbang({_mob})
+										else:
+											mbPillagerArrowRain({_mob})
+									else:
+										mbHighAbility({_mob}, {_type}, {_r}) # HIGH-LEVEL section below
+
+# ============================================
+# HIGH-LEVEL BOSSES (Harbinger, Magmaroth, Doomhoof) + THE FROG — test only: no XP, buffs or rewards
+# ============================================
+
+# ---- SPAWNING (called by mbSpawnBoss) ----
+
+function mbSpawnHigh(type: text, loc: location) :: living entity:
+	if {_type} is "harbinger":
+		spawn 1 warden at {_loc}
+		set {_mob} to last spawned warden
+		mbSetup({_mob}, "harbinger", 50, 3, "Harbinger", 1) # slowness 3
+		{_mob}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(1.0) # 100%%
+		mbWardenCalm({_mob})
+	else if {_type} is "magmaroth":
+		spawn 1 magma cube at {_loc}
+		set {_mob} to last spawned magma cube
+		add nbt compound of "{Size:3}" to nbt compound of {_mob} # full size (the largest natural magma cube: NBT Size is size - 1). Set through NBT (SkBee) — the reflect setSize() call never took, which is why the sizes came out random. Done BEFORE mbSetup, since a size change can reset max health
+		set metadata value "mbGroup" of {_mob} to "%{_mob}'s uuid%"
+		set metadata value "mbLarge" of {_mob} to true
+		set metadata value "mbSpawn" of {_mob} to {_loc}
+		mbSetup({_mob}, "magmaroth", 25, 1, "Magmaroth", 1)
+		{_mob}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(0.6) # 60%%
+		set {_g} to "%{_mob}'s uuid%"
+		delete {mbMagma::%{_g}%::*}
+		add {_mob} to {mbMagma::%{_g}%::bodies::*}
+	else: # doomhoof — a ravager with a pillager riding it, sharing one 40 health pool
+		spawn 1 ravager at {_loc}
+		set {_mob} to last spawned ravager
+		mbSetup({_mob}, "doomhoof", 50, 1, "Doomhoof", 1) # slowness 1
+		{_mob}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(1.0)
+		spawn 1 pillager at {_loc}
+		set {_rider} to last spawned pillager
+		set {_rider}'s tool to crossbow of multishot 1
+		mbSetup({_rider}, "doomhoof-rider", 50, 1, "Doomhoof", 1)
+		{_rider}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(1.0)
+		make {_rider} ride {_mob}
+		set metadata value "mbPair" of {_mob} to {_rider}
+		set metadata value "mbPair" of {_rider} to {_mob}
+		set metadata value "mbRider" of {_mob} to {_rider}
+	return {_mob}
+
+function mbHighAnnounce(mob: living entity, type: text, spawnloc: location):
+	set {_pre} to ""
+	if metadata value "testBoss" of {_mob} is set:
+		set {_pre} to "&4&l[TEST] "
+	if {_type} is "harbinger":
+		broadcast " " # blank lines around boss spawn messages
+		broadcast "%{_pre}%&4&lThe ground trembles... the Harbinger rises."
+		broadcast " "
+		mbHarbRise({_spawnloc}) # a longer, unmistakable entrance
+	else if {_type} is "magmaroth":
+		broadcast " " # blank lines around boss spawn messages
+		broadcast "%{_pre}%&4&lMagmaroth bubbles up from the depths."
+		broadcast " "
+		mbMagmaRise({_spawnloc}) # a longer, unmistakable entrance
+	else if {_type} is "doomhoof":
+		broadcast " " # blank lines around boss spawn messages
+		broadcast "%{_pre}%&4&lDoomhoof charges into the arena!"
+		broadcast " "
+		mbDoomRise({_spawnloc}) # a longer, unmistakable entrance
+
+function mbHarbRise(at: location): # ~1.5 s: heartbeats speeding up as the ground cracks with sculk, then the emerge roar and a soul burst
+	play sound "BLOCK_SCULK_SHRIEKER_SHRIEK" at volume 4 and pitch 0.7 at {_at}
+	set {_k} to 0
+	while {_k} < 6:
+		add 1 to {_k}
+		play sound "ENTITY_WARDEN_HEARTBEAT" at volume (2 + ({_k} * 0.4)) and pitch (0.8 + ({_k} * 0.06)) at {_at}
+		draw (6 * {_k}) of block particle using sculk at {_at} with offset vector(1.5, 0.1, 1.5) with extra 0.1
+		draw (2 * {_k}) of sculk_soul at {_at} with offset vector(1.2, 0.2, 1.2) with extra 0.02
+		wait 4 ticks
+	play sound "ENTITY_WARDEN_EMERGE" at volume 5 and pitch 0.8 at {_at}
+	play sound "ENTITY_WARDEN_ROAR" at volume 4 and pitch 0.7 at {_at}
+	play sound "ITEM_MACE_SMASH_GROUND_HEAVY" at volume 3 and pitch 0.5 at {_at}
+	draw 60 of block particle using sculk at {_at} with offset vector(2, 0.3, 2) with extra 0.3
+	draw 30 of sculk_soul at ({_at} offset by vector(0, 1, 0)) with offset vector(1.5, 1, 1.5) with extra 0.05
+	draw 3 of sonic_boom at ({_at} offset by vector(0, 1.5, 0)) with offset vector(0.6, 0.4, 0.6)
+
+function mbDoomRise(at: location): # ~1.5 s: a war horn, hoofbeats closing in faster and louder with dust kicking up, then the roar
+	play sound "EVENT_RAID_HORN" at volume 5 and pitch 1 at {_at}
+	set {_k} to 0
+	while {_k} < 8:
+		add 1 to {_k}
+		play sound "ENTITY_RAVAGER_STEP" at volume (1.5 + ({_k} * 0.4)) and pitch (0.6 + ({_k} * 0.04)) at {_at}
+		draw (4 * {_k}) of block particle using dirt at {_at} with offset vector(1.5, 0.1, 1.5) with extra 0.15
+		draw {_k} of cloud at {_at} with offset vector(1.2, 0.1, 1.2) with extra 0.02
+		wait 3 ticks
+	play sound "ENTITY_RAVAGER_ROAR" at volume 5 and pitch 0.8 at {_at}
+	play sound "ENTITY_PILLAGER_CELEBRATE" at volume 3 and pitch 0.8 at {_at}
+	play sound "ENTITY_GENERIC_EXPLODE" at volume 2 and pitch 0.6 at {_at}
+	draw 50 of block particle using dirt at {_at} with offset vector(2, 0.4, 2) with extra 0.3
+	draw 25 of cloud at ({_at} offset by vector(0, 0.5, 0)) with offset vector(1.8, 0.4, 1.8) with extra 0.06
+	draw 3 of explosion at {_at} with offset vector(1.5, 0.2, 1.5) with extra 0
+
+function mbMagmaRise(at: location): # ~1.5 s: lava bubbling louder and faster, then a heavy splash and roar
+	play sound "ITEM_BUCKET_EMPTY_LAVA" at volume 4 and pitch 0.5 at {_at}
+	set {_k} to 0
+	while {_k} < 8:
+		add 1 to {_k}
+		play sound "BLOCK_LAVA_POP" at volume (1.5 + ({_k} * 0.4)) and pitch (0.5 + ({_k} * 0.05)) at {_at}
+		draw (2 * {_k}) of lava at {_at} with offset vector(1.2, 0.3, 1.2) with extra 0
+		wait 3 ticks
+	play sound "ENTITY_MAGMA_CUBE_SQUISH" at volume 5 and pitch 0.4 at {_at}
+	play sound "BLOCK_LAVA_EXTINGUISH" at volume 4 and pitch 0.5 at {_at}
+	play sound "ENTITY_BLAZE_AMBIENT" at volume 4 and pitch 0.5 at {_at}
+	play sound "ENTITY_GENERIC_EXPLODE" at volume 2 and pitch 0.5 at {_at}
+	draw 40 of flame at {_at} with offset vector(1.5, 0.6, 1.5) with extra 0.05
+	draw 25 of lava at {_at} with offset vector(1.5, 0.4, 1.5) with extra 0
+
+# ---- PER-TICK UPKEEP (called by the brain every 5 ticks) ----
+
+function mbHighMove(mob: living entity, type: text, t: player):
+	if {_type} is "harbinger":
+		# The Warden runs on a "brain", not goals: it fights whoever it is angriest at. Keep it maxed on the brain's target, and keep its
+		# vanilla sonic boom and its dig-down-and-despawn permanently on cooldown (only the scripted beam below is allowed).
+		{_mob}.setAnger({_t}, Integer.parseInt("150"))
+		loop all players in radius 40 around {_mob}: # invisible / creative / spectating players are dropped
+			if mbValid(loop-player) is false:
+				{_mob}.clearAnger(loop-player)
+		loop all frogs in radius 30 around {_mob}: # the Frog is never a target
+			{_mob}.clearAnger(loop-entity)
+		mbWardenCalm({_mob})
+	else if {_type} is "doomhoof":
+		set {_rider} to metadata value "mbRider" of {_mob}
+		if {_rider} is alive:
+			if metadata value "mbLasso" of {_rider} isn't set: # it holds fire while lassoing
+				{_rider}.setTarget({_t})
+
+function mbWardenCalm(mob: living entity): # vanilla sonic boom + digging always on cooldown (Paper runs on Mojang's own names, so these internal classes resolve directly)
+	set {_brain} to {_mob}.getHandle().getBrain()
+	{_brain}.setMemory(MemoryModuleType.SONIC_BOOM_COOLDOWN, Unit.INSTANCE)
+	{_brain}.setMemory(MemoryModuleType.DIG_COOLDOWN, Unit.INSTANCE)
+
+function mbHighAbility(mob: living entity, type: text, r: number):
+	if {_type} is "harbinger":
+		if {_r} = 1:
+			mbHarbSpikes({_mob})
+		else:
+			mbHarbBeam({_mob})
+	else if {_type} is "doomhoof":
+		if {_r} = 1:
+			mbDoomBash({_mob})
+		else:
+			mbDoomLasso({_mob})
+
+# ---- HOOKS ----
+
+on damage of a warden, a magma cube or a ravager with priority high: # aggro (evoker/vindicator/pillager are handled further up)
+	if metadata value "bossType" of victim is set:
+		set {_att} to metadata value "attacker" of victim
+		if {_att} is a player:
+			set {_g} to metadata value "mbGroup" of victim
+			if {_g} is set: # Magmaroth: the whole family wakes up together
+				if {mbMagma::%{_g}%::aggro} isn't set:
+					set {mbMagma::%{_g}%::aggro} to true
+					set {mbMagma::%{_g}%::nextAt} to (unix timestamp of now) + (random number between 3 and 6)
+				loop {mbMagma::%{_g}%::bodies::*}:
+					mbAggro(loop-value, {_att})
+			else:
+				mbAggro(victim, {_att})
+
+on damage of a ravager or a pillager with priority high: # Doomhoof's shared health: whatever one half loses, both lose
+	set {_partner} to metadata value "mbPair" of victim
+	if {_partner} is set:
+		set {_att} to metadata value "attacker" of victim
+		if {_att} is a player:
+			mbAggro(victim, {_att})
+			mbAggro({_partner}, {_att})
+		wait 1 tick
+		if victim is alive:
+			if {_partner} is alive:
+				set {_h} to health of victim
+				if health of {_partner} < {_h}:
+					set {_h} to health of {_partner}
+				set health of victim to {_h}
+				set health of {_partner} to {_h}
+				mbBarUpdate(victim)
+
+on death of a ravager or a pillager:
+	set {_partner} to metadata value "mbPair" of victim
+	if {_partner} is set:
+		clear drops
+		if metadata value "mbDying" of victim isn't set:
+			set metadata value "mbDying" of {_partner} to true
+			if {_partner} is alive:
+				kill {_partner} # one shared life: when one half dies, both do
+			mbBossDefeated(victim) # rewards (credited to whoever landed the killing blow on either half)
+
+on damage of player with priority lowest: # backup: the Harbinger's vanilla sonic boom never does damage (only the scripted beam does)
+	if "%damage cause%" contains "sonic":
+		if attacker is set:
+			if metadata value "bossType" of attacker is "harbinger":
+				cancel event
+
+on EntityPotionEffectEvent: # the Warden's vanilla Darkness pulse is off for the Harbinger
+	if "%event.getCause()%" is "WARDEN":
+		cancel event
+
+on SlimeSplitEvent: # Magmaroth splits on its OWN terms (3 medium cubes, 6 health each) — the vanilla split is cancelled
+	if metadata value "mbGroup" of event.getEntity() is set:
+		cancel event
+
+on damage of player with priority lowest: # Magmaroth has no attack of its own — its damage is the vanilla touch. Limit it to once per half second per player (any cube)
+	if attacker is a magma cube:
+		if metadata value "mbGroup" of attacker is set:
+			if "%damage cause%" contains "attack":
+				set {_last} to {mbMagmaTouch::%victim's uuid%}
+				if {_last} is set:
+					if ((unix timestamp of now) - {_last}) < 0.5:
+						cancel event
+						stop
+				set {mbMagmaTouch::%victim's uuid%} to unix timestamp of now
+
+on death of a magma cube:
+	set {_g} to metadata value "mbGroup" of victim
+	if {_g} is set:
+		clear drops
+		if metadata value "mbLarge" of victim is set: # PASSIVE: the large form's health is gone -> it splits into 3 medium forms tied to the boss
+			set {_spawn} to metadata value "mbSpawn" of victim
+			set {_at} to location of victim
+			set {_tri::*} to vector(1.2, 0, 0), vector(-0.6, 0, 1.04) and vector(-0.6, 0, -1.04)
+			play sound "ENTITY_MAGMA_CUBE_DEATH" at volume 3 and pitch 0.6 at {_at}
+			draw 30 of lava at {_at} with offset vector(1, 0.5, 1) with extra 0
+			loop {_tri::*}:
+				spawn 1 magma cube at ({_at} offset by loop-value)
+				set {_part} to last spawned magma cube
+				add nbt compound of "{Size:1}" to nbt compound of {_part} # medium size (NBT Size is size - 1)
+				set metadata value "mbGroup" of {_part} to {_g}
+				set metadata value "mbSpawn" of {_part} to {_spawn}
+				set metadata value "mbBossId" of {_part} to metadata value "mbBossId" of victim # same boss: same bossbar, same rewards
+				set metadata value "mbBar" of {_part} to metadata value "mbBar" of victim
+				if metadata value "testBoss" of victim is set:
+					set metadata value "testBoss" of {_part} to true
+				mbSetup({_part}, "magmaroth", 8, 1, "Magmaroth", 1)
+				{_part}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(0.6) # 60%%
+				add {_part} to {mbMagma::%{_g}%::bodies::*}
+				if {mbMagma::%{_g}%::aggro} is set: # the fight carries straight on
+					set {_tt} to mbTarget({_part}, 40)
+					if {_tt} is set:
+						mbAggro({_part}, {_tt})
+				mbLeashLoop({_part}, {_spawn})
+			set {mbMagma::%{_g}%::barMax} to 24 # the bossbar refills: it now tracks the 3 medium cubes together (3 x 8)
+			wait 1 tick
+			mbBarUpdate({_part})
+			set {_pre} to ""
+			if metadata value "testBoss" of victim is set:
+				set {_pre} to "&4&l[TEST] "
+			broadcast "%{_pre}%&4&lMagmaroth splits apart!"
+		remove victim from {mbMagma::%{_g}%::bodies::*}
+		if {mbMagma::%{_g}%::bodies::*} isn't set:
+			set {mbMagma::%{_g}%::done} to true
+			mbBossDefeated(victim) # the last cube's killing blow claims the boss
+
+on death of a warden:
+	if metadata value "bossType" of victim is "harbinger":
+		clear drops
+		mbBossDefeated(victim)
+
+# ============================================
+# HARBINGER (Warden) — 40 health, slowness 2, 100%% knockback resistance, vanilla melee (0.5-1)
+# ============================================
+
+# Ground Spikes: a big ring (radius 4) around it plus 4 smaller rings (radius 2) out on the diagonals (NW, NE, SW, SE) go gray -> red
+# over 1.2 s (dark cyan at the end). Then it slams: everyone in the big ring takes 1-2 and is knocked up; a moment later spikes erupt in the small rings:
+# 2-3 damage + slowness 2 for 3 seconds.
+function mbHarbSpikes(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		mbFace({_mob}, {_t})
+		set {_c} to mbGround(location of {_mob})
+		set {_sat::*} to vector(-4.24, 0, -4.24), vector(4.24, 0, -4.24), vector(-4.24, 0, 4.24) and vector(4.24, 0, 4.24)
+		loop {_sat::*}:
+			add mbGround({_c} offset by loop-value) to {_satLoc::*}
+		{_mob}.playEffect(EntityEffect.WARDEN_TENDRIL_SHAKE)
+		play sound "ENTITY_WARDEN_ANGRY" at volume 3 and pitch 0.7 at {_c}
+		set {_i} to 0
+		while {_i} < 24: # 1.2 s telegraph (spikes erupt 0.3 s after the slam — 1.5 s total)
+			if {_mob} isn't alive:
+				stop loop
+			add 1 to {_i}
+			mbDrawRing({_c}, 4, {_i} / 24)
+			mbDrawRing({_c}, 2, {_i} / 24)
+			loop {_satLoc::*}:
+				mbDrawRing(loop-value, 2, {_i} / 24)
+			if mod({_i}, 10) = 0:
+				play sound "ENTITY_WARDEN_HEARTBEAT" at volume 3 and pitch 1 at {_c}
+			wait 1 tick
+		if {_mob} is alive:
+			mbDrawRingRGB({_c}, 4, 0, 110, 120) # end of the telegraph: the rings turn dark cyan (Warden colors)
+			mbDrawRingRGB({_c}, 2, 0, 110, 120)
+			loop {_satLoc::*}:
+				mbDrawRingRGB(loop-value, 2, 0, 110, 120)
+			{_mob}.playEffect(EntityEffect.WARDEN_ATTACK)
+			play sound "ENTITY_WARDEN_ATTACK_IMPACT" at volume 4 and pitch 0.6 at {_c}
+			play sound "ITEM_MACE_SMASH_GROUND_HEAVY" at volume 3 and pitch 0.6 at {_c}
+			draw 3 of explosion at {_c} with offset vector(2, 0.1, 2) with extra 0
+			draw 60 of block particle using sculk at {_c} with offset vector(2.5, 0.2, 2.5) with extra 0.3
+			draw 25 of sculk_soul at {_c} with offset vector(2.5, 0.3, 2.5) with extra 0.05
+			loop all players in radius 5 around {_c}:
+				if abs((y-coord of loop-player) - (y-coord of {_c})) <= 2.5:
+					set {_dx} to (x-coord of loop-player) - (x-coord of {_c})
+					set {_dz} to (z-coord of loop-player) - (z-coord of {_c})
+					if sqrt(({_dx} * {_dx}) + ({_dz} * {_dz})) <= 4:
+						mbHit({_mob}, loop-player, 1, 2)
+						push loop-player upward at speed 0.9
+			loop 3 times: # the small rings stay dark cyan until the spikes erupt
+				loop {_satLoc::*}:
+					mbDrawRingRGB(loop-value-2, 2, 0, 110, 120)
+				wait 2 ticks
+			play sound "BLOCK_POINTED_DRIPSTONE_LAND" at volume 3 and pitch 0.6 at {_c}
+			play sound "ENTITY_EVOKER_FANGS_ATTACK" at volume 3 and pitch 0.5 at {_c}
+			set {_w} to 0
+			while {_w} < 10: # the spikes stay dangerous for 0.5 s: anyone inside a small ring when they erupt, or who steps in during that
+				# half second, is hit — once only (one shared list for all four rings), no matter how long they stay in
+				add 1 to {_w}
+				loop {_satLoc::*}:
+					set {_s} to loop-value
+					loop all players in radius 3 around {_s}:
+						if {_spikeHit::*} doesn't contain loop-player:
+							if abs((y-coord of loop-player) - (y-coord of {_s})) <= 2.5:
+								set {_dx} to (x-coord of loop-player) - (x-coord of {_s})
+								set {_dz} to (z-coord of loop-player) - (z-coord of {_s})
+								if sqrt(({_dx} * {_dx}) + ({_dz} * {_dz})) <= 2:
+									add loop-player to {_spikeHit::*}
+									mbHit({_mob}, loop-player, 2, 3) # spikes: 2-3
+									add potion effect of slowness 2 without particles for 3 seconds to potion effects of loop-player
+				if mod({_w}, 2) = 1:
+					loop {_satLoc::*}:
+						mbHarbSpikeVisual(loop-value)
+				wait 1 tick
+			wait 6 ticks
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+function mbHarbSpikeVisual(c: location): # a cluster of dark spikes jutting out of a small ring
+	loop 6 times:
+		set {_ox} to random number between -1.6 and 1.6
+		set {_oz} to random number between -1.6 and 1.6
+		set {_h} to random number between 1.2 and 2.4
+		set {_k} to 0
+		while {_k} < {_h}:
+			set {_pt} to {_c} offset by vector({_ox}, {_k}, {_oz})
+			draw 1 of dust using dustOption(rgb(20, 40, 50), 1.3) at {_pt}
+			add 0.3 to {_k}
+		draw 2 of block particle using pointed dripstone at ({_c} offset by vector({_ox}, 0.2, {_oz})) with offset vector(0.1, 0.1, 0.1) with extra 0.1
+
+# Sonic Beam (replica — the vanilla sonic boom is disabled): the Warden charges with its own sonic-boom animation and sound while a line
+# follows its target 0.4 s behind (gray -> red, 1.5 s, dark cyan as it fires), then fires along that line: 1-2 damage to every player
+# on it, up to 15 blocks. Unlike the vanilla boom, it stops at walls, so cover works.
+function mbBashPush(p: player, dir: vector): # half of Basher's shield-bash push (basher.sk's bsBashHit: pop-up 0.75, shove 2): stop, pop up 0.375 if grounded, then a speed-1 shove
+	set {_v} to {_dir}
+	set y component of {_v} to 0
+	if vector length of {_v} < 0.01:
+		stop
+	set vector length of {_v} to 1
+	wait 1 tick
+	set velocity of {_p} to vector(0, 0, 0)
+	if {_p} is on ground:
+		push {_p} upward at speed 0.375
+		wait 1 tick
+	push {_p} {_v} at speed 1
+
+function mbHarbBeam(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		mbFace({_mob}, {_t})
+		{_mob}.playEffect(EntityEffect.WARDEN_SONIC_ATTACK)
+		play sound "ENTITY_WARDEN_SONIC_CHARGE" at volume 3 and pitch 1 at location of {_mob}
+		set {_i} to 0
+		while {_i} < 30: # 1.5 s telegraph
+			if {_mob} isn't alive:
+				stop loop
+			add 1 to {_i}
+			if {_t} is alive:
+				set {_hist::%{_i}%} to (location of {_t}) offset by vector(0, 1, 0)
+			set {_idx} to {_i} - 8
+			if {_idx} < 1:
+				set {_idx} to 1
+			set {_aim} to {_hist::%{_idx}%}
+			set {_origin} to (location of {_mob}) offset by vector(0, 1.8, 0)
+			if {_aim} is set:
+				set {_dir} to vector from {_origin} to {_aim}
+				if vector length of {_dir} > 0.01:
+					set vector length of {_dir} to 1
+			if {_dir} is set:
+				set {_f} to {_i} / 30
+				set {_r} to floor(128 + (127 * {_f}))
+				set {_g} to floor(128 - (128 * {_f}))
+				set {_step} to {_dir}
+				loop 30 times: # dotted line, 0.5 apart, 15 blocks
+					set vector length of {_step} to loop-number * 0.5
+					set {_pt} to {_origin} ~ {_step}
+					draw 1 of dust using dustOption(rgb({_r}, {_g}, {_g}), 1) at {_pt}
+			if mod({_i}, 6) = 0:
+				if {_t} is alive:
+					mbFace({_mob}, {_t})
+				draw 4 of sculk_soul at ({_origin}) with offset vector(0.3, 0.3, 0.3) with extra 0.02
+			wait 1 tick
+		if {_mob} is alive:
+			if {_dir} is set:
+				play sound "ENTITY_WARDEN_SONIC_BOOM" at volume 4 and pitch 1 at location of {_mob}
+				set {_cy} to {_dir}
+				loop 30 times: # end of the telegraph: the line flashes dark cyan as the beam fires
+					set vector length of {_cy} to loop-number * 0.5
+					draw 1 of dust using dustOption(rgb(0, 110, 120), 1.3) at ({_origin} ~ {_cy})
+				set {_step} to {_dir}
+				loop 30 times:
+					set vector length of {_step} to loop-number * 0.5
+					set {_pt} to {_origin} ~ {_step}
+					if (block at {_pt}).isPassable() is false: # the beam stops at walls
+						stop loop
+					if mod(loop-number, 2) = 0:
+						draw 1 of sonic_boom at {_pt}
+						draw 2 of sculk_soul at {_pt} with offset vector(0.4, 0.4, 0.4) with extra 0.01 # shows the wider beam
+					loop all players in radius 1.6 around {_pt}: # beam width (was 1.3)
+						if {_hit::*} doesn't contain loop-player:
+							add loop-player to {_hit::*}
+							mbHit({_mob}, loop-player, 1, 2)
+							mbBashPush(loop-player, {_dir}) # pushed back — half of Basher's shield-bash push
+			wait 12 ticks
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+# ============================================
+# MAGMAROTH (largest magma cube) — 25 health, slowness 1, 60%% knockback resistance, vanilla touch damage (0.5-1)
+# PASSIVE: at 0 health the large form splits into 3 medium cubes (6 health each) tied to the boss; it dies when the last one dies.
+# Every cube in the family uses each ability AT THE SAME TIME, so this boss has its own brain (one per family).
+# ============================================
+
+function mbMagmaBrain(g: text, spawnloc: location):
+	while {mbMagma::%{_g}%::done} isn't set:
+		wait 5 ticks
+		set {_bodies::*} to {mbMagma::%{_g}%::bodies::*}
+		loop {_bodies::*}:
+			if loop-value is not alive:
+				remove loop-value from {mbMagma::%{_g}%::bodies::*}
+		if {mbMagma::%{_g}%::bodies::*} isn't set:
+			stop loop
+		if {mbMagma::%{_g}%::aggro} is set:
+			set {_lead} to first element of {mbMagma::%{_g}%::bodies::*}
+			set {_t} to mbTarget({_lead}, 40)
+			if {_t} isn't set: # nobody valid to fight — every cube drops its target
+				loop {mbMagma::%{_g}%::bodies::*}:
+					loop-value.setTarget({_none})
+			if {_t} is set:
+				if {mbMagma::%{_g}%::busy} isn't set:
+					loop {mbMagma::%{_g}%::bodies::*}:
+						if metadata value "mbAggro" of loop-value is set:
+							loop-value.setTarget({_t})
+					if (unix timestamp of now) >= {mbMagma::%{_g}%::nextAt}:
+						set {_near} to false
+						loop {mbMagma::%{_g}%::bodies::*}:
+							if distance between loop-value and {_t} <= 12:
+								set {_near} to true
+						if {_near} is true:
+							set {mbMagma::%{_g}%::nextAt} to (unix timestamp of now) + (random number between 8 and 10)
+							set {_r} to random integer between 1 and 2
+							if {_r} = 1:
+								mbMagmaJump({_g}, {_t}, {_spawnloc})
+							else:
+								mbMagmaBreath({_g}, {_t})
+	delete {mbMagma::%{_g}%::*}
+
+# Magma Jump: every cube leaps at the target — each one's landing ring (gray -> red, 0.8 s) follows the target 0.4 s behind, spread
+# around them when there are several cubes. Landing: knock-up + set on fire for 5 seconds (fire damage only), with fire in the ring.
+function mbMagmaJump(g: text, t: player, spawnloc: location):
+	set {mbMagma::%{_g}%::busy} to true
+	set {_n} to size of {mbMagma::%{_g}%::bodies::*}
+	set {_k} to 0
+	loop {mbMagma::%{_g}%::bodies::*}:
+		add 1 to {_k}
+		set {_off} to vector(0, 0, 0)
+		if {_n} > 1:
+			set {_ang} to ({_k} * 360) / {_n}
+			set {_off} to vector(1.8 * cos({_ang}), 0, 1.8 * sin({_ang}))
+		mbMagmaJumpBody(loop-value, {_t}, {_off}, {_spawnloc}) # runs on its own — all cubes jump together
+	wait 60 ticks
+	delete {mbMagma::%{_g}%::busy}
+
+function mbMagmaJumpBody(b: living entity, t: player, off: vector, spawnloc: location):
+	if {_b} is alive:
+		mbFreeze({_b})
+		set {_ringR} to 3
+		if metadata value "mbLarge" of {_b} isn't set:
+			set {_ringR} to 2
+		play sound "ENTITY_MAGMA_CUBE_SQUISH" at volume 2 and pitch 0.6 at location of {_b}
+		set {_i} to 0
+		while {_i} < 16: # 0.8 s telegraph (was 1.2)
+			if {_b} isn't alive:
+				stop loop
+			add 1 to {_i}
+			if {_t} is alive:
+				set {_hist::%{_i}%} to location of {_t}
+			set {_idx} to {_i} - 8
+			if {_idx} < 1:
+				set {_idx} to 1
+			if {_hist::%{_idx}%} is set:
+				set {_land} to mbGround({_hist::%{_idx}%} offset by {_off})
+			if {_land} is set:
+				mbDrawRing({_land}, {_ringR}, {_i} / 16)
+			if mod({_i}, 4) = 0:
+				draw 3 of lava at location of {_b} with offset vector(0.4, 0.2, 0.4) with extra 0
+			wait 1 tick
+		if {_b} is alive:
+			if {_land} is set:
+				set {_lv} to vector from {_spawnloc} to {_land} # stay inside the leash
+				if vector length of {_lv} > ({config::majorboss::leash-radius} * 0.9):
+					set vector length of {_lv} to ({config::majorboss::leash-radius} * 0.9)
+					set {_land} to mbGround({_spawnloc} ~ {_lv})
+				set {_start} to location of {_b}
+				set {_w} to world of {_start}
+				set {_x0} to x-coord of {_start}
+				set {_y0} to y-coord of {_start}
+				set {_z0} to z-coord of {_start}
+				set {_dx} to (x-coord of {_land}) - {_x0}
+				set {_dy} to (y-coord of {_land}) - {_y0}
+				set {_dz} to (z-coord of {_land}) - {_z0}
+				{_b}.setGravity(false)
+				play sound "ENTITY_MAGMA_CUBE_JUMP" at volume 3 and pitch 0.6 at {_start}
+				set {_k} to 0
+				while {_k} < 18: # 0.9 s arc, 5 blocks high at the top
+					if {_b} isn't alive:
+						stop loop
+					add 1 to {_k}
+					set {_f} to {_k} / 18
+					set {_pos} to location({_x0} + ({_dx} * {_f}), {_y0} + ({_dy} * {_f}) + (20 * {_f} * (1 - {_f})), {_z0} + ({_dz} * {_f}), {_w})
+					teleport {_b} to {_pos}
+					draw 2 of flame at {_pos} with offset vector(0.3, 0.2, 0.3) with extra 0.02
+					wait 1 tick
+				{_b}.setGravity(true)
+				if {_b} is alive:
+					teleport {_b} to {_land}
+					play sound "ENTITY_GENERIC_EXPLODE" at volume 3 and pitch 0.7 at {_land}
+					play sound "ENTITY_MAGMA_CUBE_SQUISH" at volume 3 and pitch 0.5 at {_land}
+					play sound "BLOCK_LAVA_EXTINGUISH" at volume 2 and pitch 0.8 at {_land}
+					set {_shapes::fire} to a circle with radius {_ringR}
+					set particle of {_shapes::fire} to 1 of flame particle
+					draw shapes {_shapes::*} at ({_land} offset by vector(0, 0.2, 0))
+					draw 30 of flame at {_land} with offset vector({_ringR} * 0.6, 0.2, {_ringR} * 0.6) with extra 0.04
+					draw 15 of lava at {_land} with offset vector({_ringR} * 0.6, 0.2, {_ringR} * 0.6) with extra 0
+					loop all players in radius ({_ringR} + 1) around {_land}:
+						if abs((y-coord of loop-player) - (y-coord of {_land})) <= 2.5:
+							if distance between loop-player and {_land} <= ({_ringR} + 0.5):
+								updateAttacker({_b}, loop-player)
+								set fire to loop-player for 5 seconds
+								push loop-player upward at speed 0.8
+					wait 10 ticks
+		mbUnfreeze({_b})
+
+# Fire Breath: every cube faces the target and a cone (60 degrees wide; 6 blocks for the large form, 4 for a medium one) is outlined
+# gray -> red for 0.8 s (orange as it fires), then it breathes fire for 1 s: anyone in the cone is set on fire for 5 seconds.
+function mbMagmaBreath(g: text, t: player):
+	set {mbMagma::%{_g}%::busy} to true
+	loop {mbMagma::%{_g}%::bodies::*}:
+		mbMagmaBreathBody(loop-value, {_t})
+	wait 55 ticks
+	delete {mbMagma::%{_g}%::busy}
+
+function mbConeOutline(o: location, dx: number, dz: number, range: number, r: number, g: number, b: number): # the Fire Breath cone: both edges (+-30 degrees) and the arc at full range
+	loop 9 times:
+		set {_a} to -30 + ((loop-number - 1) * 7.5)
+		set {_ex} to ({_dx} * cos({_a})) - ({_dz} * sin({_a}))
+		set {_ez} to ({_dx} * sin({_a})) + ({_dz} * cos({_a}))
+		draw 1 of dust using dustOption(rgb({_r}, {_g}, {_b}), 1.1) at ({_o} offset by vector({_ex} * {_range}, 0, {_ez} * {_range}))
+		if loop-number is 1 or 9:
+			set {_edge} to 0.5
+			while {_edge} < {_range}:
+				draw 1 of dust using dustOption(rgb({_r}, {_g}, {_b}), 1.1) at ({_o} offset by vector({_ex} * {_edge}, 0, {_ez} * {_edge}))
+				add 0.6 to {_edge}
+
+function mbMagmaBreathBody(b: living entity, t: player):
+	if {_b} is alive:
+		mbFreeze({_b})
+		mbFace({_b}, {_t})
+		set {_range} to 6
+		if metadata value "mbLarge" of {_b} isn't set:
+			set {_range} to 4
+		set {_dir} to mbFlatDir({_b}, {_t}) # locked when the cone appears
+		set {_dx} to x component of {_dir}
+		set {_dz} to z component of {_dir}
+		set {_o} to (location of {_b}) offset by vector(0, 0.6, 0)
+		play sound "ENTITY_BLAZE_AMBIENT" at volume 2 and pitch 0.6 at {_o}
+		set {_i} to 0
+		while {_i} < 16: # 0.8 s telegraph (was 1.2)
+			if {_b} isn't alive:
+				stop loop
+			add 1 to {_i}
+			set {_f} to {_i} / 16
+			set {_r} to floor(128 + (127 * {_f}))
+			set {_g} to floor(128 - (128 * {_f}))
+			mbConeOutline({_o}, {_dx}, {_dz}, {_range}, {_r}, {_g}, {_g})
+			wait 1 tick
+		if {_b} is alive:
+			play sound "ENTITY_BLAZE_SHOOT" at volume 3 and pitch 0.6 at {_o}
+			play sound "ENTITY_ENDER_DRAGON_SHOOT" at volume 2 and pitch 1.4 at {_o}
+			set {_j} to 0
+			while {_j} < 20: # 1 s of fire
+				if {_b} isn't alive:
+					stop loop
+				add 1 to {_j}
+				if {_j} <= 6: # end of the telegraph: the cone turns orange as the fire comes out
+					mbConeOutline({_o}, {_dx}, {_dz}, {_range}, 255, 130, 0)
+				loop 6 times:
+					set {_a} to random number between -30 and 30
+					set {_d} to random number between 0.5 and {_range}
+					set {_ex} to ({_dx} * cos({_a})) - ({_dz} * sin({_a}))
+					set {_ez} to ({_dx} * sin({_a})) + ({_dz} * cos({_a}))
+					draw 1 of flame at ({_o} offset by vector({_ex} * {_d}, random number between -0.2 and 0.4, {_ez} * {_d})) with offset vector(0.1, 0.1, 0.1) with extra 0.02
+				if mod({_j}, 4) = 0:
+					play sound "BLOCK_FIRE_AMBIENT" at volume 2 and pitch 1 at {_o}
+					loop all players in radius ({_range} + 0.5) around {_o}:
+						if abs((y-coord of loop-player) - (y-coord of {_o})) <= 2.5:
+							if {_hit::*} doesn't contain loop-player:
+								set {_to} to vector from {_o} to (location of loop-player)
+								set y component of {_to} to 0
+								if vector length of {_to} <= {_range}:
+									if vector length of {_to} > 0.01:
+										set vector length of {_to} to 1
+										if ({_to} dot {_dir}) >= 0.86: # within 30 degrees of the breath's direction
+											add loop-player to {_hit::*}
+											updateAttacker({_b}, loop-player)
+											set fire to loop-player for 5 seconds
+				wait 1 tick
+			wait 6 ticks
+		mbUnfreeze({_b})
+
+# ============================================
+# DOOMHOOF (Ravager + Pillager rider, one shared 40 health pool) — slowness 1, 100%% knockback resistance.
+# Ravager melee 0.5-1; the rider's Multishot crossbow bolts 0.5-1 each (the arrow hook near the top).
+# ============================================
+
+function mbFaceRot(mob: living entity, t: living entity): # turns a mob that has a rider (a teleport would be refused), using Java's own float yaw/pitch
+	set {_l} to location of {_mob}
+	{_l}.setDirection(vector from {_mob} to {_t})
+	{_mob}.setRotation({_l}.getYaw(), {_l}.getPitch())
+
+# Bash: plants its hooves; a 3-wide, 5-long strip in front of it (locked toward the target) goes gray -> red over 0.8 s, then it charges
+# through it: 2-3 damage, knocked back hard (like Basher's shield bash) and slowed (slowness 2 for 2 s, then slowness 1 for 2 s).
+function mbDoomBash(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	mbFreeze({_mob})
+	set {_t} to mbTarget({_mob}, 14)
+	if {_t} is set:
+		set {_spawn} to metadata value "mbSpawn" of {_mob}
+		mbFaceRot({_mob}, {_t})
+		set {_dir} to mbFlatDir({_mob}, {_t})
+		set {_dx} to x component of {_dir}
+		set {_dz} to z component of {_dir}
+		set {_px} to 0 - {_dz} # sideways
+		set {_pz} to {_dx}
+		play sound "ENTITY_RAVAGER_ROAR" at volume 3 and pitch 1.2 at location of {_mob}
+		set {_i} to 0
+		while {_i} < 16: # 0.8 s telegraph (was 1.2)
+			if {_mob} isn't alive:
+				stop loop
+			add 1 to {_i}
+			set {_f} to {_i} / 16
+			set {_r} to floor(128 + (127 * {_f}))
+			set {_g} to floor(128 - (128 * {_f}))
+			set {_base} to (location of {_mob}) offset by vector(0, 0.2, 0)
+			set {_len} to 0.5
+			while {_len} <= 5: # the two long sides
+				draw 1 of dust using dustOption(rgb({_r}, {_g}, {_g}), 1.1) at ({_base} offset by vector(({_dx} * {_len}) + ({_px} * 2), 0, ({_dz} * {_len}) + ({_pz} * 2)))
+				draw 1 of dust using dustOption(rgb({_r}, {_g}, {_g}), 1.1) at ({_base} offset by vector(({_dx} * {_len}) - ({_px} * 2), 0, ({_dz} * {_len}) - ({_pz} * 2)))
+				add 0.5 to {_len}
+			set {_w} to -2
+			while {_w} <= 2: # the far end (4 wide — was 3)
+				draw 1 of dust using dustOption(rgb({_r}, {_g}, {_g}), 1.1) at ({_base} offset by vector(({_dx} * 5) + ({_px} * {_w}), 0, ({_dz} * 5) + ({_pz} * {_w})))
+				add 0.5 to {_w}
+			if mod({_i}, 6) = 0:
+				play sound "ENTITY_RAVAGER_STEP" at volume 2 and pitch 0.7 at location of {_mob}
+				draw 5 of block particle using dirt at location of {_mob} with offset vector(0.6, 0.1, 0.6) with extra 0.1
+			wait 1 tick
+		if {_mob} is alive:
+			play sound "ENTITY_RAVAGER_ATTACK" at volume 3 and pitch 0.8 at location of {_mob}
+			set {_k} to 0
+			while {_k} < 6: # the charge: ~5 blocks in 6 ticks (velocity-driven, so the rider comes along)
+				if {_mob} isn't alive:
+					stop loop
+				add 1 to {_k}
+				if distance between {_mob} and {_spawn} > ({config::majorboss::leash-radius} * 0.9):
+					stop loop
+				set velocity of {_mob} to vector({_dx} * 0.95, 0.05, {_dz} * 0.95)
+				draw 4 of cloud at location of {_mob} with offset vector(0.6, 0.2, 0.6) with extra 0.02
+				loop all players in radius 3.1 around {_mob}: # +0.5 on each side to match the wider strip (was 2.6)
+					if {_hit::*} doesn't contain loop-player:
+						add loop-player to {_hit::*}
+						mbHit({_mob}, loop-player, 2, 3) # 2-3
+						add potion effect of slowness 2 without particles for 2 seconds to potion effects of loop-player
+						bsBashSlowFollowup(loop-player) # basher.sk — slowness 1 for 2 more seconds after the first 2
+						play sound "ITEM_SHIELD_BLOCK" at volume 2 and pitch 0.5 at location of loop-player
+						set {_kb} to vector({_dx} * 1.6, 0.45, {_dz} * 1.6)
+						set velocity of loop-player to {_kb}
+				wait 1 tick
+			set velocity of {_mob} to vector(0, 0, 0)
+			wait 8 ticks # recovers 0.7 s after the charge starts (6-tick charge + 8) — 1.5 s total
+	mbUnfreeze({_mob})
+	delete metadata value "mbBusy" of {_mob}
+
+# Chain Lasso: the rider stops shooting and fires chains at every player within 9 blocks of it. Chained players get slowness 1, and
+# each chain (gray -> red) follows them for 2.5 s — stepping more than 9 blocks from the rider breaks it. When time is up, every player
+# still chained takes 1-2, is yanked to the ravager's front, has stamina disabled for 3 s and gets slowness 2 for 3 s.
+# The ravager keeps fighting meanwhile.
+function mbDoomLasso(mob: living entity):
+	set metadata value "mbBusy" of {_mob} to true
+	set {_rider} to metadata value "mbRider" of {_mob}
+	if {_rider} is alive:
+		set {_t} to mbTarget({_rider}, 14)
+		if {_t} is set:
+			set metadata value "mbLasso" of {_rider} to true
+			{_rider}.setAware(false) # holds fire
+			loop all players in radius 9 around {_rider}:
+				if gamemode of loop-player is not spectator:
+					if {respawning::%loop-player's uuid%} isn't set:
+						add loop-player to {_chained::*}
+			play sound "ITEM_CROSSBOW_SHOOT" at volume 3 and pitch 0.6 at location of {_rider}
+			play sound "BLOCK_CHAIN_PLACE" at volume 3 and pitch 0.7 at location of {_rider}
+			set {_i} to 0
+			while {_i} < 46: # 2.3 s gray -> red, then 0.2 s black (2.5 s total)
+				if {_rider} isn't alive:
+					stop loop
+				add 1 to {_i}
+				set {_f} to {_i} / 46
+				set {_r} to floor(128 + (127 * {_f}))
+				set {_g} to floor(128 - (128 * {_f}))
+				set {_from} to (location of {_rider}) offset by vector(0, 1.3, 0)
+				loop {_chained::*}:
+					set {_p} to loop-value
+					set {_broke} to false
+					if {_p} is not alive:
+						set {_broke} to true
+					else if distance between {_p} and {_rider} > 9:
+						set {_broke} to true
+					if {_broke} is true:
+						remove {_p} from {_chained::*}
+						if {_p} is alive:
+							play sound "BLOCK_CHAIN_BREAK" at volume 2 and pitch 1.2 at location of {_p}
+							draw 10 of dust using dustOption(gray, 1.2) at ((location of {_p}) offset by vector(0, 1, 0)) with offset vector(0.3, 0.3, 0.3) # (was a "chain" block particle — the block was renamed "iron chain" in 1.21.9, and the unknown name crashed the whole lasso mid-way, leaving the rider frozen and Doomhoof stuck "busy")
+					else:
+						add potion effect of slowness 1 without particles for 10 ticks to potion effects of {_p}
+						set {_v} to vector from {_from} to ((location of {_p}) offset by vector(0, 1, 0))
+						set {_len} to vector length of {_v}
+						set {_step} to {_v}
+						set {_d} to 0.4
+						while {_d} < {_len}: # the chain
+							set vector length of {_step} to {_d}
+							draw 1 of dust using dustOption(rgb({_r}, {_g}, {_g}), 0.9) at ({_from} ~ {_step})
+							add 0.4 to {_d}
+						if mod({_i}, 10) = 0:
+							play sound "BLOCK_CHAIN_HIT" at volume 1 and pitch 1 at location of {_p}
+				if {_chained::*} isn't set:
+					stop loop
+				wait 1 tick
+			if {_rider} is alive:
+				loop 4 times: # end of the telegraph: the chains still attached turn black
+					set {_from} to (location of {_rider}) offset by vector(0, 1.3, 0)
+					loop {_chained::*}:
+						if loop-value-2 is alive:
+							set {_v} to vector from {_from} to ((location of loop-value-2) offset by vector(0, 1, 0))
+							set {_len} to vector length of {_v}
+							set {_step} to {_v}
+							set {_d} to 0.4
+							while {_d} < {_len}:
+								set vector length of {_step} to {_d}
+								draw 1 of dust using dustOption(rgb(15, 15, 15), 1) at ({_from} ~ {_step})
+								add 0.4 to {_d}
+					wait 1 tick
+				loop {_chained::*}: # still chained: the yank
+					set {_p} to loop-value
+					if {_p} is alive:
+						mbHit({_mob}, {_p}, 1, 2)
+						staminaPause({_p}, 3) # 01-utils.sk — stamina disabled for 3 seconds
+						add potion effect of slowness 2 without particles for 3 seconds to potion effects of {_p}
+						play sound "ENTITY_FISHING_BOBBER_RETRIEVE" at volume 3 and pitch 0.6 at location of {_p}
+						play sound "BLOCK_CHAIN_BREAK" at volume 2 and pitch 0.6 at location of {_p}
+						set {_side} to mbFlatDir({_mob}, {_p})
+						set vector length of {_side} to 2
+						set {_dest} to (location of {_mob}) ~ {_side} # 2 blocks in front of the ravager, on the player's side
+						set {_pull} to vector from (location of {_p}) to {_dest}
+						set {_pull} to vector((x component of {_pull}) * 0.3, 0.45, (z component of {_pull}) * 0.3)
+						if vector length of {_pull} > 2.5:
+							set vector length of {_pull} to 2.5
+						set velocity of {_p} to {_pull}
+			delete metadata value "mbLasso" of {_rider}
+			if {_rider} is alive:
+				{_rider}.setAware(true)
+				{_rider}.setTarget({_t})
+	wait 5 ticks
+	delete metadata value "mbBusy" of {_mob}
+
+# ============================================
+# FROG (orange) — 12 health. Not a boss: more like a jungle camp.
+# Sits still until hit. Once hit it never attacks: it jumps away from the nearest player every 2.5 seconds while "in combat". After 6 s
+# without being hit by a player it moves normally again and regenerates (Regeneration III rate) until full (or until hit). No leash — it can go
+# anywhere — but if it falls off the map it is put back at its spawn point and keeps running. Glows orange; other mobs ignore it.
+# ============================================
+
+function mbSpawnFrog(loc: location, test: boolean) :: living entity:
+	spawn 1 frog at {_loc}
+	set {_f} to last spawned frog
+	{_f}.setVariant(FrogVariant.TEMPERATE) # the orange one
+	set max health of {_f} to 12
+	set health of {_f} to 12
+	set metadata value "arenaFrog" of {_f} to true
+	set metadata value "mbSpawn" of {_f} to {_loc}
+	{_f}.setRemoveWhenFarAway(false)
+	add potion effect of speed 3 without particles for 999999 seconds to potion effects of {_f} # speed 3 movement
+	{_f}.setAware(false) # still until hit
+	if {_test} is true:
+		set metadata value "testBoss" of {_f} to true
+	mbFrogName({_f})
+	mbFrogGlow({_f})
+	if {_test} is true:
+		broadcast " "
+		broadcast "&6&l[TEST] A Seerhopper has appeared!"
+		broadcast " "
+	else:
+		broadcast " "
+		broadcast "&6&lA Seerhopper has appeared!"
+		broadcast " "
+	play sound "ENTITY_FROG_AMBIENT" at volume 4 and pitch 1 at {_loc}
+	mbFrogBrain({_f}, {_loc})
+	return {_f}
+
+function mbFrogGlow(f: entity): # orange glow outline — glow color comes from a scoreboard team
+	set {_sb} to Bukkit.getScoreboardManager().getMainScoreboard()
+	set {_team} to {_sb}.getTeam("mbFrogGlow")
+	if {_team} isn't set:
+		set {_team} to {_sb}.registerNewTeam("mbFrogGlow")
+	{_team}.setColor(ChatColor.GOLD)
+	{_team}.addEntity({_f})
+	{_f}.setGlowing(true)
+
+function mbFrogBrain(f: living entity, spawnloc: location):
+	set {_nextJump} to 0
+	set {_nextHeal} to 0
+	set {_tick} to 0
+	while {_f} is alive:
+		wait 5 ticks
+		if {_f} is alive:
+			add 1 to {_tick}
+			draw 2 of dust using dustOption(orange, 1) at ((location of {_f}) offset by vector(0, 0.3, 0)) with offset vector(0.2, 0.1, 0.2) # orange trail
+			if y-coord of {_f} < ((y-coord of {_spawnloc}) - 20): # fell off the map — back to its spawn, still running
+				teleport {_f} to {_spawnloc}
+				set velocity of {_f} to vector(0, 0, 0)
+			set {_last} to metadata value "mbFrogHit" of {_f}
+			if {_last} is set:
+				if ((unix timestamp of now) - {_last}) < 6: # in combat: on the run
+					{_f}.setAware(false)
+					remove regeneration from active potion effects of {_f}
+					if (unix timestamp of now) >= {_nextJump}:
+						set {_nextJump} to (unix timestamp of now) + 2.5
+						mbFrogLeap({_f})
+				else: # out of combat for 6 s: moves normally and regenerates until full
+					{_f}.setAware(true)
+					if health of {_f} < max health of {_f}:
+						if (unix timestamp of now) >= {_nextHeal}: # scripted regeneration: half a heart every 0.6 s (the Regeneration III rate), name tag updated every time
+							set {_nextHeal} to (unix timestamp of now) + 0.6
+							heal {_f} by 0.5
+							mbFrogName({_f})
+							draw 1 of heart at ((location of {_f}) offset by vector(0, 0.8, 0)) with offset vector(0.2, 0.1, 0.2)
+						draw 2 of happy_villager at ((location of {_f}) offset by vector(0, 0.4, 0)) with offset vector(0.25, 0.2, 0.25) # healing sparkle
+
+function mbFrogLeap(f: living entity): # one big hop away from the nearest player (or a random direction if nobody is near)
+	set {_best} to 99999
+	loop all players in radius 40 around {_f}:
+		if gamemode of loop-player is not spectator:
+			set {_d} to distance between loop-player and {_f}
+			if {_d} < {_best}:
+				set {_best} to {_d}
+				set {_from} to loop-player
+	if {_from} is set:
+		set {_dir} to mbFlatDir({_from}, {_f})
+	else:
+		set {_a} to random number between 0 and 360
+		set {_dir} to vector(cos({_a}), 0, sin({_a}))
+	set {_jx} to (x component of {_dir}) * 0.9
+	set {_jz} to (z component of {_dir}) * 0.9
+	set {_l} to location of {_f}
+	{_l}.setDirection({_dir})
+	teleport {_f} to {_l} # face the way it jumps
+	set velocity of {_f} to vector({_jx}, 0.6, {_jz})
+	play sound "ENTITY_FROG_LONG_JUMP" at volume 2 and pitch 1 at location of {_f}
+	draw 8 of dust using dustOption(orange, 1.2) at location of {_f} with offset vector(0.3, 0.1, 0.3)
+	draw 4 of cloud at location of {_f} with offset vector(0.2, 0.05, 0.2) with extra 0.02
+
+on damage of a frog with priority high:
+	if metadata value "arenaFrog" of victim is set:
+		set {_cause} to "%damage cause%"
+		if {_cause} contains "void": # fell off the map — no damage, back to its spawn
+			cancel event
+			teleport victim to (metadata value "mbSpawn" of victim)
+			stop
+		if {_cause} contains "fall": # its own big hops never hurt it
+			cancel event
+			stop
+		set {_att} to metadata value "attacker" of victim
+		if {_att} is a player:
+			set metadata value "mbFrogHit" of victim to unix timestamp of now
+		wait 1 tick
+		if victim is alive:
+			mbFrogName(victim)
+
+on heal: # the Frog's name tag health updates as it regenerates
+	if metadata value "arenaFrog" of event-entity is set:
+		set {_f} to event-entity
+		wait 1 tick
+		if {_f} is alive:
+			mbFrogName({_f})
+
+on death of a frog:
+	if metadata value "arenaFrog" of victim is set:
+		clear drops
+		mbFrogCaught(victim) # 6 XP + Frog's Eye (see the rewards section)
+
+on target: # nothing ever targets the Frog
+	if target is set:
+		if metadata value "arenaFrog" of target is set:
+			cancel event
 
 # ============================================
 # SPAWN PLATFORM HOLE

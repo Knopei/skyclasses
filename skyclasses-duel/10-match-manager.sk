@@ -107,6 +107,7 @@ function forceEndMatchWorker(reason: text):
 			close {_p}'s inventory # closes any open draft/starting-class GUI so it doesn't linger
 			remove {_p} from boss bar with id "%{_p}%-draftbar" # harmless if that bar doesn't exist for this player
 			delete boss bar with id "%{_p}%-draftbar"
+			clearPlayerBossBars({_p}) # 01-utils.sk — every other bar too (boss, combat, cooldown)
 		delete {inMatch::%{_p}'s uuid%}
 		delete {disconnectAt::%{_p}'s uuid%}
 		delete {matchOpponent::%{_p}'s uuid%}
@@ -197,6 +198,8 @@ on join:
 			if {inMatch::%player's uuid%} is set:
 				send "&aWelcome back! &7Choose a class to jump back in." to player
 				handleRespawnFlow(player) # 09-death-match.sk — same flow as after a death, but no life is lost
+	else:
+		clearPlayerBossBars(player) # 01-utils.sk — not in a match: no leftover bars from an old match / a restart
 
 command /forfeit:
 	aliases: ff, surrender
@@ -236,6 +239,11 @@ function resetMatchStats(p: player):
 	set {matchplayerdamage::%{_p}'s uuid%} to 0
 	set {matchjungleslain::%{_p}'s uuid%} to 0
 	set {matchobjectives::%{_p}'s uuid%} to 0
+	set {matchbosses-low::%{_p}'s uuid%} to 0 # 14-stats.sk's match summary — bosses / jungle icon
+	set {matchbosses-high::%{_p}'s uuid%} to 0
+	set {matchbosssteals::%{_p}'s uuid%} to 0
+	set {matchfrogs::%{_p}'s uuid%} to 0 # Seerhoppers
+	delete {matchdamagetaken::%{_p}'s uuid%::*} # per class, for the summary's class icons
 	delete {hadLead::%{_p}'s uuid%}
 	delete {wasBehind::%{_p}'s uuid%}
 	set {matchtopks::%{_p}'s uuid%} to 0 # 14-stats.sk — best killstreak reached this match
@@ -434,6 +442,9 @@ function endMatch(loser: offline player, winner: player): # loser is "offline pl
 	stopMiniBossTimers() # 11-mini-bosses.sk
 	stopMajorBossTimer() # 12-major-boss.sk
 	teardownArena() # 15-arena-manager.sk — includes the wait + teleport back to lobby spawn
+	clearPlayerBossBars({_winner}) # 01-utils.sk — no bossbar (boss, combat, cooldown) survives the match
+	if {_loser} is online:
+		clearPlayerBossBars({_loser}.getPlayer())
 
 	# FIX: opening the match summary GUI before teardownArena()'s teleport meant
 	# the teleport (which Bukkit closes any open inventory for) immediately shut

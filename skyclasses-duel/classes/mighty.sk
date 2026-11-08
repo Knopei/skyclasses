@@ -41,7 +41,8 @@ on right click with mace: # TACTICAL
 							set {_hpDiff} to 4
 						if {_hpDiff} > 0:
 							add {_hpDiff} to {_tacDmg}
-						damage loop-entity by {_tacDmg}
+						if {_tacDmg} > 0:
+							damage loop-entity by {_tacDmg}
 			delete {balance-abilitySource::%player's uuid%}
 
 on drop of mace with priority low: # ULTIMATE

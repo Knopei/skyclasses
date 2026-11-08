@@ -1,0 +1,41 @@
+# ============================================
+# BOSS TEST LAB
+# /testboss <evoker|vindicator|pillager|harbinger|magmaroth|doomhoof|frog>   summons one at your current location (op only)
+# /testboss clear                                                              removes every test boss / clone / prop / frog
+#
+# The bosses themselves (AI, abilities, bossbar, hooks) now live in 12-major-boss.sk — this file only spawns them for testing. A test
+# boss is the real boss tagged "testBoss": no XP, no extra life, no soul, no buff, no stats, not part of the match schedule. Its spawn
+# point (and leash center) is where it was summoned. Its bossbar shows to whoever hits it first (and their opponent, if in a match).
+# ============================================
+
+command /testboss <text> [<text>]:
+	permission: op
+	description: Summons a boss for testing (no rewards)
+	trigger:
+		set {_a} to arg-1
+		if {_a} is "clear":
+			set {_n} to 0
+			loop all entities:
+				if metadata value "testBoss" of loop-entity is set:
+					set {_bar} to metadata value "mbBar" of loop-entity
+					if {_bar} is set:
+						mbBarClear({_bar}) # 12-major-boss.sk
+					loop-entity.remove()
+					add 1 to {_n}
+				else if metadata value "mbClone" of loop-entity is set:
+					loop-entity.remove()
+				else if metadata value "mbProp" of loop-entity is set: # flashbang candles, arrow-rain arrows
+					loop-entity.remove()
+			send "&7Removed &f%{_n}% &7test boss entities."
+			stop
+		set {_loc} to location of player
+		if {_a} is "frog":
+			mbSpawnFrog({_loc}, true) # 12-major-boss.sk
+			send "&7Summoned a test &fFrog&7. Hit it to make it run. &8(/testboss clear removes it)"
+			stop
+		if {_a} is not "evoker" or "vindicator" or "pillager" or "harbinger" or "magmaroth" or "doomhoof":
+			send "&cUsage: /testboss <evoker|vindicator|pillager|harbinger|magmaroth|doomhoof|frog|clear>"
+			stop
+		set {_mob} to mbSpawnBoss({_a}, {_loc}, true) # 12-major-boss.sk
+		send "&7Summoned a test &f%{_a}%&7. Hit it to wake it up. &8(/testboss clear removes it)"
+		mbStart({_mob}, {_loc}) # 12-major-boss.sk — entrance, leash, brain

@@ -36,6 +36,17 @@ function initializePlayerStats(p: offline player): # offline player, so /resetst
 	set {jungleslain::%{_uuid}%} to 0
 	set {bossesslain::%{_uuid}%} to 0
 	set {bosssteals::%{_uuid}%} to 0
+	set {bossesslain-low::%{_uuid}%} to 0 # 12-major-boss.sk — by tier
+	set {bossesslain-high::%{_uuid}%} to 0
+	set {bossesslain-type::%{_uuid}%::evoker} to 0
+	set {bossesslain-type::%{_uuid}%::vindicator} to 0
+	set {bossesslain-type::%{_uuid}%::pillager} to 0
+	set {bossesslain-type::%{_uuid}%::harbinger} to 0
+	set {bossesslain-type::%{_uuid}%::magmaroth} to 0
+	set {bossesslain-type::%{_uuid}%::doomhoof} to 0
+	set {bosssteals-low::%{_uuid}%} to 0
+	set {bosssteals-high::%{_uuid}%} to 0
+	set {frogscaught::%{_uuid}%} to 0 # the Frog (also counts as a jungle mob)
 	set {xpearly::%{_uuid}%} to 0
 	set {xpmid::%{_uuid}%} to 0
 	set {xplate::%{_uuid}%} to 0
@@ -70,6 +81,8 @@ function initializePlayerStats(p: offline player): # offline player, so /resetst
 		set {class-jungleslain::%{_uuid}%::%{_c}%} to 0
 		set {class-bossesslain::%{_uuid}%::%{_c}%} to 0
 		set {class-bosssteals::%{_uuid}%::%{_c}%} to 0
+		set {class-bossesslain-low::%{_uuid}%::%{_c}%} to 0
+		set {class-bossesslain-high::%{_uuid}%::%{_c}%} to 0
 		set {class-xpearly::%{_uuid}%::%{_c}%} to 0
 		set {class-xpmid::%{_uuid}%::%{_c}%} to 0
 		set {class-xplate::%{_uuid}%::%{_c}%} to 0
@@ -102,6 +115,8 @@ function backfillClassStats(p: offline player, class: text): # fills in only the
 		set {class-jungleslain::%{_uuid}%::%{_class}%} to 0
 		set {class-bossesslain::%{_uuid}%::%{_class}%} to 0
 		set {class-bosssteals::%{_uuid}%::%{_class}%} to 0
+		set {class-bossesslain-low::%{_uuid}%::%{_class}%} to 0
+		set {class-bossesslain-high::%{_uuid}%::%{_class}%} to 0
 		set {class-xpearly::%{_uuid}%::%{_class}%} to 0
 		set {class-xpmid::%{_uuid}%::%{_class}%} to 0
 		set {class-xplate::%{_uuid}%::%{_class}%} to 0
@@ -144,7 +159,8 @@ function formatDuration(seconds: number) :: string: # e.g. 754 -> "12m 34s"
 # {prb::...} and playerRecentRecord() (called from endMatch(), real matches only) writes the DIFFERENCE for the match into the next slot. A match that is
 # force-ended or is a /testduel never reaches playerRecentRecord(), so it is simply not in the window.
 #   overall fields : games wins losses dur durwin durloss kills deaths mxks fb dmg pdmg dtaken jungle bosses steals xe xm xl pge pgm pgl lead leadloss behindwin mxdmg mxpdmg mxcs mxkd
-#   per-class      : g w l k d dmg pd dt jg bs mxks
+#                    blow bhigh bt-<type> (one per boss type) stlow sthigh frogs
+#   per-class      : g w l k d dmg pd dt jg bs bl bh mxks
 # Fields starting with "mx" are best-of values (aggregated as a MAX over the window), everything else is summed.
 
 function trackKillstreak(p: player, class: text): # called from 09-death-match.sk right after a kill increments the streak — remembers the best streak reached THIS match (overall + per class)
@@ -165,6 +181,13 @@ function playerRecentSnapshot(p: player): # called from 10-match-manager.sk's en
 	set {prb::%{_u}%::xe} to bd({xpearly::%{_u}%})
 	set {prb::%{_u}%::xm} to bd({xpmid::%{_u}%})
 	set {prb::%{_u}%::xl} to bd({xplate::%{_u}%})
+	set {prb::%{_u}%::blow} to bd({bossesslain-low::%{_u}%}) # 12-major-boss.sk boss trackers
+	set {prb::%{_u}%::bhigh} to bd({bossesslain-high::%{_u}%})
+	set {prb::%{_u}%::stlow} to bd({bosssteals-low::%{_u}%})
+	set {prb::%{_u}%::sthigh} to bd({bosssteals-high::%{_u}%})
+	set {prb::%{_u}%::frogs} to bd({frogscaught::%{_u}%})
+	loop "evoker", "vindicator", "pillager", "harbinger", "magmaroth" and "doomhoof":
+		set {prb::%{_u}%::bt-%loop-value%} to bd({bossesslain-type::%{_u}%::%loop-value%})
 	loop integers between 1 and 3:
 		set {_c} to {loadout::%{_u}%::%loop-value%}
 		if {_c} is set:
@@ -172,6 +195,8 @@ function playerRecentSnapshot(p: player): # called from 10-match-manager.sk's en
 			set {prb::%{_u}%::c::%{_c}%::dt} to bd({class-damagetaken::%{_u}%::%{_c}%})
 			set {prb::%{_u}%::c::%{_c}%::jg} to bd({class-jungleslain::%{_u}%::%{_c}%})
 			set {prb::%{_u}%::c::%{_c}%::bs} to bd({class-bossesslain::%{_u}%::%{_c}%})
+			set {prb::%{_u}%::c::%{_c}%::bl} to bd({class-bossesslain-low::%{_u}%::%{_c}%})
+			set {prb::%{_u}%::c::%{_c}%::bh} to bd({class-bossesslain-high::%{_u}%::%{_c}%})
 	set {prb::%{_u}%::ok} to true
 
 function playerRecentRecord(p: offline player, result: text, duration: number): # called from endMatch() BEFORE processEndMatchStats() (which clears hadLead/wasBehind), real matches only
@@ -206,6 +231,13 @@ function playerRecentRecord(p: offline player, result: text, duration: number): 
 	set {pr::%{_u}%::%{_s}%::xe} to bd({xpearly::%{_u}%}) - bd({prb::%{_u}%::xe})
 	set {pr::%{_u}%::%{_s}%::xm} to bd({xpmid::%{_u}%}) - bd({prb::%{_u}%::xm})
 	set {pr::%{_u}%::%{_s}%::xl} to bd({xplate::%{_u}%}) - bd({prb::%{_u}%::xl})
+	set {pr::%{_u}%::%{_s}%::blow} to bd({bossesslain-low::%{_u}%}) - bd({prb::%{_u}%::blow})
+	set {pr::%{_u}%::%{_s}%::bhigh} to bd({bossesslain-high::%{_u}%}) - bd({prb::%{_u}%::bhigh})
+	set {pr::%{_u}%::%{_s}%::stlow} to bd({bosssteals-low::%{_u}%}) - bd({prb::%{_u}%::stlow})
+	set {pr::%{_u}%::%{_s}%::sthigh} to bd({bosssteals-high::%{_u}%}) - bd({prb::%{_u}%::sthigh})
+	set {pr::%{_u}%::%{_s}%::frogs} to bd({frogscaught::%{_u}%}) - bd({prb::%{_u}%::frogs})
+	loop "evoker", "vindicator", "pillager", "harbinger", "magmaroth" and "doomhoof":
+		set {pr::%{_u}%::%{_s}%::bt-%loop-value%} to bd({bossesslain-type::%{_u}%::%loop-value%}) - bd({prb::%{_u}%::bt-%loop-value%})
 	set {pr::%{_u}%::%{_s}%::pge} to 1 # every match reaches the early phase
 	set {pr::%{_u}%::%{_s}%::pgm} to 0
 	set {pr::%{_u}%::%{_s}%::pgl} to 0
@@ -251,6 +283,8 @@ function playerRecentRecord(p: offline player, result: text, duration: number): 
 			set {pr::%{_u}%::%{_s}%::c::%{_c}%::dt} to bd({class-damagetaken::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::dt})
 			set {pr::%{_u}%::%{_s}%::c::%{_c}%::jg} to bd({class-jungleslain::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::jg})
 			set {pr::%{_u}%::%{_s}%::c::%{_c}%::bs} to bd({class-bossesslain::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::bs})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::bl} to bd({class-bossesslain-low::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::bl})
+			set {pr::%{_u}%::%{_s}%::c::%{_c}%::bh} to bd({class-bossesslain-high::%{_u}%::%{_c}%}) - bd({prb::%{_u}%::c::%{_c}%::bh})
 			set {pr::%{_u}%::%{_s}%::c::%{_c}%::mxks} to bd({matchtopks::%{_u}%::%{_c}%})
 	set {pr::%{_u}%::%{_s}%::ok} to true
 
@@ -259,8 +293,8 @@ function recentStatsAgg(target: offline player): # totals the player's last-30 w
 	delete {sv-r::%{_u}%::*}
 	set {sv-r::%{_u}%::n} to 0
 	# explicit field lists — the totals are built by name rather than by looping the stored list and trusting loop-index, which didn't reproduce the nested "c::CLASS::field" paths
-	set {_sumf::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin"
-	set {_csumf::*} to "g", "w", "l", "k", "d", "dmg", "pd", "dt", "jg", "bs"
+	set {_sumf::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin", "blow", "bhigh", "stlow", "sthigh", "frogs", "bt-evoker", "bt-vindicator", "bt-pillager", "bt-harbinger", "bt-magmaroth" and "bt-doomhoof"
+	set {_csumf::*} to "g", "w", "l", "k", "d", "dmg", "pd", "dt", "jg", "bs", "bl" and "bh"
 	set {_classes::*} to {menu::classlist::*}
 	set {_si} to 1
 	while {_si} <= 30:
@@ -309,7 +343,7 @@ function recentStatsAgg(target: offline player): # totals the player's last-30 w
 		set {sv-r::%{_u}%::c::%{_c}%::mxks} to {_best}
 		add 1 to {_ci}
 	# make sure every overall field exists, so the icons never print "<none>"
-	set {_all::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "mxks", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin", "mxdmg", "mxpdmg", "mxcs", and "mxkd"
+	set {_all::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "mxks", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin", "mxdmg", "mxpdmg", "mxcs", "mxkd", "blow", "bhigh", "stlow", "sthigh", "frogs", "bt-evoker", "bt-vindicator", "bt-pillager", "bt-harbinger", "bt-magmaroth" and "bt-doomhoof"
 	set {_fi} to 1
 	while {_fi} <= size of {_all::*}:
 		set {_f} to {_all::%{_fi}%}
@@ -336,6 +370,13 @@ function lifetimeStatsView(target: offline player): # mirrors the lifetime count
 	set {sv-l::%{_u}%::jungle} to bd({jungleslain::%{_u}%})
 	set {sv-l::%{_u}%::bosses} to bd({bossesslain::%{_u}%})
 	set {sv-l::%{_u}%::steals} to bd({bosssteals::%{_u}%})
+	set {sv-l::%{_u}%::blow} to bd({bossesslain-low::%{_u}%})
+	set {sv-l::%{_u}%::bhigh} to bd({bossesslain-high::%{_u}%})
+	set {sv-l::%{_u}%::stlow} to bd({bosssteals-low::%{_u}%})
+	set {sv-l::%{_u}%::sthigh} to bd({bosssteals-high::%{_u}%})
+	set {sv-l::%{_u}%::frogs} to bd({frogscaught::%{_u}%})
+	loop "evoker", "vindicator", "pillager", "harbinger", "magmaroth" and "doomhoof":
+		set {sv-l::%{_u}%::bt-%loop-value%} to bd({bossesslain-type::%{_u}%::%loop-value%})
 	set {sv-l::%{_u}%::xe} to bd({xpearly::%{_u}%})
 	set {sv-l::%{_u}%::xm} to bd({xpmid::%{_u}%})
 	set {sv-l::%{_u}%::xl} to bd({xplate::%{_u}%})
@@ -407,7 +448,13 @@ function statsIcon(slot: number, target: offline player, mode: text) :: item: # 
 		set {_games} to {sv-%{_m}%::%{_u}%::games}
 		set {_avgCS} to safeDivide({sv-%{_m}%::%{_u}%::jungle}, {_games})
 		set {_avgBosses} to safeDivide({sv-%{_m}%::%{_u}%::bosses}, {_games})
-		set {_lore::*} to "" and "&7Jungle Mobs Slain: &e%{sv-%{_m}%::%{_u}%::jungle}%" and "&7Avg Jungle CS/Game: &e%{_avgCS}%" and "&7Bosses Slain: &e%{sv-%{_m}%::%{_u}%::bosses}%" and "&7Avg Bosses/Game: &e%{_avgBosses}%" and "&7Boss Steals: &e%{sv-%{_m}%::%{_u}%::steals}%"
+		set {_avgLow} to safeDivide({sv-%{_m}%::%{_u}%::blow}, {_games})
+		set {_avgHigh} to safeDivide({sv-%{_m}%::%{_u}%::bhigh}, {_games})
+		set {_lore::*} to "" and "&7Jungle Mobs Slain: &e%{sv-%{_m}%::%{_u}%::jungle}%" and "&7Seerhoppers Slain: &6%{sv-%{_m}%::%{_u}%::frogs}%" and "&7Avg Jungle CS/Game: &e%{_avgCS}%" and ""
+		add "&7Bosses Slain: &e%{sv-%{_m}%::%{_u}%::bosses}%" and "&7Avg Bosses/Game: &e%{_avgBosses}%" and "&7Avg Low-Level Bosses/Game: &e%{_avgLow}%" and "&7Avg High-Level Bosses/Game: &e%{_avgHigh}%" to {_lore::*}
+		add "&7Boss Steals: &e%{sv-%{_m}%::%{_u}%::steals}% &8(Low-Level &e%{sv-%{_m}%::%{_u}%::stlow}%&8, High-Level &e%{sv-%{_m}%::%{_u}%::sthigh}%&8)" and "" to {_lore::*}
+		add "&8Low-Level: &7Evoker &e%{sv-%{_m}%::%{_u}%::bt-evoker}% &7Vindicator &e%{sv-%{_m}%::%{_u}%::bt-vindicator}% &7Pillager &e%{sv-%{_m}%::%{_u}%::bt-pillager}%" to {_lore::*}
+		add "&8High-Level: &7Harbinger &e%{sv-%{_m}%::%{_u}%::bt-harbinger}% &7Magmaroth &e%{sv-%{_m}%::%{_u}%::bt-magmaroth}% &7Doomhoof &e%{sv-%{_m}%::%{_u}%::bt-doomhoof}%" to {_lore::*}
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (zombie head named "&2&lJungle & Bosses" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	else if {_slot} is 28:
@@ -574,6 +621,21 @@ function snapshotMatch(p: offline player, opponent: offline player, result: text
 	set {matchhistory::%{_u}%::0::odeaths} to {matchdeaths::%{_o}%}
 	set {matchhistory::%{_u}%::0::odamage} to {matchdamage::%{_o}%}
 	set {matchhistory::%{_u}%::0::oobjectives} to {matchobjectives::%{_o}%}
+	set {_who::u} to {_u} # bosses / jungle icon fields, for the player ("") and the opponent ("o")
+	set {_who::o} to {_o}
+	loop "u" and "o":
+		set {_x} to {_who::%loop-value%}
+		set {_pre} to ""
+		if loop-value is "o":
+			set {_pre} to "o"
+		set {_bl} to bd({matchbosses-low::%{_x}%})
+		set {_bh} to bd({matchbosses-high::%{_x}%})
+		set {matchhistory::%{_u}%::0::%{_pre}%blow} to {_bl}
+		set {matchhistory::%{_u}%::0::%{_pre}%bhigh} to {_bh}
+		set {matchhistory::%{_u}%::0::%{_pre}%bosses} to {_bl} + {_bh}
+		set {matchhistory::%{_u}%::0::%{_pre}%steals} to bd({matchbosssteals::%{_x}%})
+		set {matchhistory::%{_u}%::0::%{_pre}%frogs} to bd({matchfrogs::%{_x}%})
+		set {matchhistory::%{_u}%::0::%{_pre}%jungle} to bd({matchjungleslain::%{_x}%})
 	loop integers between 1 and 3:
 		set {_i} to loop-value
 		set {_class} to {loadout::%{_u}%::%{_i}%}
@@ -582,12 +644,16 @@ function snapshotMatch(p: offline player, opponent: offline player, result: text
 			set {matchhistory::%{_u}%::0::k%{_i}%} to {matchkills::%{_u}%::%{_class}%}
 			set {matchhistory::%{_u}%::0::d%{_i}%} to {matchdeaths::%{_u}%::%{_class}%}
 			set {matchhistory::%{_u}%::0::dmg%{_i}%} to {matchdamage::%{_u}%::%{_class}%}
+			set {matchhistory::%{_u}%::0::dt%{_i}%} to bd({matchdamagetaken::%{_u}%::%{_class}%})
+			set {matchhistory::%{_u}%::0::ks%{_i}%} to bd({matchtopks::%{_u}%::%{_class}%})
 		set {_oclass} to {loadout::%{_o}%::%{_i}%}
 		if {_oclass} is set:
 			set {matchhistory::%{_u}%::0::ocls%{_i}%} to {_oclass}
 			set {matchhistory::%{_u}%::0::ok%{_i}%} to {matchkills::%{_o}%::%{_oclass}%}
 			set {matchhistory::%{_u}%::0::od%{_i}%} to {matchdeaths::%{_o}%::%{_oclass}%}
 			set {matchhistory::%{_u}%::0::odmg%{_i}%} to {matchdamage::%{_o}%::%{_oclass}%}
+			set {matchhistory::%{_u}%::0::odt%{_i}%} to bd({matchdamagetaken::%{_o}%::%{_oclass}%})
+			set {matchhistory::%{_u}%::0::oks%{_i}%} to bd({matchtopks::%{_o}%::%{_oclass}%})
 
 function copyHistorySlot(p: offline player, from: number, to: number): # key-by-key copy of one saved match into another slot, replacing whatever was there
 	delete {matchhistory::%{_p}'s uuid%::%{_to}%::*}
@@ -612,24 +678,42 @@ function openMatchSummary(p: player, slot: number):
 	else:
 		set slot 4 of metadata tag "match summary" of {_p} to red dye named "&c&lDEFEAT"
 
-	set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::kills}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::deaths}%" and "&7Damage Dealt: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::damage})%" and "&7Objectives Secured: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::objectives}%"
+	set {_h} to "%{_p}'s uuid%::%{_slot}%" # this saved match's key
+	set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_h}%::kills}%" and "&7Deaths: &e%{matchhistory::%{_h}%::deaths}%" and "&7Damage Dealt: &e%formatNumber({matchhistory::%{_h}%::damage})%"
 	set slot 10 of metadata tag "match summary" of {_p} to paper named "&e&lYour Stats" with lore {_lore::*}
+	set slot 11 of metadata tag "match summary" of {_p} to matchSummaryBossIcon({_h}, "", "&e&lYour Bosses & Jungle")
 
-	set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::okills}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::odeaths}%" and "&7Damage Dealt: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::odamage})%" and "&7Objectives Secured: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::oobjectives}%"
-	set slot 16 of metadata tag "match summary" of {_p} to paper named "&c&l%{matchhistory::%{_p}'s uuid%::%{_slot}%::opponent}%'s Stats" with lore {_lore::*}
+	set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_h}%::okills}%" and "&7Deaths: &e%{matchhistory::%{_h}%::odeaths}%" and "&7Damage Dealt: &e%formatNumber({matchhistory::%{_h}%::odamage})%"
+	set slot 16 of metadata tag "match summary" of {_p} to paper named "&c&l%{matchhistory::%{_h}%::opponent}%'s Stats" with lore {_lore::*}
+	set slot 15 of metadata tag "match summary" of {_p} to matchSummaryBossIcon({_h}, "o", "&c&l%{matchhistory::%{_h}%::opponent}%'s Bosses & Jungle")
 
 	loop integers between 1 and 3:
 		set {_i} to loop-value
 		set {_class} to {matchhistory::%{_p}'s uuid%::%{_slot}%::cls%{_i}%}
 		if {_class} is set:
-			set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::k%{_i}%}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::d%{_i}%}%" and "&7Damage: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::dmg%{_i}%})%"
+			set {_lore::*} to matchSummaryClassLore({_h}, "", {_i})
 			set slot (18 + {_i}) of metadata tag "match summary" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 		set {_oclass} to {matchhistory::%{_p}'s uuid%::%{_slot}%::ocls%{_i}%}
 		if {_oclass} is set:
-			set {_lore::*} to "" and "&7Kills: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::ok%{_i}%}%" and "&7Deaths: &e%{matchhistory::%{_p}'s uuid%::%{_slot}%::od%{_i}%}%" and "&7Damage: &e%formatNumber({matchhistory::%{_p}'s uuid%::%{_slot}%::odmg%{_i}%})%"
+			set {_lore::*} to matchSummaryClassLore({_h}, "o", {_i})
 			set slot (22 + {_i}) of metadata tag "match summary" of {_p} to ({class::weapon::%{_oclass}%} named "&c%{class-name::%{_oclass}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	open (metadata tag "match summary" of {_p}) to {_p}
+
+function matchSummaryBossIcon(h: text, pre: text, title: text) :: item: # bosses + jungle for one side of a saved match (pre "" = the player, "o" = the opponent); older matches saved before these existed show 0
+	set {_bosses} to bd({matchhistory::%{_h}%::%{_pre}%bosses})
+	set {_lore::*} to "" and "&7Bosses Slain: &e%{_bosses}%" and "&7Low-Level Bosses: &e%bd({matchhistory::%{_h}%::%{_pre}%blow})%" and "&7High-Level Bosses: &e%bd({matchhistory::%{_h}%::%{_pre}%bhigh})%" and "&7Boss Steals: &e%bd({matchhistory::%{_h}%::%{_pre}%steals})%" and "" and "&7Seerhoppers Slain: &6%bd({matchhistory::%{_h}%::%{_pre}%frogs})%" and "&7Jungle Mobs Slain: &e%bd({matchhistory::%{_h}%::%{_pre}%jungle})%"
+	return (zombie head named {_title} with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+
+function matchSummaryClassLore(h: text, pre: text, i: number) :: strings: # one class icon's lore in a saved match
+	set {_k} to bd({matchhistory::%{_h}%::%{_pre}%k%{_i}%})
+	set {_d} to bd({matchhistory::%{_h}%::%{_pre}%d%{_i}%})
+	if {_d} = 0:
+		set {_kd} to {_k}
+	else:
+		set {_kd} to {_k} / {_d}
+	set {_lore::*} to "" and "&7Kills: &e%{_k}%" and "&7Deaths: &e%{_d}%" and "&7K/D: &e%{_kd}%" and "&7Damage: &e%formatNumber(bd({matchhistory::%{_h}%::%{_pre}%dmg%{_i}%}))%" and "&7Damage Taken: &e%formatNumber(bd({matchhistory::%{_h}%::%{_pre}%dt%{_i}%}))%" and "&7Best Killstreak: &e%bd({matchhistory::%{_h}%::%{_pre}%ks%{_i}%})%"
+	return {_lore::*}
 
 # ---- MATCH HISTORY (last 7) ----
 # /matchhistory opens a 1-row GUI: slots 1-7 are the last 7 games, newest on

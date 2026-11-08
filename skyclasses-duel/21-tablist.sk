@@ -1,37 +1,151 @@
 # ============================================
 # MATCH TAB LIST (TAB menu during matches)
-# While a player is in a match, their entry in the TAB list shows their current class + mastery rating (class name and mastery score, coloured by rank), then the general perk and health item they currently have equipped. Refreshed every second so a class
-# swap on respawn shows up right away. Once the match is over (or before one starts) the entry goes back to the plain player name.
+# Each player's TAB entry shows their name, current class and mastery rating (coloured by rank). The details are a small "table" in
+# the TAB header and footer: the HEADER is your own block, the FOOTER is your opponent's (each player sees everything about both).
+# Every line is centered by the game, so the blocks need no column alignment. Refreshed every second; cleared when the match ends.
 #
-#   Jacky | Viking (487) | Stamina Recovery | Golden Apple
+#   Jacky | Viking Lv2 | 28❤
+#   ❤ Healthy Boy   ❤ Golden Apple          <- general perk + consumable
+#   Low-Level Bosses: ✦ ⚔ ·                 <- one icon per low-level boss slain (· = still to get); once ANY player
+#                                              has a soul this becomes "Soul: <icon> <name>" or "Soul: —"
+#   Boss Buff: ☠ Harbinger's Might          <- high-level boss buff on the CURRENT class, or —
+#   Other: ◎ Seer's Eye 42s                 <- any other buffs, or —
+#
+# Icons are plain Unicode symbols for now (they render without a resource pack). With a resource pack later, only the icon table in
+# "on load" below needs to change — swap each symbol for its custom glyph character.
 # ============================================
 
-function tabListName(p: player) :: text:
+on load:
+	# ---- ICONS ----
+	set {tabIcon::boss::evoker} to "&5✦"
+	set {tabIcon::boss::vindicator} to "&7⚔"
+	set {tabIcon::boss::pillager} to "&8➶"
+	set {tabIcon::boss::empty} to "&8·"
+	set {tabIcon::soul::evoker} to "&5✦"
+	set {tabIcon::soul::vindicator} to "&7⚔"
+	set {tabIcon::soul::pillager} to "&8➶"
+	set {tabIcon::soul::mixed} to "&d✪"
+	set {tabName::soul::evoker} to "&5Evoker Soul"
+	set {tabName::soul::vindicator} to "&7Vindicator Soul"
+	set {tabName::soul::pillager} to "&8Pillager Soul"
+	set {tabName::soul::mixed} to "&dRaid Soul"
+	set {tabIcon::buff::harbinger} to "&3☠"
+	set {tabIcon::buff::magmaroth} to "&6♨"
+	set {tabIcon::buff::doomhoof} to "&c✚"
+	set {tabName::buff::harbinger} to "&3Harbinger's Might"
+	set {tabName::buff::magmaroth} to "&6Magmaroth's Fury"
+	set {tabName::buff::doomhoof} to "&cDoomhoof's Vigor"
+	set {tabIcon::frogeye} to "&6◎"
+	set {tabIcon::perk::healthyboy} to "&c❤"
+	set {tabIcon::perk::staminarecovery} to "&e⚡"
+	set {tabIcon::perk::reinforceddash} to "&6⛨"
+	set {tabIcon::perk::spellcaster} to "&9✧"
+	set {tabIcon::perk::enchantedconsumables} to "&6♦"
+	set {tabIcon::perk::nimblefeet} to "&b➹"
+	set {tabIcon::perk::quickfuse} to "&2✸"
+	set {tabIcon::item} to "&c✿" # consumables share one icon — the item's own name follows it
+	set {tabNone} to "&8—"
+
+function tabListName(p: player) :: text: # the player's own TAB entry: name + class (mastery rating, coloured by rank)
+	set {_class} to {class::%{_p}'s uuid%}
+	set {_color} to getMasteryColor({_p}, {_class}) # 13-mastery.sk
+	set {_rating} to round(calcMasteryScore({_p}, {_class}))
+	return "&f%{_p}% &8| %{_color}%%{class-name::%{_class}%}% (%{_rating}%)"
+
+function tabBlock(p: player) :: text: # one player's block of the header/footer table (several lines)
 	set {_u} to {_p}'s uuid
-	set {_perkName} to "&7No Perk"
-	set {_perk} to {general-perk::%{_u}%::selected} # 06-perks-general.sk — the perk effective for the class currently equipped
+	set {_class} to {class::%{_u}%}
+
+	# line 1: name, class + level, lives
+	set {_lvl} to 0
+	set {_cn} to "&7Respawning..."
+	if {_class} is set:
+		set {_lvl} to classLevel({_p}, {_class}) # 04-leveling.sk
+		set {_cn} to "&e%{class-name::%{_class}%}% &7Lv%{_lvl}%"
+	set {_lives} to 0
+	if {lifepool::%{_u}%} is set:
+		set {_lives} to {lifepool::%{_u}%}
+	set {_l1} to "&f&l%{_p}% &8| %{_cn}% &8| &c%{_lives}%❤"
+
+	# line 2: general perk + consumable
+	set {_perk} to {general-perk::%{_u}%::selected} # 06-perks-general.sk
+	set {_perkText} to "&7No Perk"
 	if {_perk} is set:
 		if {gp-display::%{_perk}%} is set:
-			set {_perkName} to name of {gp-display::%{_perk}%}
-	set {_itemName} to "&7No Item"
-	set {_item} to {health-item::%{_u}%::item} # 07-consumables.sk — likewise per-class resolved by classSelect()
-	if {_item} is set:
-		set {_itemName} to name of {_item}
-	set {_class} to {class::%{_u}%}
-	set {_color} to getMasteryColor({_p}, {_class}) # 13-mastery.sk — colour of the player's current rank on this class
-	set {_rating} to round(calcMasteryScore({_p}, {_class})) # the numeric mastery score the rank is based on
-	return "&f%{_p}% &8| %{_color}%%{class-name::%{_class}%}% (%{_rating}%) &8| %{_perkName}% &8| %{_itemName}%"
+			set {_perkText} to "%{tabIcon::perk::%{_perk}%}% %name of {gp-display::%{_perk}%}%"
+	set {_itemText} to "&7No Item"
+	if {health-item::%{_u}%::item} is set: # 07-consumables.sk
+		set {_itemText} to "%{tabIcon::item}% %name of {health-item::%{_u}%::item}%"
+	set {_l2} to "%{_perkText}%   %{_itemText}%"
+
+	# line 3: low-level bosses until anyone has a soul, then the soul
+	if {soulHolder} is set: # 12-major-boss.sk
+		set {_soul} to {soulType::%{_u}%}
+		if {_soul} is set:
+			set {_l3} to "&7Soul: %{tabIcon::soul::%{_soul}%}% %{tabName::soul::%{_soul}%}%"
+		else:
+			set {_l3} to "&7Soul: %{tabNone}%"
+	else:
+		set {_icons} to ""
+		set {_n} to 0
+		loop "evoker", "vindicator" and "pillager":
+			set {_t} to loop-value
+			set {_c} to {lowKills::%{_u}%::%{_t}%}
+			if {_c} is set:
+				set {_k} to 0
+				while {_k} < {_c}:
+					set {_icons} to "%{_icons}% %{tabIcon::boss::%{_t}%}%"
+					add 1 to {_n}
+					add 1 to {_k}
+		while {_n} < 3:
+			set {_icons} to "%{_icons}% %{tabIcon::boss::empty}%"
+			add 1 to {_n}
+		set {_l3} to "&7Low-Level Bosses:%{_icons}%"
+
+	# line 4: high-level boss buff on the current class
+	set {_buff} to hlBuffOf({_p}) # 12-major-boss.sk
+	if {_buff} is "":
+		set {_l4} to "&7Boss Buff: %{tabNone}%"
+	else:
+		set {_l4} to "&7Boss Buff: %{tabIcon::buff::%{_buff}%}% %{tabName::buff::%{_buff}%}%"
+
+	# line 5: other buffs (the Seerhopper's Seer's Eye for now)
+	set {_other} to ""
+	if {frogVision::%{_u}%} is set:
+		set {_left} to floor({frogVision::%{_u}%} - (unix timestamp of now))
+		if {_left} > 0:
+			set {_other} to "%{tabIcon::frogeye}% &6Seer's Eye &7%{_left}%s"
+	if {_other} is "":
+		set {_other} to {tabNone}
+	set {_l5} to "&7Other: %{_other}%"
+
+	return "%{_l1}%%nl%%{_l2}%%nl%%{_l3}%%nl%%{_l4}%%nl%%{_l5}%"
 
 every 1 seconds:
 	loop all players:
-		set {_u} to loop-player's uuid
+		set {_p} to loop-player
+		set {_u} to {_p}'s uuid
 		if {inMatch::%{_u}%} is set:
 			if {class::%{_u}%} is set:
-				set player list name of loop-player to tabListName(loop-player)
-				set {tabCustom::%{_u}%} to true
-		else if {tabCustom::%{_u}%} is set: # match over — back to the normal name
-			set player list name of loop-player to name of loop-player
+				set player list name of {_p} to tabListName({_p})
+			set {_header} to "%nl%%tabBlock({_p})%%nl%"
+			set {_footer} to ""
+			set {_opp} to {matchOpponent::%{_u}%}
+			if {_opp} is set:
+				if {_opp} is online:
+					set {_footer} to "%nl%&8&m                              %nl%%tabBlock({_opp})%%nl%"
+				else:
+					set {_footer} to "%nl%&8%{_opp}% is disconnected%nl%"
+			set player list header of {_p} to {_header}
+			set player list footer of {_p} to {_footer}
+			set {tabCustom::%{_u}%} to true
+		else if {tabCustom::%{_u}%} is set: # match over — back to the normal name, no table
+			set player list name of {_p} to name of {_p}
+			set player list header of {_p} to ""
+			set player list footer of {_p} to ""
 			delete {tabCustom::%{_u}%}
 
 on join:
 	delete {tabCustom::%player's uuid%}
+	set player list header of player to ""
+	set player list footer of player to ""

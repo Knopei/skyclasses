@@ -36,7 +36,7 @@ on right click with golden sword: # TACTICAL
 			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at player
 
-			set {_gd} to 2 + skirmisherTacBonus(player) # Skirmisher category buff (level 2): +0.25
+			set {_gd} to 1.75 + skirmisherTacBonus(player) # base 1.75 (was 2); Skirmisher category buff (level 2): +0.25
 			loop 10 times:
 				add 1 to {_n}
 				set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
@@ -195,23 +195,17 @@ function gdCHECK(a: living entity, v: living entity) :: number: # wrapper - see 
 function gdCHECKWorker(a: living entity, v: living entity): # empowered next-hit after the tactical dash, or a weaker version if the ultimate has already ended
 	if name of {_a}'s held item is "%{wc}%Ghost Dagger":
 		if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
-			if {godlike-ULT-USE::%{_a}'s uuid%::GD} is false:
-				set {_multi} to 0.25
-			else:
+			set {_h} to 2.5 # flat damage: 2.5, +0.5 for every full second spent in the ultimate (max 4.5 at 4+ s); crits add nothing (this is its own hit)
+			if {godlike-ULT-USE::%{_a}'s uuid%::GD} isn't false: # hit during the ultimate -> stays at the 2.5 base
 				set {_time} to difference between now and {godlike-ULT-USE::%{_a}'s uuid%::GD}
 				set {_check} to 80 ticks
-				set {_multi} to 0.25
 				loop 4 times:
 					if {_time} > {_check}:
-						add 0.1 to {_multi}
+						add 0.5 to {_h}
 					remove 20 ticks from {_check}
 
 			delete {godlike-ULT-USE::%{_a}'s uuid%::GD}
 			updateAttacker({_a}, {_v})
-			set {_h} to health of {_v}
-			set {_h} to {_h}*{_multi}
-			if {_h} < 2.5:
-				set {_h} to 2.5
 			set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk — the execute is Ghost's ultimate finishing off whatever hit triggered it
 			damage {_v} by {_h} # this re-enters the normal damage pipeline (on damage of living entity with priority high -> dmgUpdate -> dmgStats) on its own, so no separate dmgStats() call is needed here — the removed manual call was double-counting this hit
 			delete {balance-abilitySource::%{_a}'s uuid%}

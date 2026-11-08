@@ -49,10 +49,15 @@ function teardownArena(): # called by 10-match-manager.sk's endMatch()
 		teleport loop-player to {config::lobby-spawn}
 	clearLeftoverBossMobs()
 
-function clearLeftoverBossMobs(): # kills any mini-boss/major-boss mobs still alive from a previous match, just in case
+function clearLeftoverBossMobs(): # removes any jungle mobs, bosses (and their clones / candles / arrows) or Frog still around — removed, not killed, so no death event (and no reward) fires
 	loop all entities in world {config::arena::world-name}:
-		if loop-entity is a zombie, cave spider, or iron golem: # zombie/cave spider = mini-bosses (Marauder/Crawlers), iron golem = major boss
-			if metadata value "minibossLoc" of loop-entity is set:
-				kill loop-entity
-			else if metadata value "isMajorBoss" of loop-entity is set:
-				kill loop-entity
+		if metadata value "minibossLoc" of loop-entity is set:
+			loop-entity.remove()
+		else if metadata value "isMajorBoss" of loop-entity is set: # 12-major-boss.sk — every boss body
+			loop-entity.remove()
+		else if metadata value "mbClone" of loop-entity is set:
+			loop-entity.remove()
+		else if metadata value "mbProp" of loop-entity is set:
+			loop-entity.remove()
+		else if metadata value "arenaFrog" of loop-entity is set:
+			loop-entity.remove()

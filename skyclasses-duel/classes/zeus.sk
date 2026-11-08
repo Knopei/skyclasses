@@ -202,7 +202,7 @@ function zeusPSS(p: player, length: number): # empowered sweep hit
 								set {_hit} to true
 						if {_hit} is set:
 							updateAttacker({_p}, loop-entity)
-							damage loop-entity by 0.75
+							damage loop-entity by 0.25 # Pitch Fork passive (was 0.75)
 				add 1 to {_height}
 				set {_loc} to location 1 blocks below {_loc}
 

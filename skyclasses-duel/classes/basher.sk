@@ -111,7 +111,7 @@ function bsBashHit(victim: living entity, attacker: player, prevLoc: location):
 	updateAttacker({_attacker}, {_victim})
 	directAttack({_victim})
 	set {balance-abilitySource::%{_attacker}'s uuid%} to "TAC" # 19-balance-stats.sk — dash-bash is Basher's tactical
-	damage {_victim} by 2.25
+	damage {_victim} by 3 # (was 2.25)
 	add potion effect of slowness 2 without particles for 2 seconds to potion effects of {_victim}
 	bsBashSlowFollowup({_victim}) # slowness 2 for 2 seconds, THEN slowness 1 for 2 more (the ult's own slow below is unchanged)
 	delete {balance-abilitySource::%{_attacker}'s uuid%}

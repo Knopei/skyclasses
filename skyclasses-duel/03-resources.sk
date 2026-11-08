@@ -89,10 +89,14 @@ every 5 ticks: # 1 stamina point = 300 internal units, 1 mana point = 10 interna
 	loop all players:
 		if {mana::%loop-player's uuid%::max} > {mana::%loop-player's uuid%::curr}:
 			add 10 to {mana::%loop-player's uuid%::curr}
+			if soulOf(loop-player) is "evoker": # 12-major-boss.sk — Evoker Soul: +10%% mana regeneration
+				add 1 to {mana::%loop-player's uuid%::curr}
 			if {mana::%loop-player's uuid%::curr} > {mana::%loop-player's uuid%::max}:
 				set {mana::%loop-player's uuid%::curr} to {mana::%loop-player's uuid%::max}
 		if {stamina::%loop-player's uuid%::max} > {stamina::%loop-player's uuid%::curr}:
 			add 7.5 to {stamina::%loop-player's uuid%::curr}
+			if soulOf(loop-player) is "vindicator": # 12-major-boss.sk — Vindicator Soul: +20%% stamina regeneration (20%% of the base 7.5)
+				add 1.5 to {stamina::%loop-player's uuid%::curr}
 			if {stamina::%loop-player's uuid%::curr} > {stamina::%loop-player's uuid%::max}: # without this clamp, a tick that also picks up Stamina Recovery's bonus (06-perks-general.sk) can overshoot past max instead of landing exactly on it — which broke that perk's "stamina is completely full" speed check, since curr was never exactly equal to max again after the first refill
 				set {stamina::%loop-player's uuid%::curr} to {stamina::%loop-player's uuid%::max}
 		actionBar(loop-player)

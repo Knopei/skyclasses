@@ -12,17 +12,17 @@
 #   03-resources.sk's staminaCHECK() so it fires no matter which ability
 #   spent the stamina).
 # Perk 1 (level 2) "Lingering Winds": extends the passive's (Airborne)
-#   speed buff from 1.5 seconds to 2 seconds. (Previously "Wind Amplification",
+#   speed buff from 1.25 seconds to 1.5 seconds. (Previously "Wind Amplification",
 #   which sped up Air Burst itself — replaced in this rework.)
 # Perk 2 (level 3) "Category 5": Tornado travels farther.
 # ============================================
 
-function tsAirborne(p: player): # passive (Airborne) — Speed 3 for 1.5 seconds, or 2 seconds with Perk 1 (Lingering Winds). Also flags {tsAirborne::*} for that same duration (currently unused elsewhere, kept for any future perk/effect that wants to check "is Airborne currently active"), and draws the same white/light-gray dust particle as Tornado's ult trail at the player's feet — sparse and inconsistent (a 35% chance each tick, 1 particle at a time) rather than a steady stream, so it reads as a light trailing effect instead of a constant marker
-	set {_duration} to 1.5 seconds
-	set {_ticks} to 30
+function tsAirborne(p: player): # passive (Airborne) — Speed 3 for 1.25 seconds, or 1.5 seconds with Perk 1 (Lingering Winds). Also flags {tsAirborne::*} for that same duration (currently unused elsewhere, kept for any future perk/effect that wants to check "is Airborne currently active"), and draws the same white/light-gray dust particle as Tornado's ult trail at the player's feet — sparse and inconsistent (a 35% chance each tick, 1 particle at a time) rather than a steady stream, so it reads as a light trailing effect instead of a constant marker
+	set {_duration} to 1.25 seconds # (was 1.5)
+	set {_ticks} to 25
 	if classLevel({_p}, "TS") >= 2: # Perk 1 (Lingering Winds)
-		set {_duration} to 2 seconds
-		set {_ticks} to 40
+		set {_duration} to 1.5 seconds # Lingering Winds (was 2)
+		set {_ticks} to 30
 	add potion effect of speed 3 without particles for {_duration} to potion effects of {_p}
 	set {tsAirborne::%{_p}'s uuid%} to true
 	loop {_ticks} times:

@@ -269,9 +269,9 @@ on damage of living entity: # Malicious Dart hit effect — the damage itself (w
 
 function cbCalcCooldownULT(p: player) :: timespan: # per-charge recharge time (Spell Caster doesn't apply — its cooldown cut only affects ultimates with a 50+ second cooldown)
 	if classLevel({_p}, "CB") >= 3: # Perk 2 (Overclock)
-		return {perk-var::CB::overclock}
+		return cbSoulCut({_p}, {perk-var::CB::overclock}) # Raid Soul: -1 second
 	else:
-		return {weapons::CB::ULT-CD}
+		return cbSoulCut({_p}, {weapons::CB::ULT-CD})
 
 function cbULT(p: player, id: string): # background charge-recharge loop — see file header note
 	set {_uuid} to {_p}'s uuid
@@ -328,3 +328,8 @@ on damage of player with priority low: # suffocation mitigate — phasing into a
 		set {_cause} to "%event-damagecause%"
 		if {_cause} = "suffocation":
 			cancel event
+
+function cbSoulCut(p: player, base: timespan) :: timespan: # Raid Soul (12-major-boss.sk) on Cyberpunk: a flat 1 second off each charge's recharge (instead of the 10%% other classes get)
+	if soulOf({_p}) is "mixed":
+		return {_base} - 1 second
+	return {_base}

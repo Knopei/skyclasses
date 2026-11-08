@@ -31,6 +31,11 @@ on death of player: # ----------------------------------------------------------
 	set {_attacker} to metadata value "attacker" of victim
 	set {_vClass} to {class::%victim's uuid%}
 	set {_aClass} to {class::%{_attacker}'s uuid%}
+	set {_oppOfVictim} to {matchOpponent::%victim's uuid%}
+	if {_oppOfVictim} is set: # FIX: a player who dies can't later be credited with a kill for hits from that old life — e.g. the opponent falling into the
+		if metadata value "attacker" of {_oppOfVictim} is victim: # void after this player has respawned. Only a hit landed in the new life counts.
+			delete metadata value "attacker" of {_oppOfVictim}
+	delete {hlBuff::%victim's uuid%::%{_vClass}%} # 12-major-boss.sk — a class that dies loses its high-level boss buff (maxHealth() below then drops Doomhoof's extra heart)
 
 	if {godlike-ULT-USE::%victim's uuid%::%{_vClass}%} is set: # their ultimate is currently active — flag it to stop immediately rather than continuing to run/deal damage after death. Checked inside each class's own ultimate loop (mighty.sk already had its own version of this; this generalizes it to every class).
 		set {godlike-ULT-CANCEL::%victim's uuid%::%{_vClass}%} to true
@@ -72,17 +77,26 @@ on death of player: # ----------------------------------------------------------
 			add 1 to {matchkills::%{_attacker}'s uuid%::%{_aClass}%}
 			recordPvpKill({_attacker}, {_aClass}, {_vClass}) # 19-balance-stats.sk — matchup win rate, time-to-first-kill, perk/consumable K/D (this function itself no-ops during a test duel)
 
-			addClassKill({_attacker}, {_aClass}, {config::pvpkill::xp-reward}) # 04-leveling.sk — XP toward the killer's active class
+			set {_bonus} to catchupXP({_attacker}, {config::pvpkill::xp-reward}) # 04-leveling.sk — XP catch-up: +1 per 10 total XP behind the opponent (worked out before this kill's XP is added)
+			addClassKill({_attacker}, {_aClass}, {config::pvpkill::xp-reward} + {_bonus}) # 04-leveling.sk — XP toward the killer's active class
 			giveKillReward({_attacker}) # 07-consumables.sk — golden apple + selected consumable
 
+			set {_killMsg} to "&6%{_attacker}% &c%health of {_attacker}%❤ &e, defeated &6%victim%!"
 			if {firstBloodClaimed} isn't set: # 10-match-manager.sk resets this at match start
 				set {firstBloodClaimed} to true
 				if {testMatch} isn't set:
 					add 1 to {firstbloods::%{_attacker}'s uuid%}
 					add 1 to {class-firstbloods::%{_attacker}'s uuid%::%{_aClass}%}
-				broadcast "&c&lFIRST BLOOD! &6%{_attacker}%"
+				set {_killMsg} to "&c&lFIRST BLOOD! %{_killMsg}%" # first blood leads the kill message itself, for everyone
 
-			broadcast "&6%{_attacker}% &c%health of {_attacker}%❤ &e, defeated &6%victim%!"
+			loop all players: # the killer alone also sees any catch-up XP on the end of it
+				if loop-player is {_attacker}:
+					if {_bonus} > 0:
+						send "%{_killMsg}% &b(+%{_bonus}% catch-up XP)" to loop-player
+					else:
+						send {_killMsg} to loop-player
+				else:
+					send {_killMsg} to loop-player
 			make 50 of block particle using redstone block at block 1.5 above location of victim
 			play sound "BLOCK_STONE_BREAK" at volume 5 at pitch 1 to {_attacker}
 
@@ -221,11 +235,14 @@ function handleRespawnFlow(p: player):
 		stop
 
 	teleport {_p} to {playerSpawn::%{_uuid}%}
+	delete metadata value "attacker" of {_p} # a new life starts with no attacker: dying to the void or a jungle mob before the opponent has hit them gives the opponent no kill (anything an ability tagged while they were respawning is wiped here)
 	set {spawn-protection::%{_uuid}%} to true
 	set {pendingClassSelect::%{_uuid}%} to {_class} # picked up by the watcher below on a fresh, untainted execution — classSelect() (and updateMatchSidebar(), which it also triggers) internally call functions with "return", and calling them directly here risks the same class of bug this whole function already worked around once
 
 	wait 2 seconds
 	delete {spawn-protection::%{_uuid}%}
+	if {respawning::%{_uuid}%} isn't set:
+		delete metadata value "attacker" of {_p} # same again once spawn protection ends — nothing can have hit them during it, but an opponent's swing or area ability could still have tagged them
 
 every 5 ticks: # fires as its own fresh, non-delayed execution each time — safe to call classSelect()/updateMatchSidebar() (and anything else with a "return") from here
 	loop all players:

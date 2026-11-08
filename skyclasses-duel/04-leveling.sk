@@ -40,6 +40,37 @@ function nextLevelThreshold(level: number) :: number: # returns 0 if already max
 	else:
 		return 0
 
+# ---- XP CATCH-UP ----
+# A player behind in total XP (all 3 loadout classes added together) gets +1 XP per full 10 XP they trail their opponent by, on top of
+# a player kill or a boss kill (e.g. 100 vs 110 total: a 10 XP kill is worth 11, a 20 XP high-level boss 21). Never reduces anything.
+# Each class counts at most up to the level 3 threshold (110) — XP past max level adds no power, so it doesn't widen the gap.
+# The bonus is capped at +50%% of the base reward (+5 on a 10 XP kill / low-level boss, +10 on a 20 XP high-level boss).
+
+function totalClassXP(p: player) :: number: # all 3 loadout classes' XP added together, each capped at the max-level threshold
+	set {_t} to 0
+	loop integers between 1 and 3:
+		set {_c} to {loadout::%{_p}'s uuid%::%loop-value%}
+		if {_c} is set:
+			if {classxp::%{_p}'s uuid%::%{_c}%::kills} is set:
+				set {_x} to {classxp::%{_p}'s uuid%::%{_c}%::kills}
+				if {_x} > {config::xp-threshold::3}:
+					set {_x} to {config::xp-threshold::3}
+				add {_x} to {_t}
+	return {_t}
+
+function catchupXP(p: player, base: number) :: number: # bonus XP for {_p} on a reward worth {_base} (0 if not behind)
+	set {_opp} to {matchOpponent::%{_p}'s uuid%}
+	if {_opp} isn't set:
+		return 0
+	set {_gap} to totalClassXP({_opp}) - totalClassXP({_p})
+	if {_gap} < 10:
+		return 0
+	set {_bonus} to floor({_gap} / 10)
+	set {_cap} to floor({_base} * 0.5) # never more than +50%% of the base
+	if {_bonus} > {_cap}:
+		set {_bonus} to {_cap}
+	return {_bonus}
+
 # ---- GAINING XP (call this from 09-death-match.sk whenever a player gets a kill) ----
 
 function addClassKill(p: player, class: text, amount: number):
@@ -88,7 +119,7 @@ function resetPlayerLeveling(p: player): # called by 09-death-match.sk / match-m
 
 # ---- MAX HEALTH (class-level-based bonuses + the general perk of the same theme) ----
 
-function maxHealth(p: player):
+function maxHealth(p: player, heal: boolean = true): # heal = false recalculates without the top-up heal (12-major-boss.sk's Doomhoof buff coming/going)
 	set {_uuid} to {_p}'s uuid
 	set {_class} to {class::%{_uuid}%}
 	set {_health} to 0
@@ -102,9 +133,12 @@ function maxHealth(p: player):
 	if {general-perk::%{_uuid}%::selected} is "healthyboy": # general perk pool's "Healthy Boy" — extra heart
 		add 1 to {_health}
 	set {_max} to 9 + {_health}
+	if hlBuffOf({_p}) is "doomhoof": # 12-major-boss.sk — Doomhoof's Vigor: +1 max health (not part of the top-up heal below)
+		add 1 to {_max}
 	set max health of {_p} to {_max}
 	set {maxHealth::%{_uuid}%} to {_max}
-	heal {_p} by {_health}
+	if {_heal} is true:
+		heal {_p} by {_health}
 
 # ---- DEATH COOLDOWN (per-class swap lockout) ----
 # Formula: base + (class level * per-level) + (major bosses claimed * per-objective), capped at max.

@@ -299,6 +299,10 @@ function nadeCount(p: player, id: string):
 		set {_cd} to 30 seconds # "More Explosions!" faster-recharge perk removed — Mighty's level 2 perk slot is now Grenade Protection (damage reduction, gated below in grenadeExplosion())
 		if {general-perk::%{_p}'s uuid%::selected} is "quickfuse": # general perk Quick Fuse: grenades recharge 50% faster (30s -> 15s)
 			set {_cd} to 15 seconds
+			if soulOf({_p}) is "pillager": # 12-major-boss.sk — Pillager Soul with Quick Fuse: 5 s more off (10 s)
+				set {_cd} to 10 seconds
+		else if soulOf({_p}) is "pillager": # Pillager Soul: grenades recharge 50% faster (30s -> 15s)
+			set {_cd} to 15 seconds
 		wait {_cd}
 
 function grenadeExplosion(e: entity, radius: number):

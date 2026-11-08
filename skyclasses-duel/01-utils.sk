@@ -328,8 +328,9 @@ function mobActivate(m: living entity, attacker: living entity): # called when o
 function mobDeactivate(m: living entity): # called on spawn, and again whenever the mob is pulled back by its leash
 	{_m}.setAware(false)
 	{_m}.setTarget(null)
+	mbStopMoving({_m}) # 12-major-boss.sk — FIX: a leashed-back jungle mob kept walking forward (paused AI keeps its last walking input; same fix as the bosses)
 
-on damage of a zombie, cave spider, or iron golem with priority high: # activates any of our tagged mobs the moment a player lands the first hit — priority high ensures 08-damage.sk's normal-priority melee attacker-tracking has already run (Skript priority order: lowest -> low -> normal -> high -> highest -> monitor)
+on damage of a zombie, zombie villager, cave spider, or iron golem with priority high: # activates any of our tagged mobs the moment a player lands the first hit — priority high ensures 08-damage.sk's normal-priority melee attacker-tracking has already run (Skript priority order: lowest -> low -> normal -> high -> highest -> monitor)
 	set {_attacker} to metadata value "attacker" of victim # set by updateAttacker() — works for melee (08-damage.sk tracks it there), abilities, and grenades alike, unlike the native "attacker" value which only populates for direct melee hits
 	if {_attacker} is a player:
 		if metadata value "minibossLoc" of victim is set:
@@ -381,3 +382,18 @@ function bossLeashCheck(boss: living entity, spawnloc: location, radius: number,
 
 			play sound "ENTITY_ENDERMAN_TELEPORT" at volume 3 and pitch 0.5 at {_spawnloc}
 			draw 20 of portal at {_spawnloc} with extra 0.3
+
+# ---- STALE BOSSBAR CLEANUP ----
+# Every bossbar made with an id ("boss bar with id ...": the boss health bar, combat bars, death-cooldown bars, draft bars) is a saved
+# "keyed" bossbar — the server remembers who was watching it, even across a restart. So a player who logged out (or was on when the
+# server stopped) mid-match could see an old bar again on joining. This takes the player off EVERY keyed bossbar. Called on join
+# (when not in a match) and for both players when a match ends (10-match-manager.sk).
+
+import:
+	org.bukkit.Bukkit
+
+function clearPlayerBossBars(p: player):
+	set {_it} to Bukkit.getBossBars()
+	while {_it}.hasNext() is true:
+		set {_bar} to {_it}.next()
+		{_bar}.removePlayer({_p})

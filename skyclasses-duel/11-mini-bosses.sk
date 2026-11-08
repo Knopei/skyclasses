@@ -6,8 +6,8 @@
 # active class + 1 toward Jungle Mobs Slain.
 #
 # Two mob types, one per pair of locations (mirrored across the map):
-#   - Locations 1 & 2: "Marauder" - a single buffed, armored zombie (the
-#     helmet stops it burning in daylight) with 2 telegraphed, dodgeable
+#   - Locations 1 & 2: "Marauder" - a single buffed, armored adult zombie
+#     villager (the helmet stops it burning in daylight) with 2 telegraphed, dodgeable
 #     AOE special attacks. Worth more XP per kill (solo target).
 #   - Locations 3 & 4: "Crawlers" - a pack of 3 cave spiders; each individual
 #     kill grants its own (smaller) reward.
@@ -75,19 +75,31 @@ function spawnMiniBoss(loc: number):
 	set {_type} to {minibosstype::%{_loc}%}
 	# Duplicate guard: the tracking list can lose a mob that is still alive (e.g. it was in an unloaded chunk when the watchdog checked it, so it counted as "not alive" and was dropped, then the camp respawned a second pack on top of it = 6 crawlers). So before spawning, remove EVERY mob still tagged for this camp, straight from the world. "delete" removes without firing a death event, so nobody gets kill XP for it.
 	loop all entities in world {config::arena::world-name}:
-		if loop-entity is a zombie or cave spider:
+		if loop-entity is a zombie, zombie villager or cave spider:
 			if metadata value "minibossLoc" of loop-entity is {_loc}:
 				delete loop-entity
 	delete {minibossmobs::%{_loc}%::*}
 
 	if {_type} is "individual":
-		spawn 1 zombie at {_spawnloc}
-		set {_mob} to last spawned zombie
-		make {_mob} an adult # zombies can otherwise spawn as a baby (faster, smaller hitbox) — the Marauder is always meant to be the full-size adult
+		spawn 1 zombie villager at {_spawnloc}
+		set {_mob} to last spawned zombie villager
+		make {_mob} an adult # zombie villagers can otherwise spawn as a baby (faster, smaller hitbox) — the Marauder is always meant to be the full-size adult
+		# FIX "doesn't take the right damage": a spawned zombie(-villager) rolls vanilla's random zombie bonuses — sometimes a "leader" max
+		# health bonus, random armor/weapons from the difficulty — and has 2 natural armor points; the old chainmail helmet added 2 more.
+		# Armor cuts every hit. All of that is stripped here: no equipment, no attribute bonuses, 0 armor. (Daylight burning, which the
+		# helmet used to stop, is cancelled by the combust hook below instead.)
+		{_mob}.getEquipment().clear()
+		set {_hpAttr} to {_mob}.getAttribute(Attribute.MAX_HEALTH)
+		loop ...{_hpAttr}.getModifiers(): # "..." (skript-reflect) turns the Java collection into a loopable list
+			{_hpAttr}.removeModifier(loop-value)
+		set {_armorAttr} to {_mob}.getAttribute(Attribute.ARMOR)
+		loop ...{_armorAttr}.getModifiers():
+			{_armorAttr}.removeModifier(loop-value)
+		{_mob}.getAttribute(Attribute.ARMOR).setBaseValue(0.0)
+		{_mob}.getAttribute(Attribute.SPAWN_REINFORCEMENTS).setBaseValue(0.0) # never calls in extra zombies
 		set max health of {_mob} to {config::miniboss::individual::max-health} # 00-config.sk
 		set health of {_mob} to {config::miniboss::individual::max-health}
 		updateMobHealthName({_mob}, "Marauder")
-		set helmet of {_mob} to unbreakable chainmail helmet of unbreaking 1 # prevents burning in daylight — the item is "chainmail helmet", not "chain helmet"; "unbreakable" alone also doesn't parse as a valid item type in this codebase (every other "unbreakable X" item pairs it with "of unbreaking N", per 02-class-data.sk etc.)
 		add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
 		set metadata value "minibossLoc" of {_mob} to {_loc}
 		{_mob}.setRemoveWhenFarAway(false) # never naturally despawns when no player is near
@@ -108,7 +120,7 @@ function spawnMiniBoss(loc: number):
 			set max health of {_mob} to {config::miniboss::pack::max-health} # 00-config.sk
 			set health of {_mob} to {config::miniboss::pack::max-health}
 			updateMobHealthName({_mob}, "Crawler")
-			add potion effect of slowness {config::mob::move-slowness-level} without particles for 999999 seconds to potion effects of {_mob}
+			add potion effect of slowness 1 without particles for 999999 seconds to potion effects of {_mob} # Crawlers: Slowness I (the other jungle mobs use {config::mob::move-slowness-level})
 			set metadata value "minibossLoc" of {_mob} to {_loc}
 			{_mob}.setRemoveWhenFarAway(false) # never naturally despawns when no player is near
 			mobDeactivate({_mob}) # 01-utils.sk
@@ -123,13 +135,31 @@ function miniBossLeashLoop(loc: number, spawnloc: location):
 				bossLeashCheck(loop-value, {_spawnloc}, {config::miniboss::leash-radius}, {config::miniboss::leash-heal-percent}) # 01-utils.sk
 		wait 2 seconds
 
-on damage of a zombie or cave spider: # refreshes the live-health display name after every hit
+on damage of a zombie villager or cave spider: # refreshes the live-health display name after every hit
 	if metadata value "minibossLoc" of victim is set:
 		set {_name} to "Marauder"
 		if victim is a cave spider:
 			set {_name} to "Crawler"
 		wait 1 tick # health isn't actually applied yet at the moment this event fires
 		updateMobHealthName(victim, {_name})
+
+# ---- CRAWLER FIRST-HIT GRACE ----
+# The very first time a player hits a Crawler, that Crawler can't deal any damage for a quarter of a second (so waking one up never trades
+# instantly). Once per Crawler — later hits, and waking it up again after a leash, don't restart it.
+on damage of a cave spider with priority high:
+	if metadata value "minibossLoc" of victim is set:
+		if metadata value "crawlerGraceUsed" of victim isn't set:
+			if metadata value "attacker" of victim is a player:
+				set metadata value "crawlerGraceUsed" of victim to true
+				set metadata value "crawlerGraceUntil" of victim to (unix timestamp of now) + 0.25
+
+on damage of player with priority low: # a Crawler still in its grace window deals nothing (its bite's poison never lands either)
+	if attacker is a cave spider:
+		if metadata value "minibossLoc" of attacker is set:
+			set {_until} to metadata value "crawlerGraceUntil" of attacker
+			if {_until} is set:
+				if (unix timestamp of now) < {_until}:
+					cancel event
 
 # ---- MARAUDER SPECIAL ATTACKS (telegraphed, dodgeable) ----
 
@@ -150,10 +180,10 @@ function miniBossAttackLoop(mob: living entity):
 function miniBossGroundSlam(mob: living entity): # telegraph, then AOE damage centered on the boss
 	set {_loc} to location of {_mob}
 	play sound "ENTITY_RAVAGER_ROAR" at volume 3 and pitch 0.8 at {_loc}
-	set {_shapes::circle} to a circle with radius 3
-	set particle of {_shapes::*} to 1 of dust particle using dustOption(red, 1)
-	loop 30 times: # 1.5 second telegraph
-		draw shapes {_shapes::*} at {_loc}
+	set {_i} to 0
+	while {_i} < 30: # 1.5 second telegraph, gray -> red like the bosses' (12-major-boss.sk's mbDrawRing)
+		add 1 to {_i}
+		mbDrawRing({_loc}, 3, {_i} / 30)
 		wait 1 tick
 	if {_mob} is alive:
 		play sound "ENTITY_GENERIC_EXPLODE" at volume 2 and pitch 0.7 at {_loc}
@@ -168,11 +198,13 @@ function miniBossPoisonCloud(mob: living entity): # telegraph on a target's loca
 	if {_target} is set:
 		set {_loc} to location of {_target}
 		play sound "ENTITY_WITCH_CELEBRATE" at volume 2 and pitch 0.6 at {_loc}
+		set {_i} to 0
+		while {_i} < 30: # 1.5 second telegraph, gray -> red like the bosses' (12-major-boss.sk's mbDrawRing); the ring turns green below as the cloud lands
+			add 1 to {_i}
+			mbDrawRing({_loc}, 2.5, {_i} / 30)
+			wait 1 tick
 		set {_shapes::circle} to a circle with radius 2.5
 		set particle of {_shapes::*} to 1 of dust particle using dustOption(green, 1)
-		loop 30 times: # 1.5 second telegraph
-			draw shapes {_shapes::*} at {_loc}
-			wait 1 tick
 		loop 5 times: # 2.5 seconds of lingering poison/slow — no direct damage, the poison tick is the only damage source
 			loop all players in radius 2.5 around {_loc}:
 				add potion effect of poison 2 for 4 seconds to potion effects of loop-player
@@ -182,7 +214,7 @@ function miniBossPoisonCloud(mob: living entity): # telegraph on a target's loca
 
 # ---- DEATH / REWARD ----
 
-on death of a zombie or cave spider:
+on death of a zombie villager or cave spider:
 	if metadata value "minibossLoc" of victim is set:
 		set {_loc} to metadata value "minibossLoc" of victim
 		set {_type} to {minibosstype::%{_loc}%}
@@ -199,6 +231,20 @@ on death of a zombie or cave spider:
 					set {_name} to "Crawler"
 					set {_xp} to {config::miniboss::pack::xp-reward}
 				addClassKill({_killer}, {_class}, {_xp}) # 04-leveling.sk
+				if {soulHolder} is set: # 12-major-boss.sk — once a soul is claimed, clearing camps heals: a Marauder 25%%, a whole Crawler pack 20%% (on the last one)
+					set {_healPct} to 0
+					if {_type} is "individual":
+						set {_healPct} to 25
+					else:
+						set {_left} to 0
+						loop {minibossmobs::%{_loc}%::*}:
+							if loop-value is alive:
+								add 1 to {_left}
+						if {_left} = 0:
+							set {_healPct} to 20
+					if {_healPct} > 0:
+						heal {_killer} by ((max health of {_killer}) * {_healPct} / 100)
+						send "&a+%{_healPct}%%% health &7(camp cleared)" to {_killer}
 				if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
 					add 1 to {jungleslain::%{_killer}'s uuid%}
 					add 1 to {class-jungleslain::%{_killer}'s uuid%::%{_class}%}
@@ -272,4 +318,18 @@ on damage of an armor stand: # extra safety net beyond the Marker NBT flag — g
 on projectile hit: # stops arrows/tridents from registering a hit on the hologram and being consumed by it
 	if victim is an armor stand:
 		if metadata value "respawnHolo" of victim is set:
+			cancel event
+
+on right click on a zombie villager: # the Marauder can never be cured into a villager (golden apple + weakness)
+	if metadata value "minibossLoc" of event-entity is set:
+		cancel event
+
+import:
+	org.bukkit.attribute.Attribute
+	org.bukkit.event.entity.EntityCombustEvent
+
+on EntityCombustEvent: # the Marauder never burns in daylight (it no longer wears a helmet — see spawnMiniBoss()). Only plain sunlight is
+	# cancelled: being set on fire by a player's ability or a fire block is a subclass of this event (ByEntity / ByBlock) and still works.
+	if event.getClass().getSimpleName() is "EntityCombustEvent":
+		if metadata value "minibossLoc" of event.getEntity() is set:
 			cancel event
