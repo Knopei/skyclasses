@@ -1,0 +1,158 @@
+# ============================================
+# GAME SETTINGS — /gamesettings (/gs), or the Game Settings icon on the /class page
+# Inventory Layout: each player picks which hotbar slot (1-9) their weapon, golden apples, consumable and grenades go into. Saved per
+# account (not per class), used for every class, every match. Can't be opened during a match.
+#   - respawn / class select: everything is handed out into its slot, and the player is left holding their weapon slot (05-class-menu.sk)
+#   - kill rewards and grenade recharges also go to their slot (07-consumables.sk); if that slot already holds something else, the item is
+#     simply added to the inventory wherever it fits
+#   - golden apples as the selected consumable all go in the golden apple slot; mana / stamina potions count as the "consumable"
+#   - picking a slot another item uses SWAPS the two
+# Stored as {invslot::<uuid>::<kind>} = hotbar index 0-8; kinds: weapon, apple, consumable, grenade. Defaults 0, 1, 2, 3 (today's order).
+# ============================================
+
+import:
+	java.lang.Integer
+
+on load:
+	set {invKinds::*} to "weapon", "apple", "consumable" and "grenade"
+	set {invKindName::weapon} to "&e&lWeapon"
+	set {invKindName::apple} to "&6&lGolden Apple"
+	set {invKindName::consumable} to "&c&lConsumable"
+	set {invKindName::grenade} to "&2&lGrenade"
+	set {invDefault::weapon} to 0
+	set {invDefault::apple} to 1
+	set {invDefault::consumable} to 2
+	set {invDefault::grenade} to 3
+	set {invIcon::weapon} to iron sword # shared by the main page and the slot picker
+	set {invIcon::apple} to golden apple
+	set {invIcon::consumable} to potion of healing
+	set {invIcon::grenade} to fire charge
+
+function invSlot(p: player, kind: text) :: number: # this player's hotbar index (0-8) for a kind of item
+	if {invslot::%{_p}'s uuid%::%{_kind}%} is set:
+		return {invslot::%{_p}'s uuid%::%{_kind}%}
+	return {invDefault::%{_kind}%}
+
+function invKindOfName(name: text) :: text: # which kind an item belongs to, from its name (golden apple / grenade / any other consumable)
+	if {_name} is name of {health-item::GA}:
+		return "apple"
+	if {_name} is "&6Grenade":
+		return "grenade"
+	return "consumable"
+
+function giveToSlot(p: player, item: item, kind: text): # puts the item into the player's chosen slot for that kind: an empty slot gets it, a slot already holding the same item stacks it, anything else -> normal give
+	set {_s} to invSlot({_p}, {_kind})
+	set {_cur} to slot {_s} of {_p}'s inventory
+	if {_cur} is air:
+		set slot {_s} of {_p}'s inventory to {_item}
+	else if name of {_cur} is name of {_item}:
+		set {_n} to (item amount of {_cur}) + (item amount of {_item})
+		set slot {_s} of {_p}'s inventory to {_n} of {_item}
+	else:
+		give {_p} {_item}
+
+function holdWeaponSlot(p: player): # respawn: the player starts holding their weapon slot
+	set {_s} to invSlot({_p}, "weapon")
+	{_p}.getInventory().setHeldItemSlot(Integer.parseInt("%{_s}%"))
+
+# ---- MENUS ----
+
+command /gamesettings:
+	aliases: gs
+	description: Game settings (inventory layout)
+	trigger:
+		openGameSettings(player)
+
+function openGameSettings(p: player):
+	if {inMatch::%{_p}'s uuid%} is set:
+		send "&cYou can't change game settings during a match." to {_p}
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		stop
+	set metadata tag "game settings" of {_p} to chest inventory with 5 rows named "Game Settings — Inventory Layout"
+	set slot (integers between 0 and 44) of metadata tag "game settings" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "game settings" of {_p} to black stained glass pane named " " # top row
+	set slot (integers between 36 and 44) of metadata tag "game settings" of {_p} to black stained glass pane named " " # bottom row (buttons)
+	set {_slots::weapon} to 19
+	set {_slots::apple} to 21
+	set {_slots::consumable} to 23
+	set {_slots::grenade} to 25
+	loop {invKinds::*}:
+		set {_k} to loop-value
+		set {_n} to invSlot({_p}, {_k}) + 1
+		set {_lore::*} to "" and "&7Hotbar slot: &e%{_n}%" and "" and "&7[CLICK] Choose a slot" and ""
+		if {_k} is "consumable":
+			set {_lore::*} to "" and "&7Hotbar slot: &e%{_n}%" and "" and "&8&oYour selected consumable (health item," and "&8&omana or stamina potion). Golden apples" and "&8&oalways go in the Golden Apple slot." and "" and "&7[CLICK] Choose a slot" and ""
+		set slot {_slots::%{_k}%} of metadata tag "game settings" of {_p} to ({invIcon::%{_k}%} named {invKindName::%{_k}%} with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 36 of metadata tag "game settings" of {_p} to {class-bottom::back} # 05-class-menu.sk — back to the /class page
+	set slot 40 of metadata tag "game settings" of {_p} to (barrier named "&c&lReset to Default" with lore "" and "&7Weapon 1, Golden Apple 2," and "&7Consumable 3, Grenade 4" and "") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	open (metadata tag "game settings" of {_p}) to {_p}
+
+function openSlotPicker(p: player, kind: text): # one row of 9 buttons = the 9 hotbar slots
+	set {gsEdit::%{_p}'s uuid%} to {_kind}
+	set metadata tag "slot picker" of {_p} to chest inventory with 4 rows named "Choose a slot: %uncolored {invKindName::%{_kind}%}%"
+	set slot (integers between 0 and 35) of metadata tag "slot picker" of {_p} to black stained glass pane named " "
+	set slot (integers between 18 and 26) of metadata tag "slot picker" of {_p} to gray stained glass pane named " " # the added row
+	set {_mine} to invSlot({_p}, {_kind})
+	loop integers between 0 and 8:
+		set {_i} to loop-value
+		set {_n} to {_i} + 1
+		set {_owner} to ""
+		loop {invKinds::*}:
+			if invSlot({_p}, loop-value-2) = {_i}:
+				set {_owner} to loop-value-2
+		if {_i} = {_mine}:
+			set {_btn} to ({invIcon::%{_kind}%} named "&a&lSlot %{_n}%" with lore "" and "&aCurrent slot" and "") # the same icon as on the main page
+		else if {_owner} is not "":
+			set {_btn} to (barrier named "&c&lSlot %{_n}% &7— %{invKindName::%{_owner}%}%" with lore "" and "&7[CLICK] Swap: %uncolored {invKindName::%{_kind}%}% goes here," and "&7%uncolored {invKindName::%{_owner}%}% moves to slot %{_mine} + 1%" and "")
+		else:
+			set {_btn} to (pale oak button named "&f&lSlot %{_n}%" with lore "" and "&7[CLICK] Move here" and "")
+		set slot (9 + {_i}) of metadata tag "slot picker" of {_p} to {_btn} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 31 of metadata tag "slot picker" of {_p} to {class-bottom::back}
+	open (metadata tag "slot picker" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "game settings" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		set {_k} to ""
+		if {_slot} is 19:
+			set {_k} to "weapon"
+		else if {_slot} is 21:
+			set {_k} to "apple"
+		else if {_slot} is 23:
+			set {_k} to "consumable"
+		else if {_slot} is 25:
+			set {_k} to "grenade"
+		if {_k} is not "":
+			openSlotPicker(player, {_k})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {_slot} is 36:
+			openClassBrowser(player) # 18-class-browser.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {_slot} is 40:
+			delete {invslot::%player's uuid%::*}
+			send "&aInventory layout reset to default." to player
+			openGameSettings(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "slot picker" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		set {_k} to {gsEdit::%player's uuid%}
+		if {_slot} is 31:
+			openGameSettings(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {_k} is set:
+			if {_slot} >= 9:
+				if {_slot} <= 17:
+					set {_target} to {_slot} - 9
+					set {_old} to invSlot(player, {_k})
+					if {_target} is not {_old}:
+						loop {invKinds::*}: # whoever has the target slot swaps into this kind's old slot
+							if loop-value is not {_k}:
+								if invSlot(player, loop-value) = {_target}:
+									set {invslot::%player's uuid%::%loop-value%} to {_old}
+						loop {invKinds::*}: # store all four, so later default changes never shift a saved layout
+							set {invslot::%player's uuid%::%loop-value%} to invSlot(player, loop-value)
+						set {invslot::%player's uuid%::%{_k}%} to {_target}
+						play sound "BLOCK_NOTE_BLOCK_PLING" at volume 1 at pitch 1.5 to player
+					openSlotPicker(player, {_k})

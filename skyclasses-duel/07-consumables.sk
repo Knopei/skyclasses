@@ -129,26 +129,26 @@ function classHeals(p: player): # called on respawn and on class-select
 		loop {_p}'s inventory:
 			if name of loop-value-2 is {_name}:
 				remove loop-value-2 from inventory of {_p}
-	give {_p} 1 of {health-item::GA} # baseline for everyone (was 2)
+	giveToSlot({_p}, 1 of {health-item::GA}, "apple") # baseline for everyone (was 2) — into the player's chosen slots (23-game-settings.sk)
 	if name of {health-item::%{_p}'s uuid%::item} is name of {health-item::GA}:
-		give {_p} 2 of {health-item::GA} # golden apple as the selected consumable is worth +2 apples on top of the baseline (3 total)
+		giveToSlot({_p}, 2 of {health-item::GA}, "apple") # golden apple as the selected consumable is worth +2 apples on top of the baseline (3 total) — all in the golden apple slot
 	else:
-		give {_p} 1 of {health-item::%{_p}'s uuid%::item} # the player's selected consumable, additional on top
+		giveToSlot({_p}, 1 of {health-item::%{_p}'s uuid%::item}, "consumable") # the player's selected consumable, additional on top
 	stackItem({_p}, "all")
 
 function giveKillReward(p: player): # called from 09-death-match.sk when {_p} gets a kill
-	give {_p} 1 of {health-item::GA} # baseline — always given on every kill regardless of inventory, separate from the "no duplicate consumables" rule below
+	giveToSlot({_p}, 1 of {health-item::GA}, "apple") # baseline — always given on every kill regardless of inventory, separate from the "no duplicate consumables" rule below
 	set {_selected} to {health-item::%{_p}'s uuid%::item}
 	set {_selectedName} to name of {_selected}
 	if {_selectedName} is name of {health-item::GA}: # selected consumable is also golden apple — worth +2 apples on top of the baseline 1, unconditionally, so a kill nets 3 total
-		give {_p} 2 of {health-item::GA}
+		giveToSlot({_p}, 2 of {health-item::GA}, "apple")
 	else:
 		set {_hasSelected} to false
 		loop {_p}'s inventory:
 			if name of loop-value is {_selectedName}:
 				set {_hasSelected} to true
 		if {_hasSelected} is false:
-			give {_p} 1 of {_selected}
+			giveToSlot({_p}, 1 of {_selected}, "consumable")
 	stackItem({_p}, "all")
 
 function enchantedConsumablesCheck(p: player): # 06-perks-general.sk — Enchanted Consumables: every one of the 7 consumables below calls this right after recordConsumableUse(), so the bonus applies uniformly whether or not that item already heals on its own
@@ -272,12 +272,15 @@ function stackItem(p: player, name: string):
 				set {_amount} to item amount of slot {_i} of {_p}'s inventory
 				add {_amount} to {_total}
 		if size of {_slotList::*} > 1:
-			set {_itemToStack} to 1 of (slot {_slotList::1} of {_p}'s inventory)
-			set slot {_slotList::1} of {_p}'s inventory to {_total} of {_itemToStack}
-			set {_n} to 2
-			loop (size of {_slotList::*}) times:
-				set slot {_slotList::%{_n}%} of {_p}'s inventory to air
-				add 1 to {_n}
+			set {_target} to {_slotList::1}
+			set {_pref} to invSlot({_p}, invKindOfName({_name})) # 23-game-settings.sk — merge into the player's chosen slot when it holds one of the stacks
+			if {_slotList::*} contains {_pref}:
+				set {_target} to {_pref}
+			set {_itemToStack} to 1 of (slot {_target} of {_p}'s inventory)
+			loop {_slotList::*}:
+				if loop-value is not {_target}:
+					set slot loop-value of {_p}'s inventory to air
+			set slot {_target} of {_p}'s inventory to {_total} of {_itemToStack}
 
 command /stack:
 	trigger:
@@ -294,7 +297,7 @@ function nadeCount(p: player, id: string):
 			if {respawning::%{_p}'s uuid%} isn't set: # don't give items while dead/choosing a respawn class
 				if {inMatch::%{_p}'s uuid%} is set: # extra guard right at the give itself, on top of the loop-exit check above
 					add 1 to {nadeCount::%{_p}'s uuid%}
-					give {_p} 1 of {nade::grenade}
+					giveToSlot({_p}, 1 of {nade::grenade}, "grenade") # 23-game-settings.sk — the chosen grenade slot
 					stackItem({_p}, "all")
 		set {_cd} to 30 seconds # "More Explosions!" faster-recharge perk removed — Mighty's level 2 perk slot is now Grenade Protection (damage reduction, gated below in grenadeExplosion())
 		if {general-perk::%{_p}'s uuid%::selected} is "quickfuse": # general perk Quick Fuse: grenades recharge 50% faster (30s -> 15s)

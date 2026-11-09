@@ -208,6 +208,7 @@ function openClassBrowser(p: player):
 	placeClassBrowserCategoryRow({_p}, 27, "SKIRMISHER")
 
 	set slot 49 of metadata tag "class browser" of {_p} to {browser::stats} # center bottom
+	set slot 51 of metadata tag "class browser" of {_p} to (comparator named "&b&lGame Settings" with lore "" and "&7Choose your inventory layout:" and "&7which hotbar slot your weapon," and "&7golden apples, consumable and" and "&7grenades go into." and "" and "&8Also: /gamesettings or /gs" and "" and "&7[CLICK] Open") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 23-game-settings.sk
 
 	open (metadata tag "class browser" of {_p}) to {_p}
 
@@ -243,6 +244,9 @@ on inventory click:
 		set {_class} to {classBrowserSlotClass::%player's uuid%::%{_slot}%}
 		if {_class} is set:
 			openClassInfoPage(player, {_class})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {_slot} is 51:
+			openGameSettings(player) # 23-game-settings.sk (refuses during a match)
 			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
 		else if {_slot} is 49:
 			openStatsMenu(player, player) # 14-stats.sk

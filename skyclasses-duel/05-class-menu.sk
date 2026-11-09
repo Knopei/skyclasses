@@ -148,7 +148,8 @@ function classSelect(p: player, class: text):
 	set {_weapon} to {class::weapon::%{_class}%}
 	if {_class} = "RB": # Rapid starts in dagger form, swaps to bow only during its ultimate
 		set {_weapon} to {class::weapon::RD}
-	give {_p} {_weapon}
+	giveToSlot({_p}, {_weapon}, "weapon") # 23-game-settings.sk — the player's chosen weapon slot
+	holdWeaponSlot({_p}) # ...and they start out holding it
 
 	classHeals({_p}) # 07-consumables.sk
 	nadeCount({_p}, {_id}) # 07-consumables.sk
