@@ -90,6 +90,54 @@ function bkd(kills: number, deaths: number) :: text: # formatted K/D, or "No dat
 	set {_ratio} to {_k} / {_d}
 	return "&e%{_ratio}%"
 
+# ---- MINIMUM DATA ----
+# Every dashboard number is grayed out until it's based on enough data, showing "needs N more ..." instead of a misleading value.
+# The three bars live in 00-config.sk ({config::balance::min-events} / min-casts / min-games); these are the fallbacks if they're missing.
+function bmin(kind: text) :: number:
+	if {config::balance::min-%{_kind}%} is set:
+		return {config::balance::min-%{_kind}%}
+	if {_kind} is "casts":
+		return 30
+	if {_kind} is "games":
+		return 10
+	return 20 # "events": kills + deaths, fights, picks, drafts
+
+function bgate(value: text, have: number, kind: text, unit: text) :: text: # the formatted value once {_have} reaches the bar for {_kind}, otherwise a dim "needs N more <unit>"
+	set {_need} to bmin({_kind})
+	set {_h} to bd({_have})
+	if {_h} >= {_need}:
+		return {_value}
+	set {_left} to {_need} - {_h}
+	return "&8— needs %{_left}% more %{_unit}%"
+
+# one wrapper per unit, so the page lines never need quoted text inside their %...% expressions
+function bgCasts(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "casts", "casts")
+
+function bgGames(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "games", "games")
+
+function bgKD(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "events", "kills/deaths")
+
+function bgKills(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "events", "kills")
+
+function bgMatches(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "games", "matches")
+
+function bgDrafts(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "events", "drafts")
+
+function bgClassGames(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "games", "class-games")
+
+function bgLevelups(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "games", "level-ups")
+
+function bgPicks(v: text, h: number) :: text:
+	return bgate({_v}, {_h}, "events", "picks in total")
+
 function bcount(x: number) :: text: # a plain count is always meaningful at 0 — just format it safely
 	return "&e%bd({_x})%"
 
@@ -465,6 +513,7 @@ function openBalanceMainMenu(p: player):
 	set slot 16 of metadata tag "balance main" of {_p} to (golden apple named "&c&lConsumable Pick Rate & K/D" with lore "" and "&7How often each consumable is set" and "&7as a default, and K/D while the" and "&7window after eating one is open." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 20 of metadata tag "balance main" of {_p} to (glowstone dust named "&e&lGeneral Perk Pick Rate & K/D" with lore "" and "&7How often each perk is set as a" and "&7default, and K/D while it's the" and "&7active perk." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 22 of metadata tag "balance main" of {_p} to (wither skeleton skull named "&4&lBosses per Game" with lore "" and "&7Average low-level and high-level" and "&7bosses slain per game, per class" and "&7and per class category." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 23 of metadata tag "balance main" of {_p} to (apple named "&c&lHealthy Boy Value" with lore "" and "&7Fight win rate with and without" and "&7Healthy Boy, save rate and" and "&7near-miss rate — per class and" and "&7per matchup." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set slot 21 of metadata tag "balance main" of {_p} to (totem of undying named "&d&lK/D by Level" with lore "" and "&7A class's kill/death ratio before" and "&7level 2, at level 2, and at level 3 —" and "&7shows whether leveling up actually" and "&7makes a class stronger." and "" and "&a[RIGHT CLICK] &7Recent (last 30 games)" and "&b[LEFT CLICK] &7Lifetime") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	open (metadata tag "balance main" of {_p}) to {_p}
@@ -498,6 +547,8 @@ on inventory click:
 			openBalanceLevelKDPage(player, {_recent})
 		else if {_slot} is 22:
 			openBalanceBossesPage(player, {_recent})
+		else if {_slot} is 23:
+			openBalanceHBPage(player, {_recent})
 		else:
 			set {_opened} to false
 		if {_opened} is true:
@@ -586,7 +637,7 @@ function openBalanceAbilityPage(p: player, recent: boolean):
 			set {_avgMana} to safeDivide({_manaSpent}, {_classKills}) / 10 # internal units -> displayed mana points
 			set {_avgManaText} to "&e%{_avgMana}%"
 
-		set {_lore::*} to "" and "&7TAC Casts: %bcount({_tacCasts})% &7Hit Rate: %bpct({_tacHits}, {_tacCasts})%" and "&7ULT Casts: %bcount({_ultCasts})% &7Hit Rate: %bpct({_ultHits}, {_ultCasts})%" and "" and "&7Avg TAC/Game: %bavg({_tacCasts}, {_games})%" and "&7Avg ULT/Game: %bavg({_ultCasts}, {_games})%" and "&7Avg Mana Spent/Kill: %{_avgManaText}%" and ""
+		set {_lore::*} to "" and "&7TAC Casts: %bcount({_tacCasts})% &7Hit Rate: %bgCasts(bpct({_tacHits}, {_tacCasts}), {_tacCasts})%" and "&7ULT Casts: %bcount({_ultCasts})% &7Hit Rate: %bgCasts(bpct({_ultHits}, {_ultCasts}), {_ultCasts})%" and "" and "&7Avg TAC/Game: %bgGames(bavg({_tacCasts}, {_games}), {_games})%" and "&7Avg ULT/Game: %bgGames(bavg({_ultCasts}, {_games}), {_games})%" and "&7Avg Mana Spent/Kill: %bgKills({_avgManaText}, {_classKills})%" and ""
 		set slot {_slot} of metadata tag "balance ability" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance ability" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -617,8 +668,9 @@ function openBalanceDamageSourcePage(p: player, recent: boolean):
 		set {_passiveDmg} to bgv("dmg-by-source", "%{_class}%::PASSIVE", {_recent})
 		set {_meleeDmg} to bgv("dmg-by-source", "%{_class}%::MELEE", {_recent})
 		set {_total} to {_tacDmg} + {_ultDmg} + {_passiveDmg} + {_meleeDmg}
+		set {_games} to bgv("class-games", {_class}, {_recent})
 
-		set {_lore::*} to "" and "&7Tactical: %bpct({_tacDmg}, {_total})%" and "&7Ultimate: %bpct({_ultDmg}, {_total})%" and "&7Passive: %bpct({_passiveDmg}, {_total})%" and "&7Melee: %bpct({_meleeDmg}, {_total})%" and "" and "&8&oTotal Player Damage: &7%formatNumber({_total})%" and ""
+		set {_lore::*} to "" and "&7Tactical: %bgGames(bpct({_tacDmg}, {_total}), {_games})%" and "&7Ultimate: %bgGames(bpct({_ultDmg}, {_total}), {_games})%" and "&7Passive: %bgGames(bpct({_passiveDmg}, {_total}), {_games})%" and "&7Melee: %bgGames(bpct({_meleeDmg}, {_total}), {_games})%" and "" and "&8&oTotal Player Damage: &7%formatNumber({_total})% &8&oin %{_games}% games" and ""
 		set slot {_slot} of metadata tag "balance damage" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance damage" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -648,7 +700,7 @@ function openBalanceTimeToKillPage(p: player, recent: boolean):
 		set {_fkCount} to bgv("firstkill-count", {_class}, {_recent})
 		set {_fdSum} to bgv("firstdeath-sum", {_class}, {_recent})
 		set {_fdCount} to bgv("firstdeath-count", {_class}, {_recent})
-		set {_lore::*} to "" and "&7Avg Time to First Kill:" and bdur({_fkSum}, {_fkCount}) and "" and "&7Avg Time to First Death:" and bdur({_fdSum}, {_fdCount}) and ""
+		set {_lore::*} to "" and "&7Avg Time to First Kill:" and bgMatches(bdur({_fkSum}, {_fkCount}), {_fkCount}) and "" and "&7Avg Time to First Death:" and bgMatches(bdur({_fdSum}, {_fdCount}), {_fdCount}) and ""
 		set slot {_slot} of metadata tag "balance ttk" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance ttk" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -728,7 +780,7 @@ function openBalanceMatchupPage(p: player, recent: boolean):
 
 		# ---- summary lines: overall + each category (pooled kills across every class in it, so bigger samples weigh more) ----
 		set {_allTotal} to {_allFor} + {_allAgainst}
-		set {_lore::*} to "" and "&6&lOverall: %bpct({_allFor}, {_allTotal})% &8(%{_allFor}%-%{_allAgainst}%)"
+		set {_lore::*} to "" and "&6&lOverall: %bgKD(bpct({_allFor}, {_allTotal}), {_allTotal})% &8(%{_allFor}%-%{_allAgainst}%)"
 		set {_k} to 1
 		while {_k} <= 3:
 			set {_cat} to {_cats::%{_k}%}
@@ -739,7 +791,7 @@ function openBalanceMatchupPage(p: player, recent: boolean):
 					add bd({_mu::%{_class}%::%loop-value%}) to {_cf}
 					add bd({_mu::%loop-value%::%{_class}%}) to {_ca}
 			set {_catTotal} to {_cf} + {_ca}
-			add "&7vs %{category-color::%{_cat}%}%%{category-name::%{_cat}%}%s: %bpct({_cf}, {_catTotal})% &8(%{_cf}%-%{_ca}%)" to {_lore::*}
+			add "&7vs %{category-color::%{_cat}%}%%{category-name::%{_cat}%}%s: %bgKD(bpct({_cf}, {_catTotal}), {_catTotal})% &8(%{_cf}%-%{_ca}%)" to {_lore::*}
 			add 1 to {_k}
 		add "" to {_lore::*}
 
@@ -761,7 +813,7 @@ function openBalanceMatchupPage(p: player, recent: boolean):
 			set {_bf} to {_wf::%{_best}%}
 			set {_ba} to {_wa::%{_best}%}
 			set {_bt} to {_bf} + {_ba}
-			add "&7vs %{class-name::%{_bOther}%}%: %bpct({_bf}, {_bt})% &8(%{_bf}%-%{_ba}%)" to {_lore::*}
+			add "&7vs %{class-name::%{_bOther}%}%: %bgKD(bpct({_bf}, {_bt}), {_bt})% &8(%{_bf}%-%{_ba}%)" to {_lore::*}
 			add 1 to {_n}
 		add "" to {_lore::*}
 
@@ -797,7 +849,7 @@ function openBalanceDraftCarryPage(p: player, recent: boolean):
 		set {_ck} to bgv("carry-kills-top", {_class}, {_recent})
 		set {_cb} to bgv("carry-bosses-top", {_class}, {_recent})
 
-		set {_lore::*} to "" and "&7Draft Select Rate: %bpct({_picked}, {_avail})%" and "" and "&7Kill Carry Rate: %bpct({_ck}, {_games})%" and "&7Boss Carry Rate: %bpct({_cb}, {_games})%" and ""
+		set {_lore::*} to "" and "&7Draft Select Rate: %bgDrafts(bpct({_picked}, {_avail}), {_avail})%" and "" and "&7Kill Carry Rate: %bgGames(bpct({_ck}, {_games}), {_games})%" and "&7Boss Carry Rate: %bgGames(bpct({_cb}, {_games}), {_games})%" and ""
 		set slot {_slot} of metadata tag "balance draftcarry" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance draftcarry" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -834,7 +886,7 @@ function openBalanceBossesPage(p: player, recent: boolean):
 		set {_games} to bgv("class-games", {_class}, {_recent})
 		set {_low} to bgv("bosses-low", {_class}, {_recent})
 		set {_high} to bgv("bosses-high", {_class}, {_recent})
-		set {_lore::*} to "" and "&7Avg Low-Level Bosses/Game: %bavg({_low}, {_games})%" and "&7Avg High-Level Bosses/Game: %bavg({_high}, {_games})%" and "&8&o(%{_low}% low / %{_high}% high in %{_games}% games)" and ""
+		set {_lore::*} to "" and "&7Avg Low-Level Bosses/Game: %bgGames(bavg({_low}, {_games}), {_games})%" and "&7Avg High-Level Bosses/Game: %bgGames(bavg({_high}, {_games}), {_games})%" and "&8&o(%{_low}% low / %{_high}% high in %{_games}% games)" and ""
 		set slot {_slot} of metadata tag "balance bosses" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set {_cats::*} to "STRIKER", "JUGGERNAUT" and "SKIRMISHER"
@@ -849,7 +901,7 @@ function openBalanceBossesPage(p: player, recent: boolean):
 			add bgv("class-games", loop-value-2, {_recent}) to {_games}
 			add bgv("bosses-low", loop-value-2, {_recent}) to {_low}
 			add bgv("bosses-high", loop-value-2, {_recent}) to {_high}
-		set {_lore::*} to "" and "&7Avg Low-Level Bosses/Game: %bavg({_low}, {_games})%" and "&7Avg High-Level Bosses/Game: %bavg({_high}, {_games})%" and "&8&o(per class-game: %{_low}% low / %{_high}% high" and "&8&oin %{_games}% class-games)" and ""
+		set {_lore::*} to "" and "&7Avg Low-Level Bosses/Game: %bgClassGames(bavg({_low}, {_games}), {_games})%" and "&7Avg High-Level Bosses/Game: %bgClassGames(bavg({_high}, {_games}), {_games})%" and "&8&o(per class-game: %{_low}% low / %{_high}% high" and "&8&oin %{_games}% class-games)" and ""
 		set slot {_cs} of metadata tag "balance bosses" of {_p} to (categoryIcon({_cat}) with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 02-class-data.sk
 
 	set slot 40 of metadata tag "balance bosses" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -881,7 +933,7 @@ function openBalanceLevelLivesPage(p: player, recent: boolean):
 		set {_c2} to bgv("levelup-lives-count", "%{_class}%::2", {_recent})
 		set {_s3} to bgv("levelup-lives-sum", "%{_class}%::3", {_recent})
 		set {_c3} to bgv("levelup-lives-count", "%{_class}%::3", {_recent})
-		set {_lore::*} to "" and "&7Avg Lives @ Level 1: %bavg({_s1}, {_c1})%" and "&7Avg Lives @ Level 2: %bavg({_s2}, {_c2})%" and "&7Avg Lives @ Level 3: %bavg({_s3}, {_c3})%" and ""
+		set {_lore::*} to "" and "&7Avg Lives @ Level 1: %bgLevelups(bavg({_s1}, {_c1}), {_c1})%" and "&7Avg Lives @ Level 2: %bgLevelups(bavg({_s2}, {_c2}), {_c2})%" and "&7Avg Lives @ Level 3: %bgLevelups(bavg({_s3}, {_c3}), {_c3})%" and ""
 		set slot {_slot} of metadata tag "balance levellives" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance levellives" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -924,7 +976,7 @@ function balRateLines(prefix: text, id: text, recent: boolean):
 		set {_bw} to {_w::%{_best}%}
 		set {_bl} to {_bg} - {_bw}
 		if {_bg} > 0:
-			add "&7%{class-name::%{_bc}%}%: %bpct({_bw}, {_bg})% &8(%{_bw}%W-%{_bl}%L)" to {balance-ratelines::*}
+			add "&7%{class-name::%{_bc}%}%: %bgGames(bpct({_bw}, {_bg}), {_bg})% &8(%{_bw}%W-%{_bl}%L)" to {balance-ratelines::*}
 		else:
 			add "&7%{class-name::%{_bc}%}%: &8No data" to {balance-ratelines::*}
 		add 1 to {_n}
@@ -956,7 +1008,7 @@ function openBalanceConsumablePage(p: player, recent: boolean):
 		set {_deaths} to bgv("consumable-deaths", {_id}, {_recent})
 		balRateLines("cons", {_id}, {_recent}) # fills {balance-ratelines::*}: every class's win rate with this item, highest first
 
-		set {_lore::*} to "" and "&7Default Pick Share: %bpct({_pickCount}, {_totalPicks})%" and "&8&o(%{_pickCount}% picks)" and "" and "&7K/D While Active: %bkd({_kills}, {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and "" and "&6&lWin Rate by Class" and "&8&o(games with 3+ kills/deaths on the class)"
+		set {_lore::*} to "" and "&7Default Pick Share: %bgPicks(bpct({_pickCount}, {_totalPicks}), {_totalPicks})%" and "&8&o(%{_pickCount}% picks)" and "" and "&7K/D While Active: %bgKD(bkd({_kills}, {_deaths}), {_kills} + {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and "" and "&6&lWin Rate by Class" and "&8&o(games with 3+ kills/deaths on the class)"
 		add {balance-ratelines::*} to {_lore::*}
 		add "" to {_lore::*}
 		set slot {_slot} of metadata tag "balance consumable" of {_p} to ({health-item::%{_id}%} named "&e%name of {health-item::%{_id}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -993,7 +1045,7 @@ function openBalancePerkPage(p: player, recent: boolean):
 		set {_deaths} to bgv("perk-deaths", {_id}, {_recent})
 		balRateLines("perk", {_id}, {_recent}) # fills {balance-ratelines::*}: every class's win rate with this item, highest first
 
-		set {_lore::*} to "" and "&7Default Pick Share: %bpct({_pickCount}, {_totalPicks})%" and "&8&o(%{_pickCount}% picks)" and "" and "&7K/D While Active: %bkd({_kills}, {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and "" and "&6&lWin Rate by Class" and "&8&o(games with 3+ kills/deaths on the class)"
+		set {_lore::*} to "" and "&7Default Pick Share: %bgPicks(bpct({_pickCount}, {_totalPicks}), {_totalPicks})%" and "&8&o(%{_pickCount}% picks)" and "" and "&7K/D While Active: %bgKD(bkd({_kills}, {_deaths}), {_kills} + {_deaths})%" and "&8&o(%{_kills}%K / %{_deaths}%D)" and "" and "&6&lWin Rate by Class" and "&8&o(games with 3+ kills/deaths on the class)"
 		add {balance-ratelines::*} to {_lore::*}
 		add "" to {_lore::*}
 		set slot {_slot} of metadata tag "balance perk" of {_p} to ({gp-display::%{_id}%} named "&e%name of {gp-display::%{_id}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -1058,7 +1110,7 @@ function openBalanceLevelKDPage(p: player, recent: boolean):
 
 		set {_kAll} to {_k0} + {_k2} + {_k3} # pooled over every level (levels 0-1 are one bucket)
 		set {_dAll} to {_d0} + {_d2} + {_d3}
-		set {_lore::*} to "" and "&7Before Level 2: %bkd({_k0}, {_d0})% &8(%{_k0}%K/%{_d0}%D)" and "&7At Level 2 (pre-3): %bkd({_k2}, {_d2})% &8(%{_k2}%K/%{_d2}%D)" and "&7At Level 3: %bkd({_k3}, {_d3})% &8(%{_k3}%K/%{_d3}%D)" and "" and "&6&lAll Levels: %bkd({_kAll}, {_dAll})% &8(%{_kAll}%K/%{_dAll}%D)" and ""
+		set {_lore::*} to "" and "&7Before Level 2: %bgKD(bkd({_k0}, {_d0}), {_k0} + {_d0})% &8(%{_k0}%K/%{_d0}%D)" and "&7At Level 2 (pre-3): %bgKD(bkd({_k2}, {_d2}), {_k2} + {_d2})% &8(%{_k2}%K/%{_d2}%D)" and "&7At Level 3: %bgKD(bkd({_k3}, {_d3}), {_k3} + {_d3})% &8(%{_k3}%K/%{_d3}%D)" and "" and "&6&lAll Levels: %bgKD(bkd({_kAll}, {_dAll}), {_kAll} + {_dAll})% &8(%{_kAll}%K/%{_dAll}%D)" and ""
 		set slot {_slot} of metadata tag "balance levelkd" of {_p} to ({class::weapon::%{_class}%} named "&e%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set slot 31 of metadata tag "balance levelkd" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -1131,3 +1183,382 @@ command /resetbalancestats:
 		# delete {balance-fireSourceSet::*}
 		# send "&a&lBalance dashboard stats reset." to player
 		# send "&7All /balancestats trackers are back to empty. Player-specific stats (kills, deaths, class games played, mastery, etc.) were not affected." to player
+
+# ============================================
+# HEALTHY BOY VALUE (balance dashboard page "Healthy Boy Value")
+# Measures how much the Healthy Boy general perk (+1 heart) is worth on each class, overall and against each opponent class.
+#
+# FIGHTS: a fight is a stretch of player-vs-player combat — it starts on the first hit between the two match players and ends when one of
+#   them dies, or after 5 seconds with no hits between them (both escaped). A fight is "won" by the player who killed the other.
+#
+# SHADOW HEALTH: every player in a match carries a second health value — what their health WOULD be with the opposite choice:
+#   with Healthy Boy, 1 heart lower (its max 1 heart lower too); without it, 1 heart higher (its max 1 heart higher).
+#   It takes the same damage as the real health, except for the damage bonuses that scale with the target's max health OVER the
+#   attacker's (Mighty tactical, Zeus lightning, Rapid empowered hits, Viking level 2, Executioner level 3): the extra heart changes those,
+#   so the shadow takes that much less (with Healthy Boy) or more (without). Stored as an offset from the real health ({hbDelta::uuid}),
+#   reset at every death.
+#
+# SAVE (players WITH Healthy Boy): during a fight their shadow health drops to 0 or below while they're still alive (without the heart
+#   they'd have died), and the fight then ends with them winning it or escaping it alive.
+#
+# NEAR MISS (players WITHOUT Healthy Boy): they die to their opponent in a fight, and
+#   - their shadow health would still be above 0 after the killing blow, minus any burn / wither still to come (rule 2), and
+#   - the killer was "low": at or below the dead player's base melee damage (their class's melee multiplier / 2 — e.g. 2.5, 2.25 or 2),
+#     OR the killer also died within 1 second (a trade), OR the killer fell into the void within 3 seconds.
+#
+# Stored as {balance-hb::<metric>::<class>::<opponent class>} plus a "::ALL" total per class, and in the recent-games window the same way.
+# Metrics: fights-hb, wins-hb, saves, fights-no, wins-no, deaths-no, nearmiss. Test duels record nothing.
+# ============================================
+
+import:
+	org.bukkit.potion.PotionEffectType
+
+function hbAdd(m: text, c: text, o: text):
+	if {testMatch} is set:
+		stop
+	add 1 to {balance-hb::%{_m}%::%{_c}%::%{_o}%}
+	add 1 to {balance-hb::%{_m}%::%{_c}%::ALL}
+	set {_s} to {balance-recent-slot}
+	if {_s} is set:
+		add 1 to {balance-recent::%{_s}%::hb::%{_m}%::%{_c}%::%{_o}%}
+		add 1 to {balance-recent::%{_s}%::hb::%{_m}%::%{_c}%::ALL}
+
+function hbGet(m: text, c: text, o: text, recent: boolean) :: number:
+	if {_recent} isn't true:
+		return bd({balance-hb::%{_m}%::%{_c}%::%{_o}%})
+	set {_t} to 0
+	set {_si} to 1
+	while {_si} <= bd({balance-recent-size}):
+		if {balance-recent-valid::%{_si}%} is set:
+			add bd({balance-recent::%{_si}%::hb::%{_m}%::%{_c}%::%{_o}%}) to {_t}
+		add 1 to {_si}
+	return {_t}
+
+function hbHas(p: player) :: boolean: # running Healthy Boy right now
+	if {general-perk::%{_p}'s uuid%::selected} is "healthyboy":
+		return true
+	return false
+
+function hbBaseMelee(c: text) :: number: # a class's base melee damage = its melee multiplier / 2 (Rapid's melee is its dagger form)
+	set {_k} to {_c}
+	if {_k} is "RB":
+		set {_k} to "RD"
+	if {weapons::%{_k}%::AD} is set:
+		return {weapons::%{_k}%::AD} / 2
+	return 2
+
+function hbShadowSync(p: player): # makes sure the shadow offset exists, and keeps the shadow under its own max (heals that would overfill it)
+	set {_u} to {_p}'s uuid
+	if {hbDelta::%{_u}%} isn't set:
+		if hbHas({_p}) is true:
+			set {hbDelta::%{_u}%} to -1
+		else:
+			set {hbDelta::%{_u}%} to 1
+	set {_smax} to (max health of {_p}) + 1
+	if hbHas({_p}) is true:
+		set {_smax} to (max health of {_p}) - 1
+	if ((health of {_p}) + {hbDelta::%{_u}%}) > {_smax}:
+		set {hbDelta::%{_u}%} to {_smax} - (health of {_p})
+
+function hbScaleNote(a: entity, v: entity, rate: number): # called right before damage from a max-health-scaling bonus lands on a player — records how much the extra heart changes it
+	if {_v} is a player:
+		if {_a} is a living entity:
+			set {_raw} to effMaxHealth({_v}) - effMaxHealth({_a}) # 01-utils.sk
+			set {_with} to {_raw}
+			if {_with} < 0:
+				set {_with} to 0
+			if {_with} > 4:
+				set {_with} to 4
+			if hbHas({_v}) is true: # without the heart: 1 heart less over -> less bonus -> the shadow takes less
+				set {_alt} to {_raw} - 1
+			else: # with the heart: 1 heart more over -> more bonus -> the shadow takes more
+				set {_alt} to {_raw} + 1
+			if {_alt} < 0:
+				set {_alt} to 0
+			if {_alt} > 4:
+				set {_alt} to 4
+			set {hbAdj::%{_v}'s uuid%} to ({_with} - {_alt}) * {_rate} # added to the shadow offset when the hit lands
+
+function hbDotLeft(p: player) :: number: # hearts of burn / wither damage still to come on this player (poison is left out — it can't kill)
+	set {_d} to ({_p}.getFireTicks() / 20) * 0.5 # fire: half a heart per second
+	set {_w} to {_p}.getPotionEffect(PotionEffectType.WITHER)
+	if {_w} is set:
+		set {_amp} to {_w}.getAmplifier()
+		set {_interval} to 40 # wither I: half a heart every 2 seconds; each level halves the interval
+		if {_amp} >= 1:
+			set {_interval} to 20
+		if {_amp} >= 2:
+			set {_interval} to 10
+		add ({_w}.getDuration() / {_interval}) * 0.5 to {_d}
+	return {_d}
+
+# ---- every pipelined hit on a match player: shadow health, saves, near misses ----
+on damage of player with priority monitor:
+	set {_v} to victim
+	set {_u} to {_v}'s uuid
+	if event is cancelled:
+		delete {hbAdj::%{_u}%} # a cancelled hit never lands, so its note doesn't either
+		stop
+	if {inMatch::%{_u}%} isn't set:
+		delete {hbAdj::%{_u}%}
+		stop
+	if {respawning::%{_u}%} is set:
+		delete {hbAdj::%{_u}%}
+		stop
+	hbShadowSync({_v})
+	if {hbAdj::%{_u}%} is set:
+		add {hbAdj::%{_u}%} to {hbDelta::%{_u}%}
+		delete {hbAdj::%{_u}%}
+	set {_dmg} to damage
+	set {_abs} to ({_v}.getAbsorptionAmount()) / 2
+	set {_hpLoss} to {_dmg} - {_abs}
+	if {_hpLoss} < 0:
+		set {_hpLoss} to 0
+	set {_hp} to health of {_v}
+	set {_shadowAfter} to ({_hp} + {hbDelta::%{_u}%}) - {_hpLoss}
+	set {_opp} to {matchOpponent::%{_u}%}
+	set {_inFight} to false
+	if {hbFight} is set:
+		if {hbFightClass::%{_u}%} is set:
+			set {_inFight} to true
+	if {_hpLoss} < {_hp}: # survives this hit
+		if {_inFight} is true:
+			if {hbFightHB::%{_u}%} is true:
+				if {_shadowAfter} <= 0:
+					set {hbFightSave::%{_u}%} to true # without Healthy Boy they'd be dead right now
+		stop
+	# ---- a lethal hit ----
+	if {_inFight} isn't true:
+		stop
+	if {hbFightHB::%{_u}%} is true:
+		stop
+	set {_killer} to metadata value "attacker" of {_v}
+	if {_killer} isn't {_opp}:
+		stop
+	set {_vc} to {hbFightClass::%{_u}%}
+	set {_kc} to {hbFightClass::%{_killer}'s uuid%}
+	hbAdd("deaths-no", {_vc}, {_kc})
+	if ({_shadowAfter} - hbDotLeft({_v})) <= 0: # one more heart wouldn't have outlasted this hit plus the burn / wither still to come
+		stop
+	set {_kHp} to (health of {_killer}) + (({_killer}.getAbsorptionAmount()) / 2)
+	if {_kHp} <= hbBaseMelee({_vc}): # the killer was one hit from death
+		hbAdd("nearmiss", {_vc}, {_kc})
+	else: # might still be a trade or a void fall — confirmed by the killer's own death soon after (hbOnDeath)
+		set {hbPending::%{_killer}'s uuid%::at} to unix timestamp of now
+		set {hbPending::%{_killer}'s uuid%::vc} to {_vc}
+		set {hbPending::%{_killer}'s uuid%::kc} to {_kc}
+
+# ---- fights ----
+
+function hbFightHit(a: player, v: player): # 20-combat.sk's combatCheck() — every damaging hit between the two match players
+	if {hbFight} isn't set:
+		set {hbFight} to true
+		loop {_a} and {_v}:
+			set {_u} to loop-value's uuid
+			set {hbFightClass::%{_u}%} to {class::%{_u}%}
+			set {hbFightHB::%{_u}%} to hbHas(loop-value)
+			delete {hbFightSave::%{_u}%}
+			add loop-value to {hbFightPlayers::*}
+	set {hbFightLast} to unix timestamp of now
+
+function hbEndFight(loser: object): # loser = the player who died in it ("none" when both escaped); winner = whoever killed them
+	if {hbFight} isn't set:
+		stop
+	set {_ps::*} to {hbFightPlayers::*}
+	set {_winner} to {hbFightWinner}
+	loop {_ps::*}:
+		set {_p} to loop-value
+		set {_u} to {_p}'s uuid
+		set {_c} to {hbFightClass::%{_u}%}
+		set {_o} to ""
+		loop {_ps::*}:
+			if loop-value-2 isn't {_p}:
+				set {_o} to {hbFightClass::%loop-value-2's uuid%}
+		if {_c} is set:
+			if {_o} is not "":
+				set {_won} to false
+				if {_winner} is set:
+					if {_winner} is {_p}:
+						set {_won} to true
+				set {_survived} to true
+				if {_loser} is a player:
+					if {_loser} is {_p}:
+						set {_survived} to false
+				if {hbFightHB::%{_u}%} is true:
+					hbAdd("fights-hb", {_c}, {_o})
+					if {_won} is true:
+						hbAdd("wins-hb", {_c}, {_o})
+					if {hbFightSave::%{_u}%} is set:
+						if {_survived} is true: # won it or escaped it alive
+							hbAdd("saves", {_c}, {_o})
+				else:
+					hbAdd("fights-no", {_c}, {_o})
+					if {_won} is true:
+						hbAdd("wins-no", {_c}, {_o})
+		delete {hbFightClass::%{_u}%}
+		delete {hbFightHB::%{_u}%}
+		delete {hbFightSave::%{_u}%}
+	delete {hbFight}
+	delete {hbFightLast}
+	delete {hbFightWinner}
+	delete {hbFightPlayers::*}
+
+function hbOnDeath(v: player, killer: object = "none", isVoid: boolean = false): # (defaults: Skript skips a function call whose argument is empty, and the killer is often unset) # 09-death-match.sk — every in-match death, BEFORE the attacker metadata is cleared
+	set {_u} to {_v}'s uuid
+	# a near miss waiting on this player (they had just killed their opponent): a trade within 1 s, or a void fall within 3 s, confirms it
+	if {hbPending::%{_u}%::at} is set:
+		set {_age} to (unix timestamp of now) - {hbPending::%{_u}%::at}
+		set {_ok} to false
+		if {_age} <= 1:
+			set {_ok} to true
+		else if {_age} <= 3:
+			if {_isVoid} is true:
+				set {_ok} to true
+		if {_ok} is true:
+			hbAdd("nearmiss", {hbPending::%{_u}%::vc}, {hbPending::%{_u}%::kc})
+		delete {hbPending::%{_u}%::*}
+	delete {hbDelta::%{_u}%} # a new life gets a fresh shadow
+	if {hbFight} is set:
+		if {hbFightClass::%{_u}%} is set: # they were in the current fight — it ends here
+			if {_killer} is a player:
+				if {_killer} is {matchOpponent::%{_u}%}:
+					set {hbFightWinner} to {_killer}
+			hbEndFight({_v})
+
+every 5 ticks: # a fight ends when 5 seconds pass with no hits between the two players — both escaped
+	if {hbFight} is set:
+		if {hbFightLast} is set:
+			if ((unix timestamp of now) - {hbFightLast}) >= 5:
+				hbEndFight("none")
+
+function hbResetMatch(): # 10-match-manager.sk — match start / end: no fight or shadow carries over
+	delete {hbFight}
+	delete {hbFightLast}
+	delete {hbFightWinner}
+	delete {hbFightPlayers::*}
+	delete {hbFightClass::*}
+	delete {hbFightHB::*}
+	delete {hbFightSave::*}
+	delete {hbDelta::*}
+	delete {hbAdj::*}
+	delete {hbPending::*}
+
+# ---- PAGE: Healthy Boy Value ----
+
+function hbPct(a: number, b: number) :: text:
+	if {_b} <= 0:
+		return "&8—"
+	return "%round(({_a} / {_b}) * 1000) / 10%%%"
+
+function hbLore(c: text, o: text, recent: boolean) :: strings: # the numbers for one class (o = "ALL") or one matchup
+	set {_fh} to hbGet("fights-hb", {_c}, {_o}, {_recent})
+	set {_wh} to hbGet("wins-hb", {_c}, {_o}, {_recent})
+	set {_sv} to hbGet("saves", {_c}, {_o}, {_recent})
+	set {_fn} to hbGet("fights-no", {_c}, {_o}, {_recent})
+	set {_wn} to hbGet("wins-no", {_c}, {_o}, {_recent})
+	set {_dn} to hbGet("deaths-no", {_c}, {_o}, {_recent})
+	set {_nm} to hbGet("nearmiss", {_c}, {_o}, {_recent})
+	return hbLoreFrom({_fh}, {_wh}, {_sv}, {_fn}, {_wn}, {_dn}, {_nm})
+
+function hbLoreCategory(cat: text, recent: boolean) :: strings: # a class category's numbers: every one of its classes added together
+	set {_m::*} to "fights-hb", "wins-hb", "saves", "fights-no", "wins-no", "deaths-no" and "nearmiss"
+	loop {_m::*}:
+		set {_t::%loop-value%} to 0
+	loop {category-classes::%{_cat}%::*}: # 02-class-data.sk
+		set {_c} to loop-value
+		loop {_m::*}:
+			add hbGet(loop-value-2, {_c}, "ALL", {_recent}) to {_t::%loop-value-2%}
+	return hbLoreFrom({_t::fights-hb}, {_t::wins-hb}, {_t::saves}, {_t::fights-no}, {_t::wins-no}, {_t::deaths-no}, {_t::nearmiss})
+
+function hbLoreFrom(fh: number, wh: number, sv: number, fn: number, wn: number, dn: number, nm: number) :: strings:
+	set {_min} to bmin("events") # fewer fights than this on a side = not enough data yet (shown grayed out)
+	set {_cw} to "&e"
+	if {_fh} < {_min}:
+		set {_cw} to "&8"
+	set {_cn} to "&e"
+	if {_fn} < {_min}:
+		set {_cn} to "&8"
+	set {_lore::*} to "" and "&7Fights: &f%{_fh} + {_fn}% &8(%{_fh}% with HB, %{_fn}% without)" and ""
+	add "&7Win rate with HB: %{_cw}%%hbPct({_wh}, {_fh})%" to {_lore::*}
+	add "&7Win rate without: %{_cn}%%hbPct({_wn}, {_fn})%" to {_lore::*}
+	if {_fh} >= {_min}:
+		if {_fn} >= {_min}:
+			set {_diff} to round((({_wh} / {_fh}) - ({_wn} / {_fn})) * 1000) / 10
+			if {_diff} >= 0:
+				add "&7Difference: &a+%{_diff}%" to {_lore::*}
+			else:
+				add "&7Difference: &c%{_diff}%" to {_lore::*}
+		else:
+			add "&7Difference: &8needs %{_min}%+ fights each way" to {_lore::*}
+	else:
+		add "&7Difference: &8needs %{_min}%+ fights each way" to {_lore::*}
+	add "" to {_lore::*}
+	add "&7Save rate: %{_cw}%%hbPct({_sv}, {_fh})% &8(%{_sv}% saves)" to {_lore::*}
+	add "&7Near-miss rate: %{_cn}%%hbPct({_nm}, {_dn})% &8(%{_nm}% of %{_dn}% deaths)" to {_lore::*}
+	add "" to {_lore::*}
+	return {_lore::*}
+
+function openBalanceHBPage(p: player, recent: boolean):
+	set {hbView::%{_p}'s uuid%::recent} to {_recent}
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Healthy Boy Value (Recent)"
+	else:
+		set {_title} to "Healthy Boy Value (Lifetime)"
+	set metadata tag "balance hb" of {_p} to chest inventory with 5 rows named {_title}
+	set slot (integers between 0 and 44) of metadata tag "balance hb" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance hb" of {_p} to black stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "balance hb" of {_p} to black stained glass pane named " "
+	set slot 4 of metadata tag "balance hb" of {_p} to (apple named "&c&lHealthy Boy Value" with lore "" and "&7Win rate in fights with and without" and "&7Healthy Boy, how often it saves a fight," and "&7and how often players without it die" and "&7one heart short. &8Grayed = under 20 fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25
+	delete {hbViewSlot::%{_p}'s uuid%::*}
+	loop {menu::classlist::*}:
+		set {_c} to loop-value
+		set {_slot} to {_slots::%loop-index%}
+		set {hbViewSlot::%{_p}'s uuid%::%{_slot}%} to {_c}
+		set {_lore::*} to hbLore({_c}, "ALL", {_recent})
+		add "&e[CLICK] &7Matchups" to {_lore::*}
+		set slot {_slot} of metadata tag "balance hb" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_cats::*} to "STRIKER", "JUGGERNAUT" and "SKIRMISHER" # one icon per class category, its classes added together
+	set {_catSlots::*} to 29, 31 and 33
+	loop {_cats::*}:
+		set {_lore::*} to hbLoreCategory(loop-value, {_recent})
+		set slot {_catSlots::%loop-index%} of metadata tag "balance hb" of {_p} to (categoryIcon(loop-value) with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 02-class-data.sk
+	set slot 40 of metadata tag "balance hb" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 39 of metadata tag "balance hb" of {_p} to balRecentInfoIcon()
+	open (metadata tag "balance hb" of {_p}) to {_p}
+
+function openBalanceHBMatchups(p: player, c: text, recent: boolean): # one class against every opponent class
+	set {_title} to "HB: %{class-name::%{_c}%}% vs..."
+	set metadata tag "balance hbmu" of {_p} to chest inventory with 5 rows named {_title}
+	set slot (integers between 0 and 44) of metadata tag "balance hbmu" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance hbmu" of {_p} to black stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "balance hbmu" of {_p} to black stained glass pane named " "
+	set {_lore::*} to hbLore({_c}, "ALL", {_recent})
+	set slot 4 of metadata tag "balance hbmu" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}% &7— all matchups" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25
+	set {_i} to 0
+	loop {menu::classlist::*}:
+		add 1 to {_i}
+		set {_o} to loop-value
+		set {_lore::*} to hbLore({_c}, {_o}, {_recent})
+		set slot {_slots::%{_i}%} of metadata tag "balance hbmu" of {_p} to ({class::weapon::%{_o}%} named "&7vs &e%{class-name::%{_o}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 40 of metadata tag "balance hbmu" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] All classes") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	open (metadata tag "balance hbmu" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "balance hb" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		if {_slot} is 40:
+			openBalanceMainMenu(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {hbViewSlot::%player's uuid%::%{_slot}%} is set:
+			openBalanceHBMatchups(player, {hbViewSlot::%player's uuid%::%{_slot}%}, {hbView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "balance hbmu" of player):
+		cancel event
+		if index of event-slot is 40:
+			openBalanceHBPage(player, {hbView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player

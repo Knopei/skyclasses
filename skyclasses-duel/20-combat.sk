@@ -43,6 +43,7 @@ function combatCheck(a: living entity, v: living entity, dmg: number):
 				if {_a} is {matchOpponent::%{_v}'s uuid%}: # only the real match opponent counts — not a bystander in the arena
 					markCombat({_a})
 					markCombat({_v})
+					hbFightHit({_a}, {_v}) # 19-balance-stats.sk — Healthy Boy Value: starts / extends the current fight
 			else if metadata value "isMajorBoss" of {_v} is set: # hitting the major boss
 				markCombat({_a})
 		else if {_v} is a player:

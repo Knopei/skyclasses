@@ -29,6 +29,12 @@ on death of player: # ----------------------------------------------------------
 	clearCombat(victim) # 20-combat.sk — dying ends their combat state and takes their bar off the opponent
 	killLevelTag(victim) # 04-leveling.sk — done immediately rather than relying on the ridden armor stand surviving death; it gets recreated fresh once they actually respawn
 	set {_attacker} to metadata value "attacker" of victim
+	set {_hbVoid} to false # 19-balance-stats.sk — Healthy Boy Value: ends the current fight, and confirms a pending near miss (trade / void fall)
+	if {hbVoidAt::%victim's uuid%} is set:
+		if ((unix timestamp of now) - {hbVoidAt::%victim's uuid%}) < 2:
+			set {_hbVoid} to true
+		delete {hbVoidAt::%victim's uuid%}
+	hbOnDeath(victim, {_attacker}, {_hbVoid})
 	set {_vClass} to {class::%victim's uuid%}
 	set {_aClass} to {class::%{_attacker}'s uuid%}
 	set {_oppOfVictim} to {matchOpponent::%victim's uuid%}

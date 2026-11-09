@@ -72,6 +72,11 @@ on load:
 	# the exact duration/flash-window already hardcoded at each ignition/strike
 	# call site (see setFireSource()/setAbilitySourceTimed() in 19-balance-stats.sk).
 
+	# ---- BALANCE DASHBOARD MINIMUM DATA (19-balance-stats.sk) — a number stays grayed out ("needs N more ...") until it has this much behind it ----
+	set {config::balance::min-events} to 20 # kills + deaths, fights, picks, drafts
+	set {config::balance::min-casts} to 30 # ability hit rates
+	set {config::balance::min-games} to 10 # per-game averages, damage shares, time to first kill/death, lives at level-up
+
 	# ---- MASTERY RANKING ELIGIBILITY ----
 	set {config::mastery::min-tier-for-ranking} to 3 # Bronze, under the 9-tier system (Trash/Rookie/Bronze/Silver/Gold/Diamond/Master/Grandmaster/Predator) — the minimum mastery tier a class needs before it's eligible for Best/Worst Class
 

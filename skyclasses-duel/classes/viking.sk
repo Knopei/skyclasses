@@ -99,6 +99,7 @@ function vbaCHECK(a: living entity, v: living entity, dmg: number, crit: text, c
 				set {_return} to 0.25
 			if {_return} > 0: # Perk 1 only adds on to the passive — above 5 hearts there is no bonus at all
 				if classLevel({_a}, "VBA") >= 2: # Perk 1 (Joyful to Furious): +0.25 for every heart of max health the target has over Viking's own, counting at most 4 hearts (+1 max; absorption counts, 01-utils.sk)
+					hbScaleNote({_a}, {_v}, 0.25) # 19-balance-stats.sk — Healthy Boy Value
 					set {_over} to effMaxHealth({_v}) - effMaxHealth({_a})
 					if {_over} > 4:
 						set {_over} to 4

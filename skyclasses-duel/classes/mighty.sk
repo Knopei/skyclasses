@@ -35,6 +35,7 @@ on right click with mace: # TACTICAL
 						updateAttacker(player, loop-entity)
 						directAttack(loop-entity)
 						push loop-entity upward at speed 0.75
+						hbScaleNote(player, loop-entity, 1) # 19-balance-stats.sk — Healthy Boy Value: how much an extra heart changes this hit
 						set {_tacDmg} to 0.25 # base
 						set {_hpDiff} to effMaxHealth(loop-entity) - effMaxHealth(player) # +1 per heart of max health the target has over Mighty's own (01-utils.sk — absorption counts as max health)
 						if {_hpDiff} > 4: # counts at most 4 hearts over — 4.25 max

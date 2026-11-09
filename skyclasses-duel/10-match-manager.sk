@@ -91,6 +91,7 @@ function forceEndMatchWorker(reason: text):
 	fillMajorBossHoleWithBarriers() # 12-major-boss.sk — /endduel and other force-ends are a match ending too, so seal the hole before anyone's sent back
 	resetSecretDoors() # 16-world-rules.sk — and force every door back open, same as a normal match end
 	delete {majorbosses-claimed}
+	hbResetMatch() # 19-balance-stats.sk
 	delete {matchStartTime}
 	delete {firstBloodClaimed}
 	delete {arenaLive}
@@ -283,6 +284,7 @@ function enterArena(p1: player, p2: player): # called by 17-draft.sk once the dr
 	if {testMatch} isn't set:
 		playerRecentSnapshot({_p1}) # 14-stats.sk — baselines for the per-player last-30-games window (loadout is known now)
 		playerRecentSnapshot({_p2})
+	hbResetMatch() # 19-balance-stats.sk — Healthy Boy Value: fresh fights / shadow health
 	set {arenaLive} to true # the draft is over and the match is really underway — /forfeit and the disconnect grace period only apply from here
 	set {majorbosses-claimed} to 0 # global per-match objective-stakes counter — 04-leveling.sk reads this
 	set {matchStartTime} to unix timestamp of now # 04-leveling.sk reads this for Early/Mid/Late-Game XP; also used for match duration
@@ -441,6 +443,7 @@ function endMatch(loser: offline player, winner: player): # loser is "offline pl
 	delete {pendingConsumableChoice::%{_loser}'s uuid%}
 	stopMiniBossTimers() # 11-mini-bosses.sk
 	stopMajorBossTimer() # 12-major-boss.sk
+	hbResetMatch() # 19-balance-stats.sk
 	teardownArena() # 15-arena-manager.sk — includes the wait + teleport back to lobby spawn
 	clearPlayerBossBars({_winner}) # 01-utils.sk — no bossbar (boss, combat, cooldown) survives the match
 	if {_loser} is online:

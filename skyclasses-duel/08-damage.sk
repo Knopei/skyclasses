@@ -31,6 +31,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 		if {_cause} = "attack": # melee hit — if the passive is charged (counter = 3) this hit IS the empowered one; rbCHECK() then advances / resets the counter
 			if name of {_a}'s held item is "%{wc}%Rapid Dagger":
 				if {rapid-attack::%{_a}'s uuid%} = 3:
+					hbScaleNote({_a}, {_v}, 0.25) # 19-balance-stats.sk — Healthy Boy Value
 					set {_over} to effMaxHealth({_v}) - effMaxHealth({_a}) # (01-utils.sk — absorption counts as max health) empowered melee = the normal swing damage (crit included) PLUS 0.25 per heart of the victim's max health over Rapid's own; nothing is added against an equal/lower max health. Capped at +1.5 — the same ceiling the arrow's formula has above its 2.5 base
 					if {_over} > 0:
 						if {_over} > 4: # counts at most 4 hearts over
@@ -42,6 +43,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 			rbCHECK({_a})
 		else if {_cause} = "projectile":
 			if {_other} = "RB-PASSIVE": # Longshot passive arrow — 2.5 base +0.25 per heart of the victim's max health over Rapid's own, counting at most 4 hearts (3.5 max), see rapid.sk
+				hbScaleNote({_a}, {_v}, 0.25) # 19-balance-stats.sk — Healthy Boy Value
 				set {_dmg} to rbPassiveDamage({_a}, {_v})
 			else if {_other} = "RB": # base ultimate's rapid-fire arrows — 0.4 R-AD base, scales up to 0.6 R-AD at >= 7.5 blocks
 				if (distance between {_a} and {_v}) >= 7.5:
@@ -76,6 +78,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 				else:
 					set {_dmg} to 7.5
 				if classLevel({_a}, "EA") >= 3: # Perk 2 (Execution) — +1 for every heart of max health the target has over Executioner's own (absorption counts, 01-utils.sk)
+					hbScaleNote({_a}, {_v}, 1) # 19-balance-stats.sk — Healthy Boy Value
 					set {_over} to effMaxHealth({_v}) - effMaxHealth({_a})
 					if {_over} > 4: # counts at most 4 hearts over — +4 max
 						set {_over} to 4
@@ -131,6 +134,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 	# Damage Reductions
 	if {_cause} is "lightning":
 		if {class::%{_a}'s uuid%} is "ZT": # Zeus's lightning (tactical + ultimate): 1.5 base, +0.25 for every heart the hit target has over Zeus's own max health, capped at 2.5 — replaces the old flat 0.6x of vanilla lightning (which also came out to 1.5)
+			hbScaleNote({_a}, {_v}, 0.25) # 19-balance-stats.sk — Healthy Boy Value: how much an extra heart changes this
 			set {_over} to effMaxHealth({_v}) - effMaxHealth({_a}) # 01-utils.sk — absorption counts as max health
 			if {_over} < 0:
 				set {_over} to 0
@@ -241,6 +245,7 @@ on damage of player: # void = instant death, bypassing normal damage scaling
 			if {playerSpawn::%victim's uuid%} is set:
 				teleport victim to {playerSpawn::%victim's uuid%}
 				stop
+		set {hbVoidAt::%victim's uuid%} to unix timestamp of now # 19-balance-stats.sk — Healthy Boy Value: a killer falling into the void right after a kill
 		kill victim
 
 on shoot with priority low: # tags every projectile with its shooter's weapon class ID (read from lore line 1, see 02-class-data.sk)
