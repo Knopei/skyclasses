@@ -1,0 +1,64 @@
+# ============================================
+# BESTIARY — every jungle camp, boss and the Seerhopper, from the Bestiary icon on the /class page (18-class-browser.sk)
+# Read-only reference: health, XP, rewards, when it spawns, and each ability's name with a short description (only the numbers that
+# matter to a player). Built once on load — if a number changes in the game, update its lines here too.
+# ============================================
+
+on load:
+	# ---- JUNGLE CAMPS ----
+	set {bestiary::marauder} to zombie villager spawn egg named "&2&lMarauder" with lore "" and "&8Jungle camp &7(2 of the 4 camps)" and "" and "&7Health: &c12❤ &7| XP: &e7" and "&7Respawns: &f30 s &7after it dies" and "" and "&f&lBEHAVIOR" and "&8&oPassive until hit. Pulled more than 5" and "&8&oblocks from its camp, it walks back" and "&8&oand heals 10%%." and "" and "&f&lABILITIES &8(every 8-12 s)" and "&cGround Slam" and "&8&oA ring around it goes gray to red," and "&8&othen slams and knocks you up." and "&aPoison Cloud" and "&8&oA ring under you goes gray to red, then" and "&8&oturns green: Poison II + Slowness II" and "&8&owhile you stand in it." and "" and "&6&lAFTER A SOUL IS CLAIMED" and "&8&oKilling it heals you 25%%." and ""
+	set {bestiary::crawlers} to cave spider spawn egg named "&4&lCrawlers" with lore "" and "&8Jungle camp &7(2 of the 4 camps, 3 spiders)" and "" and "&7Health: &c4❤ each &7| XP: &e2 each &7(6 total)" and "&7Respawns: &f30 s &7after the whole pack" and "&7dies" and "" and "&f&lBEHAVIOR" and "&8&oPassive until hit. Pulled more than 5" and "&8&oblocks from its camp, it walks back" and "&8&oand heals 10%%. A Crawler can't hurt" and "&8&oyou for a moment after you first hit it." and "" and "&6&lAFTER A SOUL IS CLAIMED" and "&8&oClearing the whole pack heals you 20%%." and ""
+	set {bestiary::seerhopper} to frog spawn egg named "&6◎ &6&lSeerhopper" with lore "" and "&8Special jungle mob &7(counts as a jungle mob)" and "" and "&7Health: &c12❤ &7| XP: &e6" and "" and "&f&lWHEN IT APPEARS" and "&8&o30 s into the match, and 30 s after a" and "&8&oboss dies if the next boss is still 60+ s" and "&8&oaway. At one of 4 spots around the boss" and "&8&oplatform. It leaves 15 s before the next" and "&8&oboss spawns." and "" and "&f&lBEHAVIOR" and "&8&oSits still until hit, then hops away." and "&8&oLeft alone for 6 s, it slowly heals." and "" and "&6&lREWARD: SEER'S EYE" and "&8&oFor 60 s your opponent's name tag is" and "&8&ovisible to you through walls (not while" and "&8&othey're invisible), and an arrow briefly" and "&8&opoints at them." and ""
+
+	# ---- LOW-LEVEL BOSSES ----
+	set {bestiary::evoker} to evoker spawn egg named "&5✦ &4&lEvoker" with lore "" and "&8Low-level boss" and "" and "&7Health: &c25❤ &7| XP: &e10 &7+ &a1 life" and "" and "&f&lABILITIES" and "&5Evoker Fangs" and "&8&oIts normal attack." and "&5Magic Spears" and "&8&oRises into the air; a ring follows you" and "&8&o(turns purple), then spears drop and" and "&8&oslow you. Leave the ring." and "&5Clones" and "&8&oTwo copies appear and each casts fangs." and "&8&oAny hit makes a clone vanish." and ""
+	set {bestiary::vindicator} to vindicator spawn egg named "&7⚔ &4&lVindicator" with lore "" and "&8Low-level boss" and "" and "&7Health: &c25❤ &7| XP: &e10 &7+ &a1 life" and "" and "&f&lABILITIES" and "&7Axe Slam" and "&8&oMarks a circle in front of it, then" and "&8&oslams it: heavy damage + Slowness." and "&7Dash" and "&8&oCharges up while a line tracks you," and "&8&othen dashes along it." and ""
+	set {bestiary::pillager} to pillager spawn egg named "&8➶ &4&lPillager" with lore "" and "&8Low-level boss" and "" and "&7Health: &c25❤ &7| XP: &e10 &7+ &a1 life" and "" and "&f&lABILITIES" and "&7Multishot Crossbow" and "&8&oIts normal attack." and "&7Flashbang" and "&8&oThrows a candle; when its ring turns" and "&8&oblack it bursts: Wither II + Blindness." and "&7Arrow Rain" and "&8&oA ring follows you, then locks in place" and "&8&oand a rain of arrows falls inside it." and ""
+	set {bestiary::soul} to soul lantern named "&d&lSoul System" with lore "" and "&7Slay &e3 &7low-level bosses to claim a" and "&7&lSOUL&7. After the first soul is claimed," and "&7only high-level bosses spawn." and "" and "&f&lYOUR SOUL &8(2+ of one type, or 1 each)" and "&5✦ Evoker Soul &8— +10%% mana regen" and "&7⚔ Vindicator Soul &8— +20%% stamina regen" and "&8➶ Pillager Soul &8— grenades recharge 50%%" and "&8   faster (with Quick Fuse: 5 s faster)" and "&d✪ Raid Soul &8— ultimate cooldowns -10%%" and "" and "&f&lVENGEANCE" and "&8&oUntil someone claims a soul, each" and "&8&olow-level boss you've slain makes you" and "&8&odeal 20%% less damage to bosses." and "&8&oYour bossbar shows it." and ""
+
+	# ---- HIGH-LEVEL BOSSES ----
+	set {bestiary::harbinger} to warden spawn egg named "&3☠ &4&lHarbinger" with lore "" and "&8High-level boss" and "" and "&7Health: &c50❤ &7| XP: &e20 &7+ &3buff" and "" and "&f&lABILITIES" and "&3Ground Spikes" and "&8&oA ring around it and 4 small rings on" and "&8&othe diagonals: it slams (knock-up), then" and "&8&ospikes erupt in the small rings (Slowness)." and "&3Sonic Beam" and "&8&oCharges, then fires a beam along a" and "&8&oline that tracks you; it pushes you back." and "" and "&6&lBUFF: HARBINGER'S MIGHT" and "&8&oMelee damage multiplier +0.5." and ""
+	set {bestiary::magmaroth} to magma cube spawn egg named "&6♨ &4&lMagmaroth" with lore "" and "&8High-level boss" and "" and "&7Health: &c25❤&7, then splits into &c3 × 8❤" and "&7XP: &e20 &7+ &6buff" and "" and "&f&lBEHAVIOR" and "&8&oTouching it hurts. At 0 health it splits" and "&8&ointo 3 cubes; it dies with the last one." and "" and "&f&lABILITIES &8(every cube uses them)" and "&6Magma Jump" and "&8&oLeaps at you; landing knocks you up and" and "&8&osets you on fire." and "&6Fire Breath" and "&8&oA cone in front of it, then it breathes" and "&8&ofire: sets you on fire." and "" and "&6&lBUFF: MAGMAROTH'S FURY" and "&8&o+0.5 damage within 2 s of a movement" and "&8&oability, and a hit that leaves an enemy" and "&8&oat 1.5 hearts or less ignites them." and ""
+	set {bestiary::doomhoof} to ravager spawn egg named "&c✚ &4&lDoomhoof" with lore "" and "&8High-level boss &7(ravager + rider)" and "" and "&7Health: &c50❤ &7shared &7| XP: &e20 &7+ &cbuff" and "" and "&f&lBEHAVIOR" and "&8&oThe ravager and its rider share one" and "&8&ohealth pool and die together." and "" and "&f&lABILITIES" and "&cBash" and "&8&oA strip in front of it, then it charges:" and "&8&oheavy damage, knockback + Slowness." and "&cChain Lasso" and "&8&oChains everyone within 9 blocks; move" and "&8&o9+ blocks away to break it, or get yanked" and "&8&oin with stamina disabled + Slowness." and "" and "&6&lBUFF: DOOMHOOF'S VIGOR" and "&8&o+1 max heart and Regeneration I." and ""
+
+	# ---- RULES ----
+	set {bestiary::schedule} to clock named "&e&lBoss Schedule" with lore "" and "&8&oOne boss at a time, at the center." and "" and "&7First boss: &f3:00 &7into the match" and "&7Next: &f3 min &7after the last spawned," and "&7never sooner than &f60 s &7after one died" and "&7Lasts: &f2:00 &7(+0:30 if being fought)" and "" and "&8&oPassive until hit. First ability 3-6 s" and "&8&oafter waking, then one every 8-10 s." and "&8&oPulled more than 7 blocks away, it" and "&8&owalks back and heals 10%%." and "" and "&f&lREWARDS" and "&8&oLow-level: XP + 1 life." and "&8&oHigh-level: XP + a buff on all 3 of your" and "&8&oclasses. A class loses it when it dies;" and "&8&oit ends when the next boss spawns." and ""
+	set {bestiary::catchup} to experience bottle named "&b&lXP Catch-up" with lore "" and "&8&oBehind your opponent in total XP? Player" and "&8&oand boss kills give +1 XP for every 10 XP" and "&8&oyou're behind (up to +50%%)." and ""
+
+	set {bestiary::label::jungle} to oak leaves named "&2&lJungle Camps" with lore "" and "&8&oAlways around the map." and ""
+	set {bestiary::label::low} to crossbow named "&4&lLow-Level Bosses" with lore "" and "&8&oUntil a soul is claimed." and ""
+	set {bestiary::label::high} to netherite sword named "&4&lHigh-Level Bosses" with lore "" and "&8&oAfter a soul is claimed." and ""
+
+function openBestiary(p: player):
+	set metadata tag "bestiary" of {_p} to chest inventory with 6 rows named "Bestiary"
+	set slot (integers between 0 and 53) of metadata tag "bestiary" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "bestiary" of {_p} to black stained glass pane named " "
+	set slot (integers between 45 and 53) of metadata tag "bestiary" of {_p} to black stained glass pane named " "
+	set slot 4 of metadata tag "bestiary" of {_p} to (skull banner pattern named "&6&lBestiary" with lore "" and "&8&oEvery jungle camp and boss: health," and "&8&oXP, rewards and abilities." and "") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_place::9} to {bestiary::label::jungle} # row 2: jungle
+	set {_place::11} to {bestiary::marauder}
+	set {_place::12} to {bestiary::crawlers}
+	set {_place::13} to {bestiary::seerhopper}
+	set {_place::18} to {bestiary::label::low} # row 3: low-level bosses + the soul system
+	set {_place::20} to {bestiary::evoker}
+	set {_place::21} to {bestiary::vindicator}
+	set {_place::22} to {bestiary::pillager}
+	set {_place::25} to {bestiary::soul}
+	set {_place::27} to {bestiary::label::high} # row 4: high-level bosses
+	set {_place::29} to {bestiary::harbinger}
+	set {_place::30} to {bestiary::magmaroth}
+	set {_place::31} to {bestiary::doomhoof}
+	set {_place::16} to {bestiary::catchup} # right-hand column: XP Catch-up above the Soul System, Boss Schedule below it
+	set {_place::34} to {bestiary::schedule}
+	loop {_place::*}:
+		set {_i} to loop-index parsed as an integer
+		set slot {_i} of metadata tag "bestiary" of {_p} to loop-value with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 45 of metadata tag "bestiary" of {_p} to {class-bottom::back} # 05-class-menu.sk — back to the /class page
+	open (metadata tag "bestiary" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "bestiary" of player):
+		cancel event
+		if index of event-slot is 45:
+			openClassBrowser(player) # 18-class-browser.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player

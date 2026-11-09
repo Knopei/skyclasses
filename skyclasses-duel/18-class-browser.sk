@@ -24,18 +24,18 @@
 on load:
 	# ---- RATINGS (Difficulty / Melee / Range / Toughness / Crowd Control / Mobility) ----
 	set {class-rating::PGS::*} to "&a●&2●&7●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●&7●●● &bMobility"
-	set {class-rating::VBA::*} to "&a●●●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&7●●● &5Crowd Control" and "&a●●&7●● &bMobility"
+	set {class-rating::VBA::*} to "&a●●●● &cClose Damage" and "&a●●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&7●●● &5Crowd Control" and "&a●&2●&7●● &bMobility"
 	set {class-rating::RB::*} to "&a●●●&7● &cClose Damage" and "&a●●●&2● &eRange Damage" and "&7●●●● &6Toughness" and "&7●●●● &5Crowd Control" and "&a●●&7●● &bMobility"
-	set {class-rating::DS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&a●●●&7● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●&7●●● &bMobility"
+	set {class-rating::DS::*} to "&a●●&7●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&a●●●&2● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&7●●●● &bMobility"
 	set {class-rating::GD::*} to "&a●●&2●&7● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●&7●● &6Toughness" and "&7●●●● &5Crowd Control" and "&a●●●● &bMobility"
 	set {class-rating::ZT::*} to "&a●●●&7● &cClose Damage" and "&a●●●&7● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●&7●●● &bMobility"
 	set {class-rating::MH::*} to "&a●●●&2● &cClose Damage" and "&7●●●● &eRange Damage" and "&2●&7●●● &6Toughness" and "&a●●●&7● &5Crowd Control" and "&a●&2●&7●● &bMobility"
-	set {class-rating::RS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&a●&7●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●●&2●&7● &bMobility"
-	set {class-rating::NS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&2●&7● &5Crowd Control" and "&a●●●&7● &bMobility"
+	set {class-rating::RS::*} to "&a●●&7●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&2●&7● &5Crowd Control" and "&a●●&2●&7● &bMobility"
+	set {class-rating::NS::*} to "&a●●&7●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●●●&7● &bMobility"
 	set {class-rating::FH::*} to "&a●●&7●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●●&2● &6Toughness" and "&a●&7●●● &5Crowd Control" and "&a●●&7●● &bMobility"
-	set {class-rating::BS::*} to "&a●●&7●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●&2●&7● &6Toughness" and "&a●●●&7● &5Crowd Control" and "&a●&7●●● &bMobility"
+	set {class-rating::BS::*} to "&a●●&2●&7● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●●&2●&7● &6Toughness" and "&a●●●&7● &5Crowd Control" and "&2●&7●●● &bMobility"
 	set {class-rating::CB::*} to "&a●●&7●● &cClose Damage" and "&a●●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●●●&7● &bMobility"
-	set {class-rating::TS::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&2●&7● &5Crowd Control" and "&a●●●&7● &bMobility" # Range 1/4 (was 1.5/4), Mobility 3/4 (was 2.5/4) — half a point moved from Range to Mobility
+	set {class-rating::TS::*} to "&a●●&7●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●●●&7● &bMobility"
 	set {class-rating::EA::*} to "&a●●●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●&7●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●●&7●● &bMobility"
 
 	# ---- LEVEL UNLOCK INFO (Level 1 = ultimate, Level 2 = Perk 1, Level 3 = Perk 2) ----
@@ -208,6 +208,7 @@ function openClassBrowser(p: player):
 	placeClassBrowserCategoryRow({_p}, 27, "SKIRMISHER")
 
 	set slot 49 of metadata tag "class browser" of {_p} to {browser::stats} # center bottom
+	set slot 47 of metadata tag "class browser" of {_p} to (skull banner pattern named "&6&lBestiary" with lore "" and "&7Every jungle camp and boss:" and "&7health, XP, rewards, buffs" and "&7and abilities." and "" and "&7[CLICK] Open") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 24-bestiary.sk
 	set slot 51 of metadata tag "class browser" of {_p} to (comparator named "&b&lGame Settings" with lore "" and "&7Choose your inventory layout:" and "&7which hotbar slot your weapon," and "&7golden apples, consumable and" and "&7grenades go into." and "" and "&8Also: /gamesettings or /gs" and "" and "&7[CLICK] Open") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 23-game-settings.sk
 
 	open (metadata tag "class browser" of {_p}) to {_p}
@@ -244,6 +245,9 @@ on inventory click:
 		set {_class} to {classBrowserSlotClass::%player's uuid%::%{_slot}%}
 		if {_class} is set:
 			openClassInfoPage(player, {_class})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {_slot} is 47:
+			openBestiary(player) # 24-bestiary.sk
 			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
 		else if {_slot} is 51:
 			openGameSettings(player) # 23-game-settings.sk (refuses during a match)
