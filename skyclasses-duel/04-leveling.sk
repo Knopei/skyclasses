@@ -309,14 +309,17 @@ function updateLevelSidebar(p: player):
 				set line (4+loop-value) of {_p}'s fastboard to "&e%{class-name::%{_class}%}%&7: Lvl %{_lvl}% (MAX)"
 	set line 8 of {_p}'s fastboard to ""
 
-# ---- SKIRMISHER CATEGORY BUFF (level 2+) ----
-# Every Skirmisher class (GD, NS, RS, CB, TS) deals +0.25 damage with its direct-hit tactical from level 2 on. The class files add
-# skirmisherTacBonus() to their own tactical damage; Cyberpunk's dart and Ninja's shuriken go through 08-damage.sk's arrow pipeline.
+# ---- CATEGORY BUFFS (level 2+) ----
+# Skirmisher (GD, NS, RS, CB, TS): execute — a melee or ability hit that leaves the enemy at 0.5 hearts or less kills them (damage over
+#   time never triggers it). Applied in 08-damage.sk's dmgUpdate().
+# Striker (MH, RB, VBA, ZT, EA): faster stamina regeneration while the opponent is low (03-resources.sk).
+# Juggernaut (BS, FH, PGS, DS): regeneration out of combat (20-combat.sk).
 
-function skirmisherTacBonus(p: entity) :: number: # 0.25 for a level 2+ Skirmisher player, else 0
+function categoryLevel2(p: entity, cat: text) :: boolean: # true when this player's current class is in that category and level 2+
 	if {_p} is a player:
 		set {_c} to {class::%{_p}'s uuid%}
-		if classCategory({_c}) is "SKIRMISHER":
-			if classLevel({_p}, {_c}) >= 2:
-				return 0.25
-	return 0
+		if {_c} is set:
+			if classCategory({_c}) is {_cat}:
+				if classLevel({_p}, {_c}) >= 2:
+					return true
+	return false

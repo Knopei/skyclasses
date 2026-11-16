@@ -26,14 +26,14 @@ on load:
 	set {gp-dmgReduction} to 40 # Reinforced Movement: %% damage reduction while airborne from a movement ability (see perkDashReduction() below)
 	set {gp-ultManaReduction} to 15 # Spell Caster: flat mana reduction on ultimates (applied in 03-resources.sk)
 	set {gp-ultCDReduction} to 15 # Spell Caster: percent cooldown reduction on ultimates (applied via ultCooldownFor() below, called from every class file's ultimate trigger). The reduction is rounded to the nearest whole second first — e.g. 70s: 10.5 -> 11s off -> 59s; 60s: 9s off -> 51s; 80s: 12s off -> 68s; 90s: 13.5 -> 14s off -> 76s
-	set {gp-staminaRecoveryBonus} to 3 # Stamina Recovery: flat bonus added to the base 7.5/tick regen every 5 ticks (40%% of 7.5)
+	set {gp-staminaRecoveryBonus} to 60 # Stamina Recovery: +60%% stamina regeneration (added up with the other bonuses in 03-resources.sk's staminaRegenBonus(), capped at +100%%)
 
 	# ---- Selection GUI display items (also reused by 18-class-browser.sk's read-only info page) ----
 	set {gp-caption} to glowstone dust of unbreaking 1 named "&e&lGeneral Perks" with lore "" and "&8&oChoose a passive perk that best" and "&8&omatches your playstyle." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
 	set {gp-display::healthyboy} to apple named "&c&lHealthy Boy" with lore "" and "&f&lPASSIVE" and "&8&oGain an extra heart." and ""
-	set {gp-display::staminarecovery} to feather named "&e&lStamina Recovery" with lore "" and "&f&lPASSIVE" and "&8&oStamina regenerates 40%% quicker." and ""
-	set {gp-display::reinforceddash} to golden helmet named "&6&lReinforced Movement" with lore "" and "&f&lPASSIVE" and "&8&oTake 40%% less damage while airborne" and "&8&ofrom stamina and movement abilities." and ""
+	set {gp-display::staminarecovery} to feather named "&e&lStamina Recovery" with lore "" and "&f&lPASSIVE" and "&8&oStamina regenerates 60%% quicker." and ""
+	set {gp-display::reinforceddash} to golden helmet named "&6&lReinforced Movement" with lore "" and "&f&lPASSIVE" and "&8&oTake 40%% less damage while airborne" and "&8&ofrom stamina and movement abilities." and "&8&oOnce every 2.5 seconds; doesn't stack." and ""
 	set {gp-display::spellcaster} to water bottle named "&9&lSpell Caster" with lore "" and "&f&lPASSIVE" and "&8&oUltimate mana cost reduced by 15," and "&8&oand ultimate cooldown reduced by 15%%" and "&8&o(ultimates with a 50+ second cooldown)." and ""
 	set {gp-display::enchantedconsumables} to golden apple named "&6&lEnchanted Consumables" with lore "" and "&f&lPASSIVE" and "&8&oAll consumables heal an extra" and "&8&o+0.75 hearts of health." and ""
 	set {gp-display::nimblefeet} to rabbit foot named "&b&lNimble Feet" with lore "" and "&f&lPASSIVE" and "&8&oTake zero fall stun and gain" and "&8&ospeed 2 briefly." and ""
@@ -137,14 +137,34 @@ on inventory close: # while respawning, closing this menu (for any reason) retur
 #   stamina dash (03-resources.sk), Mighty ult leap + mid-air dash (mighty.sk), Executioner Cleaving Rush (executioner.sk), Ghost Lunge (ghost.sk),
 #   Reaper grapple movement (reaper.sk), Frankenstein Leap (frankenstein.sk), Tempest Air Burst self-launch + Tornado push (tempest.sk).
 # Cyberpunk's phase is instant, so it uses perkPhaseReduction() below instead (a flat half second, no airborne check).
-# Calling it again while it's already running just restarts the grace window — the one running loop keeps going until landing.
+# It can trigger at most once every 2.5 seconds, and it never stacks or extends: a movement while it's already running (or within 2.5 s of
+# the last trigger) does nothing — the running reduction still ends on landing as usual.
+# These two functions also stamp {lastMoveAbility::uuid} for Magmaroth's Fury (12-major-boss.sk / 08-damage.sk): its +0.5 damage window
+# lasts 2 seconds from the movement and can only start once every 2 seconds — a movement inside a running window doesn't restart it.
+function markMoveAbility(p: player): # Magmaroth's Fury window: starts only if the last one started 2+ seconds ago
+	set {_last} to {lastMoveAbility::%{_p}'s uuid%}
+	if {_last} is set:
+		if ((unix timestamp of now) - {_last}) < 2:
+			stop
+	set {lastMoveAbility::%{_p}'s uuid%} to unix timestamp of now
+
+function rdCanTrigger(p: player) :: boolean: # Reinforced Movement: not already running, and 2.5 s since the last trigger
+	set {_uuid} to {_p}'s uuid
+	if {rd-active::%{_uuid}%} is set:
+		return false
+	if {rd-last::%{_uuid}%} is set:
+		if ((unix timestamp of now) - {rd-last::%{_uuid}%}) < 2.5:
+			return false
+	return true
+
 function perkDashReduction(p: player):
-	set {lastMoveAbility::%{_p}'s uuid%} to unix timestamp of now # 12-major-boss.sk — Magmaroth's Fury reads this (every movement ability calls this function, whatever the perk)
+	markMoveAbility({_p})
 	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
 		set {_uuid} to {_p}'s uuid
-		set {rd-hold::%{_uuid}%} to now # (re)starts the grace window in which being on the ground doesn't end the reduction yet
-		if {rd-active::%{_uuid}%} is set: # a loop from an earlier movement is already running
+		if rdCanTrigger({_p}) is false:
 			stop
+		set {rd-last::%{_uuid}%} to unix timestamp of now
+		set {rd-hold::%{_uuid}%} to now # the grace window in which being on the ground doesn't end the reduction yet
 		set {rd-active::%{_uuid}%} to true
 		set {playerDefense::%{_uuid}%} to {gp-dmgReduction}
 		loop 150 times: # hard cap of 15 seconds, in case a landing is somehow never detected
@@ -164,30 +184,27 @@ function perkDashReduction(p: player):
 		delete {rd-hold::%{_uuid}%}
 
 # Reinforced Movement for Cyberpunk's phase (cyberpunk.sk): half a second of reduction from the moment the ultimate is used, no airborne check.
+# Same once-per-2.5-seconds, no-stacking rule as above.
 function perkPhaseReduction(p: player):
-	set {lastMoveAbility::%{_p}'s uuid%} to unix timestamp of now # 12-major-boss.sk — Magmaroth's Fury
+	markMoveAbility({_p})
 	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
 		set {_uuid} to {_p}'s uuid
-		if {rd-active::%{_uuid}%} is set: # an airborne-reduction loop is already covering this
+		if rdCanTrigger({_p}) is false:
 			stop
+		set {rd-last::%{_uuid}%} to unix timestamp of now
+		set {rd-active::%{_uuid}%} to true
 		set {playerDefense::%{_uuid}%} to {gp-dmgReduction}
 		wait 10 ticks
-		if {rd-active::%{_uuid}%} isn't set:
-			if {playerDefense::%{_uuid}%} = {gp-dmgReduction}:
-				delete {playerDefense::%{_uuid}%}
+		if {playerDefense::%{_uuid}%} = {gp-dmgReduction}:
+			delete {playerDefense::%{_uuid}%}
+		delete {rd-active::%{_uuid}%}
 
 on load:
 	delete {rd-active::*}
 	delete {rd-hold::*}
+	delete {rd-last::*}
 
-# Stamina Recovery — supplements the base regen tick in 03-resources.sk with a 40%% bonus (the old speed burst at full stamina was removed)
-every 5 ticks:
-	loop all players:
-		if {general-perk::%loop-player's uuid%::selected} is "staminarecovery":
-			if {stamina::%loop-player's uuid%::max} > {stamina::%loop-player's uuid%::curr}:
-				add {gp-staminaRecoveryBonus} to {stamina::%loop-player's uuid%::curr} # 40%% of the base 7.5/tick
-				if {stamina::%loop-player's uuid%::curr} > {stamina::%loop-player's uuid%::max}: # this bonus stacking with the base regen tick (03-resources.sk) could overshoot past max — clamp it
-					set {stamina::%loop-player's uuid%::curr} to {stamina::%loop-player's uuid%::max}
+# Stamina Recovery's +60%% is applied by the regen tick in 03-resources.sk (staminaRegenBonus()), together with the other bonuses.
 
 # Fall stun / landing speed:
 #  - Nimble Feet (general perk): no fall stun + Speed 2 for 1 second on landing.

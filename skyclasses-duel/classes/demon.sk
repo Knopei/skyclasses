@@ -1,7 +1,7 @@
 # ============================================
 # DEMON (DS) — Demonic Saber
 # Tactical: always available. Ultimate: unlocks at class level 1.
-# Perk 1 (level 2) "Efficient Siphon": the tactical costs 5 less mana (50 -> 45). (Replaced "Extended Siphon", which raised the beam range 5 -> 7.5.)
+# Perk 1 (level 2) "Extended Siphon": the tactical's beam range goes from 5 to 7.5 blocks. (Back again — it had been replaced by "Efficient Siphon", -5 mana.)
 # Perk 2 (level 3) "Vampire": increases lifesteal per hit during the ultimate.
 # ============================================
 
@@ -21,14 +21,17 @@ function demonicBeam(p: player, e: living entity, v: vector, h: number):
 on right click with netherite sword: # TACTICAL
 	if name of player's held item is "%{wc}%Demonic Saber":
 		set {_cost} to {weapons::DS::TAC-COST}
-		if classLevel(player, "DS") >= 2: # Perk 1 (Efficient Siphon) — -5 mana
-			set {_cost} to {_cost} - 5
 		if tacCHECK(player, {_cost}) is true:
 			set {_beamRange} to 5
+			if classLevel(player, "DS") >= 2: # Perk 1 (Extended Siphon) — 7.5 blocks
+				set {_beamRange} to 7.5
 
 			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
-			loop {_beamRange} times:
+			set {_dis} to 0
+			while {_dis} < {_beamRange}: # steps of 1 block out to the range (the last step lands exactly on 7.5 with Extended Siphon)
 				add 1 to {_dis}
+				if {_dis} > {_beamRange}:
+					set {_dis} to {_beamRange}
 				set {_loc} to location {_dis} blocks infront of player
 				set {_loc} to location 1 blocks above {_loc}
 				loop all living entities in radius 2.5 of {_loc}:
@@ -82,16 +85,17 @@ on drop of netherite sword with priority low: # ULTIMATE
 									if {_max} < 3:
 										demonicBeam(player, loop-entity, {_v}, 1.25)
 										damage loop-entity by 0.5 hearts
-										set {_heal} to true
+										add 1 to {_hits}
 										add 1 to {_max}
 								else:
 									set {_v} to vector from player to loop-entity
 									demonicBeam(player, loop-entity, {_v}, 1.25)
 									damage loop-entity by 0.5 hearts
-									set {_heal} to true
-					if {_heal} is set:
-						heal player by 0.5 hearts
-					delete {_heal}
+									add 1 to {_hits}
+					if {_hits} > 0: # 0.5 hearts for the first enemy hit by this pulse, +0.25 hearts for each additional one
+						set {_amt} to 0.5 + (({_hits} - 1) * 0.25)
+						heal player by {_amt}
+					delete {_hits}
 					delete {_v}
 					delete {_max}
 					delete {balance-abilitySource::%player's uuid%}

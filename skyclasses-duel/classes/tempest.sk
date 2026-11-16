@@ -42,7 +42,7 @@ on projectile hit with priority low: # Air Burst impact — handles BOTH the dir
 						updateAttacker({_shooter}, {_direct})
 						directAttack({_direct})
 						set {balance-abilitySource::%{_shooter}'s uuid%} to "TAC" # 19-balance-stats.sk — matches how 08-damage.sk's own generic projectile handler tags TAC/ULT before calling dmgUpdate()
-						damage {_direct} by (2 + skirmisherTacBonus({_shooter})) # raw ability damage only — "damage X by Y" fires its own fresh damage event, which 08-damage.sk's generic handler catches and runs through dmgUpdate() itself (same as the AOE splash's flat "damage loop-entity by 1" below). Calling dmgUpdate() here too double-counted it: showDMG() fired twice, showing the hit number twice for one hit
+						damage {_direct} by 3.5 # Air Burst direct hit: 3.5 (was 2) — raw ability damage only — "damage X by Y" fires its own fresh damage event, which 08-damage.sk's generic handler catches and runs through dmgUpdate() itself (same as the AOE splash's flat "damage loop-entity by 1" below). Calling dmgUpdate() here too double-counted it: showDMG() fired twice, showing the hit number twice for one hit
 						if {_shooter} is a player: # a direct hit also triggers the passive (Airborne) for the shooter
 							tsAirborne({_shooter})
 			# (the AOE splash — 1.25 damage + Slowness I to everyone near the impact — was removed: the burst now only knocks back, via the vanilla wind charge)

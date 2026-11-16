@@ -1,9 +1,9 @@
 # ============================================
 # GHOST (GD) — Ghost Dagger
 # Tactical: always available. Ultimate: unlocks at class level 1.
-# Passive "Spectral Lunge": while below half max health, the tactical (Lunge) turns the Ghost invisible (potion + hidden armor + hidden nametag,
+# Passive "Spectral Lunge": while below 3 hearts (5 with Perk 1), the tactical (Lunge) turns the Ghost invisible (potion + hidden armor + hidden nametag,
 #   same look as the ultimate) for as long as the lunge is active; it is removed when the lunge ends. Not applied while the ultimate is active.
-# Perk 1 (level 2) "Lunge Master": reduces the tactical's mana cost.
+# Perk 1 (level 2) "Deeper Shadows": Spectral Lunge works below 5 hearts instead of 3. (Replaced "Lunge Master", which reduced the tactical's mana cost.)
 # Perk 2 (level 3) "Supportive Ghost": adds cleanse + regen to the ultimate.
 # "Parried Lunge" (damage reduction while dashing) was cut per design decision —
 # the original 3-perk kit is trimmed to 2 slots.
@@ -22,13 +22,12 @@ on sprint toggle: # smoke trail while sprinting
 
 on right click with golden sword: # TACTICAL
 	if name of player's held item is "%{wc}%Ghost Dagger":
-		if classLevel(player, "GD") >= 2: # Perk 1 (Lunge Master)
-			set {_mana} to {perk-var::GD::alt-tac-cost}
-		else:
-			set {_mana} to {weapons::GD::TAC-COST}
+		set {_mana} to {weapons::GD::TAC-COST}
 		if tacCHECK(player, {_mana}) is true:
-			set {_half} to (max health of player) / 2
-			if health of player < {_half}: # Passive (Spectral Lunge) — below half health the lunge makes the Ghost invisible
+			set {_below} to 3 # Passive (Spectral Lunge) — below 3 hearts the lunge makes the Ghost invisible
+			if classLevel(player, "GD") >= 2: # Perk 1 (Deeper Shadows) — below 5 hearts instead
+				set {_below} to 5
+			if health of player < {_below}:
 				if {godlike-ULT-USE::%player's uuid%::GD} isn't set:
 					gdTacInvisOn(player)
 			set velocity of player to vector(0, 0, 0)
@@ -36,7 +35,7 @@ on right click with golden sword: # TACTICAL
 			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at player
 
-			set {_gd} to 1.75 + skirmisherTacBonus(player) # base 1.75 (was 2); Skirmisher category buff (level 2): +0.25
+			set {_gd} to 3 # Lunge damage (was 1.75)
 			loop 10 times:
 				add 1 to {_n}
 				set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk

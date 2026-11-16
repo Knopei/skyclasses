@@ -107,8 +107,5 @@ on drop of iron sword with priority low: # ULTIMATE
 			if {class::%player's uuid%} = "PGS":
 				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
 
-every 3 seconds: # passive (Believer): regeneration I while wielding the sword AND below half of max health
-	loop all players:
-		if name of loop-player's held item is "%{wc}%Paladin Great Sword":
-			if (health of loop-player) < ((max health of loop-player) / 2):
-				add potion effect of regeneration 1 without particles for 3 seconds to potion effects of loop-player
+# Passive (Believer): the Juggernaut level 2 out-of-combat regeneration heals at the Regeneration II rate (half a heart every 1.25 s)
+# instead of Regeneration I — handled in 20-combat.sk. (The old "regeneration I below 40%% health" passive was removed.)

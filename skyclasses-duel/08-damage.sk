@@ -49,10 +49,8 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 				if (distance between {_a} and {_v}) >= 7.5:
 					set {_dmg} to {_dmg}*1.5 # bridges 0.4 up to 0.6 (0.6 / 0.4 = 1.5x)
 	else if {class::%{_a}'s uuid%} is "CB":
-		if {_cause} = "projectile": # Malicious Dart — capped at 2 damage (2.25 with the level 2 Skirmisher bonus; the cap used to sit below the bonus and silently erased it)
-			set {_cbCap} to 2 + skirmisherTacBonus({_a})
-			if {_dmg} > {_cbCap}:
-				set {_dmg} to {_cbCap}
+		if {_cause} = "projectile": # Malicious Dart — a flat 3.5 damage
+			set {_dmg} to 3.5
 	else if {class::%{_a}'s uuid%} is "GD": # class-checked like RS above
 		if {_cause} = "attack": # ONLY a real melee hit may trigger/consume the Ghost's empowered hit. This used to run for every damage cause, and the generic non-melee branch of the damage event (fire, fall, poison, a lunge's flat damage...) resolves the attacker from the victim's "last attacker" metadata — so while the ult was up, ANY damage tick on someone the Ghost had recently hit fired the execute without a swing
 			if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
@@ -123,6 +121,9 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 	if {_a} is a player:
 		if {_a} is not {_v}:
 			if {_cause} is not "fire" or "fire_tick" or "fire tick" or "wither" or "poison" or "fall" or "void":
+				if {_cause} is "attack":
+					if hlBuffOf({_a}) is "harbinger": # Harbinger's Might: +1 damage on every melee hit (after the class caps above, so Mighty / Frankenstein keep it too)
+						add 1 to {_dmg}
 				if hlBuffOf({_a}) is "magmaroth": # Magmaroth's Fury: +0.5 within 2 s of a movement ability (the same ones Reinforced Movement tracks — 06-perks-general.sk)
 					if {lastMoveAbility::%{_a}'s uuid%} is set:
 						if ((unix timestamp of now) - {lastMoveAbility::%{_a}'s uuid%}) <= 2:
@@ -164,7 +165,36 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 
 	if {isShielding::%{_v}'s uuid%} is set:
 		if {_v}.isBlocking():
-			bsCHECK({_v}, {_dmg}, {_cause})
+			bsCHECK({_v}, {_dmg}, {_cause}, {_a}) # basher.sk — also reflects half of the blocked damage back at the attacker
+
+	# Skirmisher level 2 category buff — Execute: a melee or ability hit from a level 2+ Skirmisher that leaves a player at 0.5 hearts
+	# or less kills them instead. Damage over time (fire, wither, poison) and fall / void never trigger it. Absorption counts as health.
+	if {_v} is a player:
+		if {_a} is not {_v}:
+			if {_dmg} > 0:
+				if {_cause} is not "fire" or "fire_tick" or "fire tick" or "wither" or "poison" or "fall" or "void" or "lava" or "hot_floor" or "hot floor" or "freeze" or "suffocation" or "drowning" or "starvation" or "contact":
+					if categoryLevel2({_a}, "SKIRMISHER") is true: # 04-leveling.sk
+						if {_cause} is not "attack" or "projectile": # ability damage ("damage X by Y") names its attacker through updateAttacker() right before the hit — an older attacker (a boss or jungle hit landing on someone the Skirmisher hit earlier) doesn't count
+							set {_at} to metadata value "attackerAt" of {_v}
+							if {_at} is set:
+								if ((unix timestamp of now) - {_at}) > 0.1:
+									set {_noExec} to true
+							else:
+								set {_noExec} to true
+						if {isShielding::%{_v}'s uuid%} is set: # a Basher blocking with the shield takes nothing, so nothing to execute
+							if {_v}.isBlocking():
+								set {_noExec} to true
+						if {_noExec} isn't set:
+							set {hbExec::%{_v}'s uuid%} to {_dmg} # 19-balance-stats.sk — Healthy Boy Value: the shadow health gets the same execute rule, on the damage before the execute
+							set {_rem} to (health of {_v}) + (({_v}.getAbsorptionAmount()) / 2)
+							set {_left} to {_rem} - {_dmg}
+							if {_left} > 0:
+								if {_left} <= 0.5:
+									set {_dmg} to {_rem} + 0.01
+									set metadata value "skExecute" of {_v} to true # the damage event below makes sure they really die (resistance effects etc.)
+									play sound "entity.player.attack.crit" with volume 3 and pitch 0.6 to {_a} and {_v} # the execute crunch — played straight to both players, so neither can miss it
+									play sound "block.chain.break" with volume 3 and pitch 0.5 to {_a} and {_v}
+									play sound "entity.zombie.break_wooden_door" with volume 0.6 and pitch 1.4 to {_a} and {_v}
 
 	if {_mfIgnite} is true: # Magmaroth's Fury: a hit that leaves the enemy at 1.5 hearts or less sets them on fire for 3 seconds
 		if {_v} is alive:
@@ -279,15 +309,13 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 						set {_new} to {_dmg}*{weapons::%{_w}%::R-AD}
 						if {_new} < 0.5:
 							set {_new} to 0.5
-						if {_w} is "NS": # shuriken/arrow damage scales with the projectile's impact speed, which a downward throw can inflate past the intended amount — cap it so it always hits for the same damage regardless of angle
-							set {_cap} to 0.7
-							if skirmisherTacBonus(metadata value "attacker" of event-projectile) > 0: # Skirmisher category buff (level 2): 0.75 per shuriken
-								set {_cap} to 0.75
-								set {_new} to {_dmg} * 0.375
-							if {_new} > {_cap}:
-								set {_new} to {_cap}
-						else if {_w} is "CB": # Malicious Dart — Skirmisher category buff (level 2): +0.25
-							set {_new} to {_new} + skirmisherTacBonus(metadata value "attacker" of event-projectile)
+						if {_w} is "NS": # Shuriken Throw: flat damage whatever the throw angle — the first shuriken of a throw to land a hit does 1.5 (the next one if the first misses), every other one 1 (ninja.sk tags each shuriken with its throw's id)
+							set {_new} to 1
+							set {_cast} to metadata value "nsCast" of event-projectile
+							if {_cast} is set:
+								if {nsHit::%{_cast}%::hit} isn't set: # the throw's first landed hit, on anything
+									set {nsHit::%{_cast}%::hit} to true
+									set {_new} to 1.5
 				if {_new} is set:
 					set {_attacker} to metadata value "attacker" of event-projectile
 					set {_projSource} to metadata value "balanceSource" of event-projectile # 19-balance-stats.sk — "TAC"/"ULT", set by the class file at shoot time
@@ -300,8 +328,6 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 					set {_w} to (uncolored line 1 of lore of attacker's held item)
 					set {_dmgMult} to {weapons::%{_w}%::AD}
 					if {_w} is set:
-						if hlBuffOf(attacker) is "harbinger": # 12-major-boss.sk — Harbinger's Might: melee damage multiplier +0.5 (x4 -> x4.5, x5 -> x5.5)
-							add 0.5 to {_dmgMult}
 						set {_vbaUlt} to false
 						if {class::%attacker's uuid%} is "VBA":
 							if {godlike-ULT-USE::%attacker's uuid%::VBA} is set: # Viking ultimate (Big Rage): x8 multiplier, and crits add nothing — a full swing is 4, the most it can do
@@ -335,7 +361,14 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 				else:
 					set {_attacker} to metadata value "attacker" of victim
 				set damage to dmgUpdate({_attacker}, victim, {_dmg}, {_cause}, "none")
-	wait 1 tick
+	if metadata value "skExecute" of victim is set: # Skirmisher Execute (dmgUpdate) — anything that softened the hit can't leave them alive
+		delete metadata value "skExecute" of victim
+		wait 1 tick
+		if victim is alive:
+			if health of victim <= 0.5:
+				set health of victim to 0
+	else:
+		wait 1 tick
 	if {_w} is "RB":
 		set victim's invulnerability time to 10 ticks
 	else if {_cause} is "lightning":

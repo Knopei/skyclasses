@@ -100,6 +100,8 @@ function bmin(kind: text) :: number:
 		return 30
 	if {_kind} is "games":
 		return 10
+	if {_kind} is "hb":
+		return 10
 	return 20 # "events": kills + deaths, fights, picks, drafts
 
 function bgate(value: text, have: number, kind: text, unit: text) :: text: # the formatted value once {_have} reaches the bar for {_kind}, otherwise a dim "needs N more <unit>"
@@ -1201,6 +1203,10 @@ command /resetbalancestats:
 # SAVE (players WITH Healthy Boy): during a fight their shadow health drops to 0 or below while they're still alive (without the heart
 #   they'd have died), and the fight then ends with them winning it or escaping it alive.
 #
+# SKIRMISHER EXECUTE: a hit from a level 2+ Skirmisher kills at 0.5 hearts or less. The shadow follows the same rule on the hit's damage
+#   before the execute — e.g. with Healthy Boy, a hit leaving them at 1.25 hearts would have executed them without it (a save); without
+#   Healthy Boy, an executed player whose shadow would also be at 0.5 hearts or less is not a near miss.
+#
 # NEAR MISS (players WITHOUT Healthy Boy): they die to their opponent in a fight, and
 #   - their shadow health would still be above 0 after the killing blow, minus any burn / wither still to come (rule 2), and
 #   - the killer was "low": at or below the dead player's base melee damage (their class's melee multiplier / 2 — e.g. 2.5, 2.25 or 2),
@@ -1298,12 +1304,15 @@ on damage of player with priority monitor:
 	set {_u} to {_v}'s uuid
 	if event is cancelled:
 		delete {hbAdj::%{_u}%} # a cancelled hit never lands, so its note doesn't either
+		delete {hbExec::%{_u}%}
 		stop
 	if {inMatch::%{_u}%} isn't set:
 		delete {hbAdj::%{_u}%}
+		delete {hbExec::%{_u}%}
 		stop
 	if {respawning::%{_u}%} is set:
 		delete {hbAdj::%{_u}%}
+		delete {hbExec::%{_u}%}
 		stop
 	hbShadowSync({_v})
 	if {hbAdj::%{_u}%} is set:
@@ -1315,7 +1324,20 @@ on damage of player with priority monitor:
 	if {_hpLoss} < 0:
 		set {_hpLoss} to 0
 	set {_hp} to health of {_v}
-	set {_shadowAfter} to ({_hp} + {hbDelta::%{_u}%}) - {_hpLoss}
+	# Skirmisher Execute (08-damage.sk): when the hit came from a level 2+ Skirmisher, {hbExec::uuid} holds its damage BEFORE any execute. The
+	# shadow takes that damage and follows the same rule — at 0.5 hearts or less after the hit, the shadow is executed too.
+	set {_sLoss} to {_hpLoss}
+	set {_exec} to false
+	if {hbExec::%{_u}%} is set:
+		set {_exec} to true
+		set {_sLoss} to {hbExec::%{_u}%} - {_abs}
+		if {_sLoss} < 0:
+			set {_sLoss} to 0
+		delete {hbExec::%{_u}%}
+	set {_shadowAfter} to ({_hp} + {hbDelta::%{_u}%}) - {_sLoss}
+	if {_exec} is true:
+		if {_shadowAfter} <= 0.5:
+			set {_shadowAfter} to 0
 	set {_opp} to {matchOpponent::%{_u}%}
 	set {_inFight} to false
 	if {hbFight} is set:
@@ -1441,6 +1463,7 @@ function hbResetMatch(): # 10-match-manager.sk — match start / end: no fight o
 	delete {hbFightSave::*}
 	delete {hbDelta::*}
 	delete {hbAdj::*}
+	delete {hbExec::*}
 	delete {hbPending::*}
 
 # ---- PAGE: Healthy Boy Value ----
@@ -1471,7 +1494,7 @@ function hbLoreCategory(cat: text, recent: boolean) :: strings: # a class catego
 	return hbLoreFrom({_t::fights-hb}, {_t::wins-hb}, {_t::saves}, {_t::fights-no}, {_t::wins-no}, {_t::deaths-no}, {_t::nearmiss})
 
 function hbLoreFrom(fh: number, wh: number, sv: number, fn: number, wn: number, dn: number, nm: number) :: strings:
-	set {_min} to bmin("events") # fewer fights than this on a side = not enough data yet (shown grayed out)
+	set {_min} to bmin("hb") # fewer fights than this on a side = not enough data yet (shown grayed out)
 	set {_cw} to "&e"
 	if {_fh} < {_min}:
 		set {_cw} to "&8"
@@ -1509,7 +1532,8 @@ function openBalanceHBPage(p: player, recent: boolean):
 	set slot (integers between 0 and 44) of metadata tag "balance hb" of {_p} to gray stained glass pane named " "
 	set slot (integers between 0 and 8) of metadata tag "balance hb" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance hb" of {_p} to black stained glass pane named " "
-	set slot 4 of metadata tag "balance hb" of {_p} to (apple named "&c&lHealthy Boy Value" with lore "" and "&7Win rate in fights with and without" and "&7Healthy Boy, how often it saves a fight," and "&7and how often players without it die" and "&7one heart short. &8Grayed = under 20 fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_hbMin} to bmin("hb")
+	set slot 4 of metadata tag "balance hb" of {_p} to (apple named "&c&lHealthy Boy Value" with lore "" and "&7Win rate in fights with and without" and "&7Healthy Boy, how often it saves a fight," and "&7and how often players without it die" and "&7one heart short. &8Grayed = under %{_hbMin}% fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, and 25
 	delete {hbViewSlot::%{_p}'s uuid%::*}
 	loop {menu::classlist::*}:

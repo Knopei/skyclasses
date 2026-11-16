@@ -56,8 +56,8 @@ on load:
 	set {classlevel-name::DS::1} to "&4Blood Harvest"
 	set {classlevel-desc::DS::1::*} to "&8&oAutomatically shoot Blood Beams at" and "&8&oall nearby enemies."
 	set {classlevel-category::DS::2} to "Tactical Upgrade"
-	set {classlevel-name::DS::2} to "&6Efficient Siphon"
-	set {classlevel-desc::DS::2::*} to "&8&oYour tactical costs 5 less mana."
+	set {classlevel-name::DS::2} to "&6Extended Siphon"
+	set {classlevel-desc::DS::2::*} to "&8&oIncreases your tactical's range."
 	set {classlevel-category::DS::3} to "Ultimate Upgrade"
 	set {classlevel-name::DS::3} to "&6Vampire"
 	set {classlevel-desc::DS::3::*} to "&8&oIncreases lifesteal per hit during" and "&8&othe ultimate."
@@ -75,9 +75,9 @@ on load:
 	set {classlevel-category::GD::1} to "Unlocks Ultimate"
 	set {classlevel-name::GD::1} to "&4Ghost"
 	set {classlevel-desc::GD::1::*} to "&8&oGain immense speed and invisibility" and "&8&o+ your next attack while invis deals 2.5" and "&8&odamage, +0.5 per second invisible (max 4.5)."
-	set {classlevel-category::GD::2} to "Tactical Upgrade"
-	set {classlevel-name::GD::2} to "&6Lunge Master"
-	set {classlevel-desc::GD::2::*} to "&8&oReduces the tactical's mana cost."
+	set {classlevel-category::GD::2} to "Passive Upgrade"
+	set {classlevel-name::GD::2} to "&6Deeper Shadows"
+	set {classlevel-desc::GD::2::*} to "&8&oSpectral Lunge works below 5 hearts" and "&8&oinstead of 3."
 	set {classlevel-category::GD::3} to "Ultimate Upgrade"
 	set {classlevel-name::GD::3} to "&6Supportive Ghost"
 	set {classlevel-desc::GD::3::*} to "&8&oAdds cleanse + regen to the ultimate."
@@ -87,7 +87,7 @@ on load:
 	set {classlevel-desc::BS::1::*} to "&8&oSlam your shield multiple times," and "&8&oknocking up enemies and briefly" and "&8&odisabling their stamina usage."
 	set {classlevel-category::BS::2} to "Tactical Upgrade"
 	set {classlevel-name::BS::2} to "&6Resilient Basher"
-	set {classlevel-desc::BS::2::*} to "&8&oBigger stamina refund on bash."
+	set {classlevel-desc::BS::2::*} to "&8&oBash refunds 1/3 of your stamina" and "&8&oinstead of 1/6."
 	set {classlevel-category::BS::3} to "Ultimate Upgrade"
 	set {classlevel-name::BS::3} to "&6Unsteady Grounds"
 	set {classlevel-desc::BS::3::*} to "&8&oIncreases the damage of Shield Quake" and "&8&oand the duration of stamina pause."
@@ -398,8 +398,8 @@ function openClassInfoPage(p: player, class: text):
 		add {classlevel-desc::%{_class}%::%loop-value%::*} to {_lore::*}
 		if loop-value = 2:
 			set {_cat} to {class-category::%{_class}%}
-			if {category-buffdesc-l2::%{_cat}%} is set: # category buff that unlocks at level 2 (Skirmisher)
-				add "" and "&f&lCATEGORY BUFF" and {category-buffdesc-l2::%{_cat}%} to {_lore::*}
+			if {category-buffdesc-l2::%{_cat}%::*} is set: # category buff that unlocks at level 2 (every category)
+				add "" and "&f&lCATEGORY BUFF" and {category-buffdesc-l2::%{_cat}%::*} to {_lore::*}
 		add "" to {_lore::*}
 		set {_name} to "&e&lLevel %loop-value%&e: &7%{classlevel-category::%{_class}%::%loop-value%}%"
 		set {_icon} to ({_levelMaterial::%loop-value%} named {_name} with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable

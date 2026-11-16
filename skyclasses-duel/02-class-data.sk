@@ -51,6 +51,8 @@ on load:
 		set {class-color::%loop-value%} to "&6"
 
 	# ---- CLASS ARCHETYPE CATEGORIES ----
+	# Level 2 category buffs (04-leveling.sk's categoryLevel2()): Juggernaut — regeneration out of combat (20-combat.sk); Striker — faster
+	# stamina regen while the opponent is low (03-resources.sk); Skirmisher — execute at 0.5 hearts (08-damage.sk).
 	# Juggernaut (durability/outlast), Striker (steady damage/pressure), and
 	# Skirmisher (mobility/positioning). Each category grants a passive LEVEL 0
 	# buff — active from the moment a class is selected, on top of anything the
@@ -58,8 +60,8 @@ on load:
 	# perks (a Juggernaut can still stack Healthy Boy, a Skirmisher can still
 	# stack Nimble Feet for its speed burst on top of this).
 	#   - Juggernaut: +1 max health at level 0 (see maxHealth(), 04-leveling.sk) and 40%% knockback resistance (03-resources.sk's ticker).
-	#   - Striker: 5 melee attack damage at level 0 instead of the 4.5 every
-	#     other category uses — already the case for every Striker's {weapons::
+	#   - Striker: 5 melee attack damage at level 0 instead of the 4 the
+	#     other categories use (Basher and every Skirmisher x4 too) — already the case for every Striker's {weapons::
 	#     %class%::AD}/{AD-PERK} value below, so no extra code was needed, just
 	#     documenting it as the category's buff.
 	#   - Skirmisher: Nimble Feet baseline (no fall-stun on landing + Speed 2 for 1s; doubled to 2s if Nimble Feet is also the selected general perk) (the actual fall damage is already
@@ -94,12 +96,14 @@ on load:
 	set {category-desc::JUGGERNAUT::*} to "&8&oTough classes that rely on their" and "&8&odurability to stay in fights and" and "&8&ooutlast enemies."
 	set {category-buffdesc::JUGGERNAUT} to "&8&o+1 Max Health and 40%% knockback"
 	set {category-buffdesc2::JUGGERNAUT} to "&8&oresistance."
+	set {category-buffdesc-l2::JUGGERNAUT::*} to "&8&oRegeneration I while out of combat." # level 2 category buff lore (a list: one or more lines)
 	set {category-icon::JUGGERNAUT} to netherite chestplate
 
 	set {category-name::STRIKER} to "Striker"
 	set {category-color::STRIKER} to "&c"
 	set {category-desc::STRIKER::*} to "&8&oClasses that rely on steady damage" and "&8&oto pressure enemies and secure" and "&8&okills."
 	set {category-buffdesc::STRIKER} to "&8&oBase Melee Damage = 2.5"
+	set {category-buffdesc-l2::STRIKER::*} to "&8&oFaster stamina regeneration while your" and "&8&oopponent is low: below 50%%/35%%/20%%" and "&8&omax health, +20%%/+60%%/+100%%."
 	set {category-icon::STRIKER} to netherite helmet
 
 	set {category-name::SKIRMISHER} to "Skirmisher"
@@ -107,7 +111,7 @@ on load:
 	set {category-desc::SKIRMISHER::*} to "&8&oFast and mobile classes that use" and "&8&omovement and positioning to gain" and "&8&oan advantage."
 	set {category-buffdesc::SKIRMISHER} to "&8&oPermanent speed 2 and take"
 	set {category-buffdesc2::SKIRMISHER} to "&8&ozero fall stun." # optional second lore line (only Skirmisher needs one)
-	set {category-buffdesc-l2::SKIRMISHER} to "&8&oDirect Hit Tactical Damage: +0.25"
+	set {category-buffdesc-l2::SKIRMISHER::*} to "&8&oExecute enemies your melee or ability" and "&8&ohits leave at 0.5 hearts or less."
 	set {category-icon::SKIRMISHER} to netherite boots
 
 	# ---- ABILITY COSTS & COOLDOWNS ----
@@ -118,7 +122,7 @@ on load:
 	set {weapons::VBA::ULT-CD} to 80 seconds
 
 	set {weapons::DS::AS} to -2
-	set {weapons::DS::TAC-COST} to 50 # 45 with Perk 1 (Efficient Siphon, level 2) — see demon.sk
+	set {weapons::DS::TAC-COST} to 50 # see demon.sk (Perk 1 is Extended Siphon: longer beam range)
 	set {weapons::DS::ULT-COST} to 55
 	set {weapons::DS::ULT-CD} to 90 seconds
 
@@ -131,7 +135,7 @@ on load:
 	set {weapons::GD::TAC-COST} to 50
 	set {weapons::GD::ULT-COST} to 60
 	set {weapons::GD::ULT-CD} to 70 seconds
-	set {perk-var::GD::alt-tac-cost} to 45 # Perk 1: reduced tactical cost (mana, not x10)
+	set {perk-var::GD::alt-tac-cost} to 45 # (unused — Lunge Master was replaced by Deeper Shadows)
 
 	set {weapons::BS::AS} to -2
 	set {weapons::BS::TAC-COST} to 30 # must be divisible by 10
@@ -170,8 +174,8 @@ on load:
 	set {weapons::RS::ULT-CD} to 70 seconds
 
 	set {weapons::ZT::AS} to -2
-	set {weapons::ZT::TAC-COST} to 45
-	set {weapons::ZT::ULT-COST} to 60
+	set {weapons::ZT::TAC-COST} to 50
+	set {weapons::ZT::ULT-COST} to 55
 	set {weapons::ZT::ULT-CD} to 80 seconds
 
 	set {weapons::CB::AS} to -2
@@ -198,21 +202,21 @@ on load:
 
 	set {weapons::DS::AD} to 4 # same as Paladin (was 4.5)
 	set {weapons::FH::AD} to 4 # same as Paladin (hammer smashes are a flat 3.75 instead — see the FH branch of dmgUpdate() in 08-damage.sk)
-	set {weapons::GD::AD} to 4.5
-	set {weapons::BS::AD} to 4.5
+	set {weapons::GD::AD} to 4 # Skirmisher category: x4 (2 damage, 3 with a crit)
+	set {weapons::BS::AD} to 4
 	set {weapons::MH::AD} to 5
-	set {weapons::NS::AD} to 4.5
+	set {weapons::NS::AD} to 4 # Skirmisher category: x4
 	set {weapons::NK::AD} to 5
 	set {weapons::NS::R-AD} to 0.35 # 0.7 damage per shuriken/arrow (raw ~2 damage x 0.35) — same multiplier applies whether Ninja is in shuriken or ultimate katana form, since the TAC arrow-shooting trigger in ninja.sk fires for both weapon names; capped at 0.7 in 08-damage.sk so a downward throw can't exceed it
 	set {weapons::PGS::AD} to 4
 	set {weapons::RD::AD} to 5
 	set {weapons::RB::R-AD} to 0.4 # scales up to 0.6 at >= 7.5 blocks — see 08-damage.sk's dmgUpdate()
-	set {weapons::RS::AD} to 4.5
+	set {weapons::RS::AD} to 4 # Skirmisher category: x4
 	set {weapons::ZT::AD} to 5
 	set {weapons::ZT::R-AD} to 0.5
-	set {weapons::CB::AD} to 4.5
+	set {weapons::CB::AD} to 4 # Skirmisher category: x4
 	set {weapons::CB::R-AD} to 0.8 # Malicious Dart is a damaging utility dart — 08-damage.sk's generic arrow-damage pipeline picks this up automatically (same mechanism as every other bow/dart class) on top of the slow + stamina-lockout effect cyberpunk.sk applies directly
-	set {weapons::TS::AD} to 4.5 # Skirmisher category — no melee damage buff (that's the Striker category's own perk); Tempest's own damage (Air Burst/Tornado) is hand-computed in tempest.sk instead of going through this generic path, since wind charges aren't arrows/tridents
+	set {weapons::TS::AD} to 4 # Skirmisher category: x4. Skirmisher category — no melee damage buff (that's the Striker category's own perk); Tempest's own damage (Air Burst/Tornado) is hand-computed in tempest.sk instead of going through this generic path, since wind charges aren't arrows/tridents
 	set {weapons::EA::AD} to 5 # Striker category. Executioner's TAC buff (+40%) and ULT charge damage are hand-overridden directly in dmgUpdate()'s EA branch (08-damage.sk), on top of this base multiplier for an ordinary unbuffed swing
 
 	# ---- WEAPON ITEM REGISTRATION ----
@@ -250,15 +254,15 @@ on load:
 	# weapon lore below and 05-class-menu.sk's info view read from.
 	wait 1 tick
 	set {class-display::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&e&lPASSIVE" and "&3Pitch Fork" and "&8&oExtended your trident forward dealing" and "&8&odamage in front of you, every 4th hit." and "" and "&e&lTACTICAL" and "&bEmpowered Throw &7[RIGHT] &9🧪%{weapons::ZT::TAC-COST}%" and "&8&oThrow your trident and strike lightning" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&bThunderstorm &7[DROP] &9🧪%{weapons::ZT::ULT-COST}% &f⌚%formatCooldown({weapons::ZT::ULT-CD})%" and "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance." and ""
-	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oRegenerate health while below 5 hearts." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
-	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow half health, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis deals 2.5 damage," and "&8&o+0.5 for every second invisible (max 4.5)." and ""
-	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&oGain attack damage the lower" and "&8&oyour health." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oFor a short time, every melee hit" and "&8&odeals 4 damage (crits add nothing)." and ""
+	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oYour level 2 Juggernaut regeneration" and "&8&oout of combat heals at the" and "&8&oRegeneration II rate instead of I." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
+	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow 3 hearts, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis deals 2.5 damage," and "&8&o+0.5 for every second invisible (max 4.5)." and ""
+	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&o+0.25 damage below 50%% health," and "&8&o+0.5 below 25%%." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oFor a short time, every melee hit" and "&8&odeals 4 damage (crits add nothing)." and ""
 	set {class-display::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&e&lPASSIVE" and "&4Life Steal" and "&8&oHeal when damaging enemies." and "" and "&e&lTACTICAL" and "&cBlood Beam &7[RIGHT] &9🧪%{weapons::DS::TAC-COST}%" and "&8&oTarget a enemy to damage and heal from." and "" and "&e&lULTIMATE" and "&4Blood Harvest &7[DROP] &9🧪%{weapons::DS::ULT-COST}% &f⌚%formatCooldown({weapons::DS::ULT-CD})%" and "&8&oAutomatically shoot Blood Beams at all" and "&8&onearby enemies." and ""
 	set {class-display::MH} to mace named "&eClass: %{class-color::MH}%&l%{class-name::MH}%" with lore "" and "&e&lPASSIVE" and "&cHammer Down" and "&8&oYour weapon allows you to do smash" and "&8&oattacks." and "" and "&e&lTACTICAL" and "&3Explode &7[RIGHT] &9🧪%{weapons::MH::TAC-COST}%" and "&8&oCreate an explosion at your location damaging" and "&8&oand knocking up any enemies nearby." and "" and "&e&lULTIMATE" and "&bMighty Leap &7[DROP] &9🧪%{weapons::MH::ULT-COST}% &f⌚%formatCooldown({weapons::MH::ULT-CD})%" and "&8&oLeap high into the air and create a big explosion" and "&8&oupon landing that damages and pushes enemies away" and "&8&o+ &7[DROP] &8&oWhile airborne to directional dash." and ""
 	set {class-display::RS} to netherite hoe named "&eClass: %{class-color::RS}%&l%{class-name::RS}%" with lore "" and "&e&lPASSIVE" and "&cReaping Slash" and "&8&oSlash around you applying wither on every" and "&8&o3rd hit." and "" and "&e&lTACTICAL" and "&eGrapple &7[RIGHT] &9🧪%{weapons::RS::S-TAC-COST}%-%{weapons::RS::L-TAC-COST}%" and "&8&oThrow a grapple that pulls you toward solid" and "&8&oobjects or pulls enemies toward you." and "" and "&e&lULTIMATE" and "&4Soul Collector &7[DROP] &9🧪%{weapons::RS::ULT-COST}% &f⌚%formatCooldown({weapons::RS::ULT-CD})%" and "&8&oSwing your scythe around you, and apply" and "&8&owithering to hit enemies." and ""
 	set {class-display::NS} to nether star named "&eClass: %{class-color::NS}%&l%{class-name::NS}%" with lore "" and "&e&lPASSIVE" and "&eImproved Stamina" and "&8&oIncreased max stamina." and "" and "&e&lTACTICAL" and "&cShuriken Throw &7[RIGHT] &9🧪%{weapons::NS::TAC-COST}%" and "&8&oConsecutively throw 3 ninja stars." and "" and "&e&lULTIMATE" and "&6Dragon Blade &7[DROP] &9🧪%{weapons::NS::ULT-COST}% &f⌚%formatCooldown({weapons::NS::ULT-CD})%" and "&8&oPull out a fiery katana and gain immense" and "&8&ospeed and jumboost." and ""
 	set {class-display::FH} to mace named "&eClass: %{class-color::FH}%&l%{class-name::FH}%" with lore "" and "&e&lPASSIVE" and "&cHammer Down" and "&8&oYour weapon allows you to do smash" and "&8&oattacks." and "" and "&e&lTACTICAL" and "&3Leap &7[RIGHT] &9🧪%{weapons::FH::TAC-COST}%" and "&8&oLeap into the air, and create a damaging" and "&8&oand slowing radius on impact." and "" and "&e&lULTIMATE" and "&bIt's Alive! &7[DROP] &9🧪%{weapons::FH::ULT-COST}% &f⌚%formatCooldown({weapons::FH::ULT-CD})%" and "&8&oCreate a powerful electric shield around" and "&8&oyou that reflects projectiles." and ""
-	set {class-display::BS} to shield named "&eClass: %{class-color::BS}%&l%{class-name::BS}%" with lore "" and "&e&lPASSIVE" and "&eStamina Recharge" and "&8&oHitting Bash refunds a small portion" and "&8&oof Stamina." and "" and "&e&lTACTICAL" and "&3Shield &7[RIGHT+HOLD] &9🧪%{weapons::BS::TAC-COST}% PER SECOND" and "&8&oUse your shield to block all sources" and "&8&oof damage." and "" and "&e&lSPECIAL" and "&cBash &7[RIGHT+HOLD+STAMINA]" and "&8&oWhile in Shield State, using Stamina will" and "&8&odamage and knock back any enemies in" and "&8&oyour way." and "" and "&e&lULTIMATE" and "&6Shield Quake &7[DROP] &9🧪%{weapons::BS::ULT-COST}% &f⌚%formatCooldown({weapons::BS::ULT-CD})%" and "&8&oSlam your shield on the ground mutliple" and "&8&otimes, knocking up enemies and briefly" and "&8&odisabling thier stamina usage." and ""
+	set {class-display::BS} to shield named "&eClass: %{class-color::BS}%&l%{class-name::BS}%" with lore "" and "&e&lPASSIVE" and "&eStamina Recharge" and "&8&oHitting Bash refunds 1/6 of your" and "&8&oStamina." and "" and "&e&lTACTICAL" and "&3Shield &7[RIGHT+HOLD] &9🧪%{weapons::BS::TAC-COST}% PER SECOND" and "&8&oUse your shield to block all sources" and "&8&oof damage. Half of the melee damage" and "&8&oit blocks is reflected back." and "" and "&e&lSPECIAL" and "&cBash &7[RIGHT+HOLD+STAMINA]" and "&8&oWhile in Shield State, using Stamina will" and "&8&odamage and knock back any enemies in" and "&8&oyour way." and "" and "&e&lULTIMATE" and "&6Shield Quake &7[DROP] &9🧪%{weapons::BS::ULT-COST}% &f⌚%formatCooldown({weapons::BS::ULT-CD})%" and "&8&oSlam your shield on the ground mutliple" and "&8&otimes, knocking up enemies and briefly" and "&8&odisabling thier stamina usage." and ""
 	set {class-display::RB} to bow named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&e&lPASSIVE" and "&bLongshot" and "&8&oEvery 4th attack is empowered: a melee hit" and "&8&odeals bonus damage, a miss fires an arrow" and "&8&odealing the same." and "" and "&e&lULTIMATE" and "&6Rapid Bow" and "&8&oShoots arrows like a rapid fire machine gun." and "" and "&7Click to swap"
 	set {class-display::RD} to stone sword named "&eClass: %{class-color::RB}%&l%{class-name::RB}%" with lore "" and "&e&lPASSIVE" and "&bLongshot" and "&8&oEvery 4th attack is empowered: a melee hit" and "&8&odeals bonus damage, a miss fires an arrow" and "&8&odealing the same." and "" and "&e&lTACTICAL" and "&bSprint &7[RIGHT] &9🧪%{weapons::RB::TAC-COST}%" and "&8&oBriefly gain great speed that declines." and "" and "&e&lULTIMATE" and "&6Rapid Bow &7[DROP] &9🧪%{weapons::RB::ULT-COST}% &f⌚%formatCooldown({weapons::RB::ULT-CD})%" and "&8&oSwap to your bow and plow anything in your way." and "" and "&7Click to swap"
 	set {class-display::CB} to diamond sword named "&eClass: %{class-color::CB}%&l%{class-name::CB}%" with lore "" and "&e&lPASSIVE" and "&9Mana Breach" and "&8&oWhen below half max mana, damage you" and "&8&odo will steal a portion of mana from the" and "&8&oenemy and transfer it to you." and "" and "&e&lTACTICAL" and "&aMalicious Dart &7[RIGHT] &9🧪%{weapons::CB::TAC-COST}%" and "&8&oShoot a dart that briefly disables" and "&8&ostamina usage." and "" and "&e&lULTIMATE" and "&6Cyber Glitch &7[DROP] &9🧪%{weapons::CB::ULT-COST}% &f⌚%formatCooldown({weapons::CB::ULT-CD})%" and "&8&oPhase through doors and solid terrain." and ""
@@ -294,8 +298,8 @@ function categoryIcon(category: text) :: item: # used for the category header sl
 	add {category-buffdesc::%{_category}%} to {_lore::*}
 	if {category-buffdesc2::%{_category}%} is set:
 		add {category-buffdesc2::%{_category}%} to {_lore::*}
-	if {category-buffdesc-l2::%{_category}%} is set:
-		add "" and "&f&lLEVEL 2 PASSIVE" and {category-buffdesc-l2::%{_category}%} to {_lore::*}
+	if {category-buffdesc-l2::%{_category}%::*} is set:
+		add "" and "&f&lLEVEL 2 PASSIVE" and {category-buffdesc-l2::%{_category}%::*} to {_lore::*}
 	add "" to {_lore::*}
 	set {_name} to "&7Category: %{category-color::%{_category}%}%&l%{category-name::%{_category}%}%"
 	set {_icon} to ({category-icon::%{_category}%} named {_name} with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable

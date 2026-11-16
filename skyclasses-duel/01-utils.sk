@@ -10,6 +10,7 @@ function formatCooldown(t: timespan) :: text: # displays a cooldown as plain sec
 
 function updateAttacker(a: living entity, v: living entity):
 	if {_a} != {_v}:
+		set metadata value "attackerAt" of {_v} to unix timestamp of now # when — 08-damage.sk's Skirmisher Execute only trusts a fresh attacker for ability damage
 		if {_v} is a player:
 			set metadata value "attacker" of {_v} to {_a}
 		else if {_v} is a living entity:

@@ -11,9 +11,7 @@ function rgHitEntity(a: player, victim: living entity):
 	updateAttacker({_a}, {_victim})
 	directAttack({_victim})
 	set {balance-abilitySource::%{_a}'s uuid%} to "TAC" # 19-balance-stats.sk
-	set {_gd} to 1.25 + skirmisherTacBonus({_a}) # Skirmisher category buff (level 2): +0.25
-	damage {_victim} by {_gd}
-	add potion effect of wither 1 without particles for 5 seconds to potion effects of {_victim}
+	damage {_victim} by 3 # grapple hit: 3 damage (was 1.25 + Wither I — the wither was removed)
 	delete {balance-abilitySource::%{_a}'s uuid%}
 
 	set {_d} to distance between {_a} and {_victim}
@@ -198,9 +196,9 @@ on drop of netherite hoe with priority low: # ULTIMATE
 					if y-coord of loop-entity is between {_y-max} and {_y-min}:
 						updateAttacker(player, loop-entity)
 						add loop-entity to {_hitEnemies::*}
-						set {_amount} to 1.5
+						set {_amount} to 1
 						if distance between player and loop-entity >= 7:
-							set {_amount} to 2.5
+							set {_amount} to 2.25
 							play sound "entity.wither.hurt" with volume 0.5 and pitch 0.75 to player
 						add potion effect of wither 2 without particles for 6 seconds to potion effects of loop-entity
 						damage loop-entity by {_amount}

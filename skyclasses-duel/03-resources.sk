@@ -94,12 +94,39 @@ every 5 ticks: # 1 stamina point = 300 internal units, 1 mana point = 10 interna
 			if {mana::%loop-player's uuid%::curr} > {mana::%loop-player's uuid%::max}:
 				set {mana::%loop-player's uuid%::curr} to {mana::%loop-player's uuid%::max}
 		if {stamina::%loop-player's uuid%::max} > {stamina::%loop-player's uuid%::curr}:
-			add 7.5 to {stamina::%loop-player's uuid%::curr}
-			if soulOf(loop-player) is "vindicator": # 12-major-boss.sk — Vindicator Soul: +20%% stamina regeneration (20%% of the base 7.5)
-				add 1.5 to {stamina::%loop-player's uuid%::curr}
+			set {_regen} to 7.5 * (1 + (staminaRegenBonus(loop-player) / 100)) # base 7.5 every 5 ticks (1 point per 10 s) + every bonus, see below
+			add {_regen} to {stamina::%loop-player's uuid%::curr}
 			if {stamina::%loop-player's uuid%::curr} > {stamina::%loop-player's uuid%::max}: # without this clamp, a tick that also picks up Stamina Recovery's bonus (06-perks-general.sk) can overshoot past max instead of landing exactly on it — which broke that perk's "stamina is completely full" speed check, since curr was never exactly equal to max again after the first refill
 				set {stamina::%loop-player's uuid%::curr} to {stamina::%loop-player's uuid%::max}
 		actionBar(loop-player)
+
+# Stamina regeneration bonuses, in %% of the base rate. They add together, capped at +100%% (double the base rate):
+#   Stamina Recovery (general perk, 06-perks-general.sk)  +60%%
+#   Vindicator Soul (12-major-boss.sk)                     +20%%
+#   Striker level 2 category buff: while the match opponent (alive, in the match) is below 50%% / 35%% / 20%% of their max health,
+#     +20%% / +60%% / +100%%. Their real health, whether or not the two are in combat.
+function staminaRegenBonus(p: player) :: number:
+	set {_b} to 0
+	if {general-perk::%{_p}'s uuid%::selected} is "staminarecovery":
+		add {gp-staminaRecoveryBonus} to {_b}
+	if soulOf({_p}) is "vindicator":
+		add 20 to {_b}
+	if categoryLevel2({_p}, "STRIKER") is true: # 04-leveling.sk
+		set {_o} to {matchOpponent::%{_p}'s uuid%}
+		if {_o} is set:
+			if {_o} is online:
+				if {respawning::%{_o}'s uuid%} isn't set:
+					if {_o} is alive:
+						set {_pct} to (health of {_o}) / (max health of {_o})
+						if {_pct} < 0.2:
+							add 100 to {_b}
+						else if {_pct} < 0.35:
+							add 60 to {_b}
+						else if {_pct} < 0.5:
+							add 20 to {_b}
+	if {_b} > 100:
+		set {_b} to 100
+	return {_b}
 
 function actionBar(p: player):
 	set {_uuid} to {_p}'s uuid

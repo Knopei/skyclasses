@@ -169,13 +169,17 @@ on death of player: # ----------------------------------------------------------
 
 	handleRespawnFlow(victim) # last effect in this trigger — see the function below for why
 
-function handleRespawnFlow(p: player):
+function handleRespawnFlow(p: player, rejoin: boolean = false): # rejoin = back from a disconnect (10-match-manager.sk), not a death
 	# Frozen (invisible, can't move or take damage, can still look around) at a
 	# fixed spot (center-top of the map — see {config::arena::deathmode-spawn})
 	# regardless of where they actually died, while forced to choose a class.
 	# Auto-assigns after 10 seconds if a class is available, or the moment one
 	# comes off cooldown if all 3 were on cooldown when the timer ran out.
 	set {_uuid} to {_p}'s uuid
+	set {_bossAliveAtDeath} to false
+	if {majorbossId} is set:
+		if {_rejoin} is false: # a major boss is alive right now, and this is a death — the frozen wait before the class menu is longer (see below)
+			set {_bossAliveAtDeath} to true
 	set {respawning::%{_uuid}%} to true
 	delete {pendingPerkChoice::%{_uuid}%} # defensive — a fresh respawn cycle never inherits an in-progress perk/consumable pick from a previous one
 	delete {pendingConsumableChoice::%{_uuid}%}
@@ -186,7 +190,10 @@ function handleRespawnFlow(p: player):
 	{_p}.setAllowFlight(true) # stops constant-fall jitter — without this, gravity keeps trying to move them down every tick and the movement-freeze handler cancels it, causing visible rubber-banding
 	{_p}.setFlying(true)
 
-	wait {config::respawn::menu-delay} # 00-config.sk
+	set {_menuDelay} to {config::respawn::menu-delay} # 00-config.sk — 3 s, or 5 s if a major boss was alive when they died ({majorbossId} is set from its spawn until it dies / despawns, 12-major-boss.sk)
+	if {_bossAliveAtDeath} is true:
+		set {_menuDelay} to {config::respawn::menu-delay-boss}
+	wait {_menuDelay}
 	if {_p} isn't online: # they disconnected during this delay — 10-match-manager.sk's on-quit handling covers the match itself; just avoid leaving stale state behind
 		delete {respawning::%{_uuid}%}
 		stop
@@ -285,9 +292,7 @@ on player move: # freezes position while choosing a respawn class, but still all
 		if {_moved} is true:
 			cancel event
 
-on damage of player: # spawn protection — attacker can't deal damage while it's active on them; separately, the protected player also can't take damage during the same window
-	if {spawn-protection::%attacker's uuid%} is set:
-		cancel event
+on damage of player: # spawn protection — the protected player can't take damage for 2 seconds (they CAN deal damage during it)
 	if {spawn-protection::%victim's uuid%} is set: # invincible for the same 2-second window set in handleRespawnFlow()
 		cancel event
 	if {respawning::%victim's uuid%} is set: # frozen/invisible while choosing a respawn class — see handleRespawnFlow() above

@@ -198,7 +198,7 @@ on join:
 			wait 1 second # let every other join handler finish first (gamemode, health bar, etc.)
 			if {inMatch::%player's uuid%} is set:
 				send "&aWelcome back! &7Choose a class to jump back in." to player
-				handleRespawnFlow(player) # 09-death-match.sk — same flow as after a death, but no life is lost
+				handleRespawnFlow(player, true) # 09-death-match.sk — same flow as after a death, but no life is lost (and no longer boss-alive wait)
 	else:
 		clearPlayerBossBars(player) # 01-utils.sk — not in a match: no leftover bars from an old match / a restart
 

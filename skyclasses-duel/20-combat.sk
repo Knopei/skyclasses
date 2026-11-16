@@ -201,3 +201,47 @@ on quit:
 	clearCombat(player)
 	nameShow(player)
 	delete {nameHidden::%player's uuid%}
+
+# ---- NO NATURAL REGENERATION IN MATCHES ----
+# Vanilla food regeneration (and peaceful-difficulty regen) is cancelled for players in a match. Golden apples, potions, Paladin's
+# Believer and Doomhoof's Vigor are potion regeneration (a different heal reason) and still work, as does every scripted heal.
+on heal:
+	if event-entity is a player:
+		if {inMatch::%event-entity's uuid%} is set:
+			set {_r} to event.getRegainReason().name()
+			if {_r} is "SATIATED" or "REGEN":
+				cancel event
+
+# ---- JUGGERNAUT LEVEL 2 CATEGORY BUFF: REGENERATION OUT OF COMBAT ----
+function jgRegenInterval(p: player) :: number: # seconds between half-heart heals: Regeneration I rate, or II for Paladin (its passive, Believer)
+	if {class::%{_p}'s uuid%} is "PGS":
+		return 1.25
+	return 2.5
+
+# A Juggernaut at level 2+ on its current class regenerates while out of combat (no {combat::<uuid>} timer, see above): scripted
+# healing at the Regeneration I rate (half a heart every 2.5 s), with the Seerhopper's heal particles (12-major-boss.sk) — a heart
+# above the head on each heal and a green sparkle while it's healing. The first heal comes 2.5 s after they drop out of combat.
+every 5 ticks:
+	loop all players:
+		set {_p} to loop-player
+		set {_u} to {_p}'s uuid
+		set {_ok} to false
+		if {inMatch::%{_u}%} is set:
+			if {respawning::%{_u}%} isn't set:
+				if {combat::%{_u}%} isn't set:
+					set {_c} to {class::%{_u}%}
+					if {_c} is set:
+						if classCategory({_c}) is "JUGGERNAUT": # 02-class-data.sk
+							if classLevel({_p}, {_c}) >= 2: # 04-leveling.sk
+								if health of {_p} < max health of {_p}:
+									set {_ok} to true
+		if {_ok} is true:
+			if {jgRegenNext::%{_u}%} isn't set:
+				set {jgRegenNext::%{_u}%} to (unix timestamp of now) + jgRegenInterval({_p})
+			else if (unix timestamp of now) >= {jgRegenNext::%{_u}%}:
+				set {jgRegenNext::%{_u}%} to (unix timestamp of now) + jgRegenInterval({_p})
+				heal {_p} by 0.5
+				draw 1 of heart at ((location of {_p}) offset by vector(0, 2.2, 0)) with offset vector(0.2, 0.1, 0.2)
+			draw 2 of happy_villager at ((location of {_p}) offset by vector(0, 1, 0)) with offset vector(0.35, 0.5, 0.35) # healing sparkle
+		else if {jgRegenNext::%{_u}%} is set:
+			delete {jgRegenNext::%{_u}%}

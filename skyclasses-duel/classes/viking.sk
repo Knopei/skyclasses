@@ -1,8 +1,8 @@
 # ============================================
 # VIKING (VBA) — Viking Battle Axe
 # Tactical: always available. Ultimate: unlocks at class level 1.
-# Passive "Little Rage": +0.25 damage at 5 hearts or below, +0.5 at 3 or below. (It no longer gives speed — Viking has the normal Speed 1 baseline.)
-# Perk 1 (level 2) "Joyful to Furious": while Little Rage is active (5 hearts or below), hits also deal +0.25 for every heart of max
+# Passive "Little Rage": +0.25 damage below 50% of max health, +0.5 below 25%. (It no longer gives speed — Viking has the normal Speed 1 baseline.)
+# Perk 1 (level 2) "Joyful to Furious": while Little Rage is active (below 50% of max health), hits also deal +0.25 for every heart of max
 #   health the target has over Viking's own, counting at most 4 hearts (+1 max).
 # Ultimate "Big Rage": melee hits use a x8 multiplier with no crit bonus — a full swing does 4, the most it can do (08-damage.sk).
 # Perk 2 (level 3) "Victim Chase": while the ultimate is active, the tactical arrow's on-hit speed is Speed 3 instead of Speed 2.
@@ -93,11 +93,12 @@ function vbaCHECK(a: living entity, v: living entity, dmg: number, crit: text, c
 				if {godlike-ULT-USE::%{_a}'s uuid%::VBA} is set: # ULTIMATE (Big Rage): no bonus at all — the hit itself is x8 with crits removed, a flat 4 at most (08-damage.sk's melee branch)
 					stop
 			set {_return} to 0
-			if {_a}'s health <= 3: # PASSIVE (Little Rage): +0.25 at 5 hearts or below, +0.5 at 3 or below
+			set {_pct} to ({_a}'s health) / ({_a}'s max health)
+			if {_pct} < 0.25: # PASSIVE (Little Rage): +0.25 below 50%% of max health, +0.5 below 25%%
 				set {_return} to 0.5
-			else if {_a}'s health <= 5:
+			else if {_pct} < 0.5:
 				set {_return} to 0.25
-			if {_return} > 0: # Perk 1 only adds on to the passive — above 5 hearts there is no bonus at all
+			if {_return} > 0: # Perk 1 only adds on to the passive — at 50%% health or above there is no bonus at all
 				if classLevel({_a}, "VBA") >= 2: # Perk 1 (Joyful to Furious): +0.25 for every heart of max health the target has over Viking's own, counting at most 4 hearts (+1 max; absorption counts, 01-utils.sk)
 					hbScaleNote({_a}, {_v}, 0.25) # 19-balance-stats.sk — Healthy Boy Value
 					set {_over} to effMaxHealth({_v}) - effMaxHealth({_a})

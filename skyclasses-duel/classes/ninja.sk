@@ -11,6 +11,7 @@
 on right click with nether star or diamond sword: # TACTICAL
 	if name of player's held item is "%{wc}%Ninja Shurikens" or "%{wc}%Ninja Katana":
 		if tacCHECK(player, {weapons::NS::TAC-COST}) is true:
+			set {_cast} to "%player's uuid%-%random integer between 1 and 999999999%" # one id per throw: the first shuriken of this throw to hit an enemy does 1.5, the rest 1 (08-damage.sk)
 			loop 3 times:
 				set {_l} to location 0.5 in front of player # only used to compute the jittered aim direction below now — spawning the arrow FROM this location (instead of from the player) was the actual cause of the north-facing visual bug: the client can't render a fresh projectile's rotation correctly unless it's spawned from a living entity
 				add 1.5 to y-coord of {_l}
@@ -33,10 +34,13 @@ on right click with nether star or diamond sword: # TACTICAL
 				set metadata value "type" of shot projectile to "NS"
 				set metadata value "attacker" of shot projectile to player
 				set metadata value "balanceSource" of shot projectile to "TAC" # 19-balance-stats.sk
+				set metadata value "nsCast" of shot projectile to {_cast}
 				play sound "entity_arrow_shoot" with volume 3 and pitch 1.5 at player
 				trackProjectileTrail(shot projectile) # 01-utils.sk — registers the trail immediately without pausing this loop, so the next shuriken isn't held up waiting on this one's particles
 
 				wait 3 tick
+			wait 3 seconds # every shuriken of this throw has landed by now
+			delete {nsHit::%{_cast}%::*}
 
 on damage of living entity: # ignites the victim if hit by a fire-charged shuriken
 	if event-damagecause is a projectile:
