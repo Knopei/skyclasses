@@ -162,7 +162,9 @@ function perkDashReduction(p: player):
 	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
 		set {_uuid} to {_p}'s uuid
 		if rdCanTrigger({_p}) is false:
+			rdShadowStart({_p}, false) # 25-balance-stats-advanced.sk — the cooldown / no-stacking stopped it: track what it would have prevented
 			stop
+		rdActivated({_p}) # 25-balance-stats-advanced.sk
 		set {rd-last::%{_uuid}%} to unix timestamp of now
 		set {rd-hold::%{_uuid}%} to now # the grace window in which being on the ground doesn't end the reduction yet
 		set {rd-active::%{_uuid}%} to true
@@ -190,7 +192,9 @@ function perkPhaseReduction(p: player):
 	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
 		set {_uuid} to {_p}'s uuid
 		if rdCanTrigger({_p}) is false:
+			rdShadowStart({_p}, true) # 25-balance-stats-advanced.sk
 			stop
+		rdActivated({_p}) # 25-balance-stats-advanced.sk
 		set {rd-last::%{_uuid}%} to unix timestamp of now
 		set {rd-active::%{_uuid}%} to true
 		set {playerDefense::%{_uuid}%} to {gp-dmgReduction}

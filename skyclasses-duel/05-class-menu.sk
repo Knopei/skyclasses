@@ -11,7 +11,7 @@
 
 on load:
 	set {class-bottom::back} to spectral arrow named "&7Back"
-	set {menu::classlist::*} to "VBA", "DS", "FH", "GD", "BS", "MH", "NS", "PGS", "RB", "RS", "ZT", "CB", "TS", "EA"
+	set {menu::classlist::*} to "VBA", "DS", "FH", "GD", "BS", "MH", "NS", "PGS", "RB", "RS", "ZT", "CB", "TS", "EA", "FG"
 
 # ---- IN-BASE CLASS MENU (mid-match swap) ----
 

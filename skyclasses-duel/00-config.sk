@@ -78,6 +78,9 @@ on load:
 	set {config::balance::min-casts} to 30 # ability hit rates
 	set {config::balance::min-games} to 10 # per-game averages, damage shares, time to first kill/death, lives at level-up
 	set {config::balance::min-hb} to 10 # Healthy Boy Value: fights with HB and without
+	set {config::balance::min-ec} to 10 # Enchanted Consumables Value: fights with Enchanted Consumables, and fights without
+	set {config::balance::min-pf} to 10 # Perk & Consumable Fight Lift: fights with the item, and fights without, per class
+	set {config::balance::min-rd} to 10 # Reinforced Movement Value: fights (and lives) with Reinforced Movement, and fights without
 
 	# ---- MASTERY RANKING ELIGIBILITY ----
 	set {config::mastery::min-games-for-ranking} to 10 # games played on a class before it can be its Best / Worst Class (lifetime, and within the last-30-games window for the recent view)

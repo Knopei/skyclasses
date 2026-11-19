@@ -1,0 +1,1193 @@
+# ============================================
+# BALANCE STATS — ADVANCED
+# The perk value trackers of the /balancestats dashboard (19-balance-stats.sk holds the main menu and the general trackers):
+#   - Healthy Boy Value              (main menu slot 23)
+#   - Reinforced Movement Value      (main menu slot 24)
+#   - Enchanted Consumables Value    (main menu slot 25)
+# All three share Healthy Boy's fight windows (hbFightHit / hbEndFight below).
+# ============================================
+
+# ============================================
+# HEALTHY BOY VALUE (balance dashboard page "Healthy Boy Value")
+# Measures how much the Healthy Boy general perk (+1 heart) is worth on each class, overall and against each opponent class.
+#
+# FIGHTS: a fight is a stretch of player-vs-player combat — it starts on the first hit between the two match players and ends when one of
+#   them dies, or after 5 seconds with no hits between them (both escaped). A fight is "won" by the player who killed the other.
+#
+# SHADOW HEALTH: every player in a match carries a second health value — what their health WOULD be with the opposite choice:
+#   with Healthy Boy, 1 heart lower (its max 1 heart lower too); without it, 1 heart higher (its max 1 heart higher).
+#   It takes the same damage as the real health, except for the damage bonuses that scale with the target's max health OVER the
+#   attacker's (Mighty tactical, Zeus lightning, Rapid empowered hits, Viking level 2, Executioner level 3): the extra heart changes those,
+#   so the shadow takes that much less (with Healthy Boy) or more (without). Stored as an offset from the real health ({hbDelta::uuid}),
+#   reset at every death.
+#
+# SAVE (players WITH Healthy Boy): during a fight their shadow health drops to 0 or below while they're still alive (without the heart
+#   they'd have died), and the fight then ends with them winning it or escaping it alive.
+#
+# SKIRMISHER EXECUTE: a hit from a level 2+ Skirmisher kills at 0.5 hearts or less. The shadow follows the same rule on the hit's damage
+#   before the execute — e.g. with Healthy Boy, a hit leaving them at 1.25 hearts would have executed them without it (a save); without
+#   Healthy Boy, an executed player whose shadow would also be at 0.5 hearts or less is not a near miss.
+#
+# NEAR MISS (players WITHOUT Healthy Boy): they die to their opponent in a fight, and
+#   - their shadow health would still be above 0 after the killing blow, minus any burn / wither still to come (rule 2), and
+#   - the killer was "low": at or below the dead player's base melee damage (their class's melee multiplier / 2 — e.g. 2.5, 2.25 or 2),
+#     OR the killer also died within 1 second (a trade), OR the killer fell into the void within 3 seconds.
+#
+# Stored as {balance-hb::<metric>::<class>::<opponent class>} plus a "::ALL" total per class, and in the recent-games window the same way.
+# Metrics: fights-hb, wins-hb, saves, fights-no, wins-no, deaths-no, nearmiss. Test duels record nothing.
+# ============================================
+
+import:
+	org.bukkit.potion.PotionEffectType
+
+function hbAdd(m: text, c: text, o: text):
+	if {testMatch} is set:
+		stop
+	add 1 to {balance-hb::%{_m}%::%{_c}%::%{_o}%}
+	add 1 to {balance-hb::%{_m}%::%{_c}%::ALL}
+	set {_s} to {balance-recent-slot}
+	if {_s} is set:
+		add 1 to {balance-recent::%{_s}%::hb::%{_m}%::%{_c}%::%{_o}%}
+		add 1 to {balance-recent::%{_s}%::hb::%{_m}%::%{_c}%::ALL}
+
+function hbGet(m: text, c: text, o: text, recent: boolean) :: number:
+	if {_recent} isn't true:
+		return bd({balance-hb::%{_m}%::%{_c}%::%{_o}%})
+	set {_t} to 0
+	set {_si} to 1
+	while {_si} <= bd({balance-recent-size}):
+		if {balance-recent-valid::%{_si}%} is set:
+			add bd({balance-recent::%{_si}%::hb::%{_m}%::%{_c}%::%{_o}%}) to {_t}
+		add 1 to {_si}
+	return {_t}
+
+function hbHas(p: player) :: boolean: # running Healthy Boy right now
+	if {general-perk::%{_p}'s uuid%::selected} is "healthyboy":
+		return true
+	return false
+
+function hbBaseMelee(c: text) :: number: # a class's base melee damage = its melee multiplier / 2 (Rapid's melee is its dagger form)
+	set {_k} to {_c}
+	if {_k} is "RB":
+		set {_k} to "RD"
+	if {weapons::%{_k}%::AD} is set:
+		return {weapons::%{_k}%::AD} / 2
+	return 2
+
+function hbShadowSync(p: player): # makes sure the shadow offset exists, and keeps the shadow under its own max (heals that would overfill it)
+	set {_u} to {_p}'s uuid
+	if {hbDelta::%{_u}%} isn't set:
+		if hbHas({_p}) is true:
+			set {hbDelta::%{_u}%} to -1
+		else:
+			set {hbDelta::%{_u}%} to 1
+	set {_smax} to (max health of {_p}) + 1
+	if hbHas({_p}) is true:
+		set {_smax} to (max health of {_p}) - 1
+	if ((health of {_p}) + {hbDelta::%{_u}%}) > {_smax}:
+		set {hbDelta::%{_u}%} to {_smax} - (health of {_p})
+
+function hbScaleNote(a: entity, v: entity, rate: number): # called right before damage from a max-health-scaling bonus lands on a player — records how much the extra heart changes it
+	if {_v} is a player:
+		if {_a} is a living entity:
+			set {_raw} to effMaxHealth({_v}) - effMaxHealth({_a}) # 01-utils.sk
+			set {_with} to {_raw}
+			if {_with} < 0:
+				set {_with} to 0
+			if {_with} > 4:
+				set {_with} to 4
+			if hbHas({_v}) is true: # without the heart: 1 heart less over -> less bonus -> the shadow takes less
+				set {_alt} to {_raw} - 1
+			else: # with the heart: 1 heart more over -> more bonus -> the shadow takes more
+				set {_alt} to {_raw} + 1
+			if {_alt} < 0:
+				set {_alt} to 0
+			if {_alt} > 4:
+				set {_alt} to 4
+			set {hbAdj::%{_v}'s uuid%} to ({_with} - {_alt}) * {_rate} # added to the shadow offset when the hit lands
+
+function hbDotLeft(p: player) :: number: # hearts of burn / wither damage still to come on this player (poison is left out — it can't kill)
+	set {_d} to ({_p}.getFireTicks() / 20) * 0.5 # fire: half a heart per second
+	set {_w} to {_p}.getPotionEffect(PotionEffectType.WITHER)
+	if {_w} is set:
+		set {_amp} to {_w}.getAmplifier()
+		set {_interval} to 40 # wither I: half a heart every 2 seconds; each level halves the interval
+		if {_amp} >= 1:
+			set {_interval} to 20
+		if {_amp} >= 2:
+			set {_interval} to 10
+		add ({_w}.getDuration() / {_interval}) * 0.5 to {_d}
+	return {_d}
+
+# ---- every pipelined hit on a match player: shadow health, saves, near misses ----
+on damage of player with priority monitor:
+	set {_v} to victim
+	set {_u} to {_v}'s uuid
+	if event is cancelled:
+		delete {hbAdj::%{_u}%} # a cancelled hit never lands, so its note doesn't either
+		delete {hbExec::%{_u}%}
+		stop
+	if {inMatch::%{_u}%} isn't set:
+		delete {hbAdj::%{_u}%}
+		delete {hbExec::%{_u}%}
+		stop
+	if {respawning::%{_u}%} is set:
+		delete {hbAdj::%{_u}%}
+		delete {hbExec::%{_u}%}
+		stop
+	hbShadowSync({_v})
+	if {hbAdj::%{_u}%} is set:
+		add {hbAdj::%{_u}%} to {hbDelta::%{_u}%}
+		delete {hbAdj::%{_u}%}
+	set {_dmg} to damage
+	set {_abs} to ({_v}.getAbsorptionAmount()) / 2
+	set {_hpLoss} to {_dmg} - {_abs}
+	if {_hpLoss} < 0:
+		set {_hpLoss} to 0
+	set {_hp} to health of {_v}
+	# Skirmisher Execute (08-damage.sk): when the hit came from a level 2+ Skirmisher, {hbExec::uuid} holds its damage BEFORE any execute. The
+	# shadow takes that damage and follows the same rule — at 0.5 hearts or less after the hit, the shadow is executed too.
+	set {_sLoss} to {_hpLoss}
+	set {_exec} to false
+	if {hbExec::%{_u}%} is set:
+		set {_exec} to true
+		set {_sLoss} to {hbExec::%{_u}%} - {_abs}
+		if {_sLoss} < 0:
+			set {_sLoss} to 0
+		delete {hbExec::%{_u}%}
+	set {_shadowAfter} to ({_hp} + {hbDelta::%{_u}%}) - {_sLoss}
+	if {_exec} is true:
+		if {_shadowAfter} <= 0.5:
+			set {_shadowAfter} to 0
+	set {_opp} to {matchOpponent::%{_u}%}
+	set {_inFight} to false
+	if {hbFight} is set:
+		if {hbFightClass::%{_u}%} is set:
+			set {_inFight} to true
+	if {_hpLoss} < {_hp}: # survives this hit
+		if {_inFight} is true:
+			if {hbFightHB::%{_u}%} is true:
+				if {_shadowAfter} <= 0:
+					set {hbFightSave::%{_u}%} to true # without Healthy Boy they'd be dead right now
+		stop
+	# ---- a lethal hit ----
+	if {_inFight} isn't true:
+		stop
+	if {hbFightHB::%{_u}%} is true:
+		stop
+	set {_killer} to metadata value "attacker" of {_v}
+	if {_killer} isn't {_opp}:
+		stop
+	set {_vc} to {hbFightClass::%{_u}%}
+	set {_kc} to {hbFightClass::%{_killer}'s uuid%}
+	hbAdd("deaths-no", {_vc}, {_kc})
+	if ({_shadowAfter} - hbDotLeft({_v})) <= 0: # one more heart wouldn't have outlasted this hit plus the burn / wither still to come
+		stop
+	set {_kHp} to (health of {_killer}) + (({_killer}.getAbsorptionAmount()) / 2)
+	if {_kHp} <= hbBaseMelee({_vc}): # the killer was one hit from death
+		hbAdd("nearmiss", {_vc}, {_kc})
+	else: # might still be a trade or a void fall — confirmed by the killer's own death soon after (hbOnDeath)
+		set {hbPending::%{_killer}'s uuid%::at} to unix timestamp of now
+		set {hbPending::%{_killer}'s uuid%::vc} to {_vc}
+		set {hbPending::%{_killer}'s uuid%::kc} to {_kc}
+
+# ---- fights ----
+
+function hbFightHit(a: player, v: player): # 20-combat.sk's combatCheck() — every damaging hit between the two match players
+	if {hbFight} isn't set:
+		set {hbFight} to true
+		loop {_a} and {_v}:
+			set {_u} to loop-value's uuid
+			set {hbFightClass::%{_u}%} to {class::%{_u}%}
+			set {hbFightHB::%{_u}%} to hbHas(loop-value)
+			delete {hbFightSave::%{_u}%}
+			pfFightStart(loop-value) # Perk & Consumable Fight Lift (below)
+			ecFightStart(loop-value) # Enchanted Consumables Value (below)
+			rdFightStart(loop-value) # (below) — Reinforced Movement Value shares these fights
+			add loop-value to {hbFightPlayers::*}
+	set {hbFightLast} to unix timestamp of now
+
+function hbEndFight(loser: object): # loser = the player who died in it ("none" when both escaped); winner = whoever killed them
+	if {hbFight} isn't set:
+		stop
+	set {_ps::*} to {hbFightPlayers::*}
+	set {_winner} to {hbFightWinner}
+	loop {_ps::*}:
+		set {_p} to loop-value
+		set {_u} to {_p}'s uuid
+		set {_c} to {hbFightClass::%{_u}%}
+		set {_o} to ""
+		loop {_ps::*}:
+			if loop-value-2 isn't {_p}:
+				set {_o} to {hbFightClass::%loop-value-2's uuid%}
+		if {_c} is set:
+			if {_o} is not "":
+				set {_won} to false
+				if {_winner} is set:
+					if {_winner} is {_p}:
+						set {_won} to true
+				set {_survived} to true
+				if {_loser} is a player:
+					if {_loser} is {_p}:
+						set {_survived} to false
+				if {hbFightHB::%{_u}%} is true:
+					hbAdd("fights-hb", {_c}, {_o})
+					if {_won} is true:
+						hbAdd("wins-hb", {_c}, {_o})
+					if {hbFightSave::%{_u}%} is set:
+						if {_survived} is true: # won it or escaped it alive
+							hbAdd("saves", {_c}, {_o})
+				else:
+					hbAdd("fights-no", {_c}, {_o})
+					if {_won} is true:
+						hbAdd("wins-no", {_c}, {_o})
+				rdFightEnd({_p}, {_c}, {_o}, {_won}, {_survived}) # Reinforced Movement Value (below)
+				pfFightEnd({_p}, {_c}, {_o}, {_won}) # Perk & Consumable Fight Lift (below)
+				ecFightEnd({_p}, {_c}, {_o}, {_won}, {_survived}) # Enchanted Consumables Value (below)
+		delete {hbFightClass::%{_u}%}
+		delete {hbFightHB::%{_u}%}
+		delete {hbFightSave::%{_u}%}
+	delete {hbFight}
+	delete {hbFightLast}
+	delete {hbFightWinner}
+	delete {hbFightPlayers::*}
+
+function hbOnDeath(v: player, killer: object = "none", isVoid: boolean = false): # (defaults: Skript skips a function call whose argument is empty, and the killer is often unset) # 09-death-match.sk — every in-match death, BEFORE the attacker metadata is cleared
+	set {_u} to {_v}'s uuid
+	ecOnDeath({_v}) # (below) — Enchanted Consumables Value: a fresh shadow
+	rdFlushLife({_v}) # (below) — Reinforced Movement Value: this life's totals
+	# a near miss waiting on this player (they had just killed their opponent): a trade within 1 s, or a void fall within 3 s, confirms it
+	if {hbPending::%{_u}%::at} is set:
+		set {_age} to (unix timestamp of now) - {hbPending::%{_u}%::at}
+		set {_ok} to false
+		if {_age} <= 1:
+			set {_ok} to true
+		else if {_age} <= 3:
+			if {_isVoid} is true:
+				set {_ok} to true
+		if {_ok} is true:
+			hbAdd("nearmiss", {hbPending::%{_u}%::vc}, {hbPending::%{_u}%::kc})
+		delete {hbPending::%{_u}%::*}
+	delete {hbDelta::%{_u}%} # a new life gets a fresh shadow
+	if {hbFight} is set:
+		if {hbFightClass::%{_u}%} is set: # they were in the current fight — it ends here
+			if {_killer} is a player:
+				if {_killer} is {matchOpponent::%{_u}%}:
+					set {hbFightWinner} to {_killer}
+			hbEndFight({_v})
+
+every 5 ticks: # a fight ends when 5 seconds pass with no hits between the two players — both escaped
+	if {hbFight} is set:
+		if {hbFightLast} is set:
+			if ((unix timestamp of now) - {hbFightLast}) >= 5:
+				hbEndFight("none")
+
+function hbResetMatch(): # 10-match-manager.sk — match start / end: no fight or shadow carries over
+	delete {hbFight}
+	delete {hbFightLast}
+	delete {hbFightWinner}
+	delete {hbFightPlayers::*}
+	delete {hbFightClass::*}
+	delete {hbFightHB::*}
+	delete {hbFightSave::*}
+	delete {hbDelta::*}
+	delete {hbAdj::*}
+	delete {hbExec::*}
+	delete {hbPending::*}
+	rdResetMatch() # (below)
+	ecResetMatch() # (below)
+	delete {pfPerk::*}
+	delete {pfCons::*}
+
+# ---- PAGE: Healthy Boy Value ----
+
+function hbPct(a: number, b: number) :: text:
+	if {_b} <= 0:
+		return "&8—"
+	return "%round(({_a} / {_b}) * 1000) / 10%%%"
+
+function hbLore(c: text, o: text, recent: boolean) :: strings: # the numbers for one class (o = "ALL") or one matchup
+	set {_fh} to hbGet("fights-hb", {_c}, {_o}, {_recent})
+	set {_wh} to hbGet("wins-hb", {_c}, {_o}, {_recent})
+	set {_sv} to hbGet("saves", {_c}, {_o}, {_recent})
+	set {_fn} to hbGet("fights-no", {_c}, {_o}, {_recent})
+	set {_wn} to hbGet("wins-no", {_c}, {_o}, {_recent})
+	set {_dn} to hbGet("deaths-no", {_c}, {_o}, {_recent})
+	set {_nm} to hbGet("nearmiss", {_c}, {_o}, {_recent})
+	return hbLoreFrom({_fh}, {_wh}, {_sv}, {_fn}, {_wn}, {_dn}, {_nm})
+
+function hbLoreCategory(cat: text, recent: boolean) :: strings: # a class category's numbers: every one of its classes added together
+	set {_m::*} to "fights-hb", "wins-hb", "saves", "fights-no", "wins-no", "deaths-no" and "nearmiss"
+	loop {_m::*}:
+		set {_t::%loop-value%} to 0
+	loop {category-classes::%{_cat}%::*}: # 02-class-data.sk
+		set {_c} to loop-value
+		loop {_m::*}:
+			add hbGet(loop-value-2, {_c}, "ALL", {_recent}) to {_t::%loop-value-2%}
+	return hbLoreFrom({_t::fights-hb}, {_t::wins-hb}, {_t::saves}, {_t::fights-no}, {_t::wins-no}, {_t::deaths-no}, {_t::nearmiss})
+
+function hbLoreFrom(fh: number, wh: number, sv: number, fn: number, wn: number, dn: number, nm: number) :: strings:
+	set {_min} to bmin("hb") # fewer fights than this on a side = not enough data yet (shown grayed out)
+	set {_cw} to "&e"
+	if {_fh} < {_min}:
+		set {_cw} to "&8"
+	set {_cn} to "&e"
+	if {_fn} < {_min}:
+		set {_cn} to "&8"
+	set {_lore::*} to "" and "&7Fights: &f%{_fh} + {_fn}% &8(%{_fh}% with HB, %{_fn}% without)" and ""
+	add "&7Win rate with HB: %{_cw}%%hbPct({_wh}, {_fh})%" to {_lore::*}
+	add "&7Win rate without: %{_cn}%%hbPct({_wn}, {_fn})%" to {_lore::*}
+	if {_fh} >= {_min}:
+		if {_fn} >= {_min}:
+			set {_diff} to round((({_wh} / {_fh}) - ({_wn} / {_fn})) * 1000) / 10
+			if {_diff} >= 0:
+				add "&7Difference: &a+%{_diff}%" to {_lore::*}
+			else:
+				add "&7Difference: &c%{_diff}%" to {_lore::*}
+		else:
+			add "&7Difference: &8needs %{_min}%+ fights each way" to {_lore::*}
+	else:
+		add "&7Difference: &8needs %{_min}%+ fights each way" to {_lore::*}
+	add "" to {_lore::*}
+	add "&7Save rate: %{_cw}%%hbPct({_sv}, {_fh})% &8(%{_sv}% saves)" to {_lore::*}
+	add "&7Near-miss rate: %{_cn}%%hbPct({_nm}, {_dn})% &8(%{_nm}% of %{_dn}% deaths)" to {_lore::*}
+	add "" to {_lore::*}
+	return {_lore::*}
+
+function openBalanceHBPage(p: player, recent: boolean):
+	set {hbView::%{_p}'s uuid%::recent} to {_recent}
+	if {_recent} is true:
+		balRecentAgg()
+		set {_title} to "Healthy Boy Value (Recent)"
+	else:
+		set {_title} to "Healthy Boy Value (Lifetime)"
+	set metadata tag "balance hb" of {_p} to chest inventory with 6 rows named {_title}
+	set slot (integers between 0 and 53) of metadata tag "balance hb" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance hb" of {_p} to black stained glass pane named " "
+	set slot (integers between 45 and 53) of metadata tag "balance hb" of {_p} to black stained glass pane named " "
+	set {_hbMin} to bmin("hb")
+	set slot 4 of metadata tag "balance hb" of {_p} to (apple named "&c&lHealthy Boy Value" with lore "" and "&7Win rate in fights with and without" and "&7Healthy Boy, how often it saves a fight," and "&7and how often players without it die" and "&7one heart short. &8Grayed = under %{_hbMin}% fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31
+	delete {hbViewSlot::%{_p}'s uuid%::*}
+	loop {menu::classlist::*}:
+		set {_c} to loop-value
+		set {_slot} to {_slots::%loop-index%}
+		set {hbViewSlot::%{_p}'s uuid%::%{_slot}%} to {_c}
+		set {_lore::*} to hbLore({_c}, "ALL", {_recent})
+		add "&e[CLICK] &7Matchups" to {_lore::*}
+		set slot {_slot} of metadata tag "balance hb" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_cats::*} to "STRIKER", "JUGGERNAUT" and "SKIRMISHER" # one icon per class category, its classes added together
+	set {_catSlots::*} to 38, 40 and 42
+	loop {_cats::*}:
+		set {_lore::*} to hbLoreCategory(loop-value, {_recent})
+		set slot {_catSlots::%loop-index%} of metadata tag "balance hb" of {_p} to (categoryIcon(loop-value) with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 02-class-data.sk
+	set slot 49 of metadata tag "balance hb" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 48 of metadata tag "balance hb" of {_p} to balRecentInfoIcon()
+	open (metadata tag "balance hb" of {_p}) to {_p}
+
+function openBalanceHBMatchups(p: player, c: text, recent: boolean): # one class against every opponent class
+	set {_title} to "HB: %{class-name::%{_c}%}% vs..."
+	set metadata tag "balance hbmu" of {_p} to chest inventory with 5 rows named {_title}
+	set slot (integers between 0 and 44) of metadata tag "balance hbmu" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance hbmu" of {_p} to black stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "balance hbmu" of {_p} to black stained glass pane named " "
+	set {_lore::*} to hbLore({_c}, "ALL", {_recent})
+	set slot 4 of metadata tag "balance hbmu" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}% &7— all matchups" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31
+	set {_i} to 0
+	loop {menu::classlist::*}:
+		add 1 to {_i}
+		set {_o} to loop-value
+		set {_lore::*} to hbLore({_c}, {_o}, {_recent})
+		set slot {_slots::%{_i}%} of metadata tag "balance hbmu" of {_p} to ({class::weapon::%{_o}%} named "&7vs &e%{class-name::%{_o}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 40 of metadata tag "balance hbmu" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] All classes") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	open (metadata tag "balance hbmu" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "balance hb" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		if {_slot} is 49:
+			openBalanceMainMenu(player)
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {hbViewSlot::%player's uuid%::%{_slot}%} is set:
+			openBalanceHBMatchups(player, {hbViewSlot::%player's uuid%::%{_slot}%}, {hbView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "balance hbmu" of player):
+		cancel event
+		if index of event-slot is 40:
+			openBalanceHBPage(player, {hbView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+# ============================================
+# REINFORCED MOVEMENT VALUE (balance dashboard page "Reinforced Movement Value", /balancestats slot 24)
+# Measures how much the Reinforced Movement general perk (40% damage reduction after a movement ability, once every 2.5 s, no stacking —
+# 06-perks-general.sk) is worth on each class, overall and against each opponent class, and how much its cooldown costs it.
+#
+# PREVENTED: every hit on a player while Reinforced Movement is reducing it records the damage it took away (08-damage.sk's dmgUpdate()
+#   calls rdNote() right before the reduction). If Executioner's ult resistance (20%) is running at the same time, only Reinforced
+#   Movement's extra share counts, so the two never mix.
+#
+# BLOCKED BY THE COOLDOWN ("no cooldown" tracking): when a movement ability is used but the 2.5 s cooldown or the no-stacking rule stops
+#   Reinforced Movement from triggering, an invisible shadow window starts with the exact same rules (until landing, with the same 0.4 s
+#   grace and 15 s cap — or half a second for Cyberpunk's phase). Nothing is reduced; every hit taken in it records the 40% it WOULD have
+#   prevented. A blocked movement while a shadow window is running restarts its grace, the way the old stacking did.
+#   Actual + blocked = its power with no cooldown at all (a floor: players would likely move even more without the cooldown).
+#
+# FIGHTS: the same fights as Healthy Boy Value (the Healthy Boy section above — first hit between the two match players until a death or 5 s with
+#   no hits). Per fight with Reinforced Movement: damage prevented, damage taken, damage blocked by the cooldown, and
+#   - SAVE: a hit they survived that would have killed them without the reduction; counts if they then win or escape the fight alive
+#   - MISSED SAVE: a hit that killed them during a shadow window that they would have survived with the reduction
+# LIVES: per life with Reinforced Movement (death, or the match ending): damage prevented and blocked from ANY source (players, bosses,
+#   jungle), activations, useful activations (blocked at least one hit), and movements the cooldown / no-stacking blocked.
+#
+# Stored as {balance-rd::<metric>::<class>::<opponent class>} plus a "::ALL" total per class (life metrics only have "::ALL"), and in the
+# recent-games window the same way. Test duels record nothing. Damage is in hearts.
+# Fight metrics: fights-rd, wins-rd, fights-no, wins-no, prev, taken, block, saves, msaves
+# Life metrics:  lives, lprev, lblock, acts, useful, btrig
+# ============================================
+
+function rdHas(p: player) :: boolean: # running Reinforced Movement right now
+	if {general-perk::%{_p}'s uuid%::selected} is "reinforceddash":
+		return true
+	return false
+
+function rdAdd(m: text, c: text, o: text, amt: number): # a fight metric: the matchup and the class total
+	if {testMatch} is set:
+		stop
+	add {_amt} to {balance-rd::%{_m}%::%{_c}%::%{_o}%}
+	add {_amt} to {balance-rd::%{_m}%::%{_c}%::ALL}
+	set {_s} to {balance-recent-slot}
+	if {_s} is set:
+		add {_amt} to {balance-recent::%{_s}%::rd::%{_m}%::%{_c}%::%{_o}%}
+		add {_amt} to {balance-recent::%{_s}%::rd::%{_m}%::%{_c}%::ALL}
+
+function rdAddLife(m: text, c: text, amt: number): # a life metric: the class total only
+	if {testMatch} is set:
+		stop
+	add {_amt} to {balance-rd::%{_m}%::%{_c}%::ALL}
+	set {_s} to {balance-recent-slot}
+	if {_s} is set:
+		add {_amt} to {balance-recent::%{_s}%::rd::%{_m}%::%{_c}%::ALL}
+
+function rdGet(m: text, c: text, o: text, recent: boolean) :: number:
+	if {_recent} isn't true:
+		return bd({balance-rd::%{_m}%::%{_c}%::%{_o}%}) # 19-balance-stats.sk
+	set {_t} to 0
+	set {_si} to 1
+	while {_si} <= bd({balance-recent-size}):
+		if {balance-recent-valid::%{_si}%} is set:
+			add bd({balance-recent::%{_si}%::rd::%{_m}%::%{_c}%::%{_o}%}) to {_t}
+		add 1 to {_si}
+	return {_t}
+
+# ---- recording ----
+
+function rdActivated(p: player): # 06-perks-general.sk — Reinforced Movement just triggered
+	set {_u} to {_p}'s uuid
+	if {inMatch::%{_u}%} isn't set:
+		stop
+	add 1 to {rdL::%{_u}%::acts}
+	delete {rdActUseful::%{_u}%} # this activation hasn't blocked anything yet
+
+function rdShadowStart(p: player, phase: boolean): # 06-perks-general.sk — a movement the cooldown / no-stacking rule stopped from triggering
+	set {_u} to {_p}'s uuid
+	if {inMatch::%{_u}%} isn't set:
+		stop
+	add 1 to {rdL::%{_u}%::btrig}
+	set {rdShadowHold::%{_u}%} to now # (re)starts the grace window
+	if {rdShadow::%{_u}%} is set: # already following one — the new movement only restarts its grace
+		stop
+	set {rdShadow::%{_u}%} to true
+	loop 150 times: # same rules as perkDashReduction() / perkPhaseReduction(), including the 15-second cap
+		wait 2 ticks
+		if {_p} isn't online:
+			stop loop
+		if health of {_p} <= 0:
+			stop loop
+		if {respawning::%{_u}%} is set:
+			stop loop
+		if {rdShadowHold::%{_u}%} isn't set:
+			stop loop
+		if {_phase} is true:
+			if difference between now and {rdShadowHold::%{_u}%} >= 10 ticks:
+				stop loop
+		else if {_p} is on ground:
+			if difference between now and {rdShadowHold::%{_u}%} >= 8 ticks:
+				stop loop
+	delete {rdShadow::%{_u}%}
+	delete {rdShadowHold::%{_u}%}
+
+function rdNote(v: living entity, pre: number): # 08-damage.sk's dmgUpdate(), right before the damage reduction step ({_pre} = the hit before it)
+	if {_v} is not a player:
+		stop
+	set {_u} to {_v}'s uuid
+	if {inMatch::%{_u}%} isn't set:
+		stop
+	if {general-perk::%{_u}%::selected} isn't "reinforceddash":
+		stop
+	if {_pre} <= 0:
+		stop
+	set {_base} to 0 # Executioner's ult resistance (20%%) while its ult is running — only Reinforced Movement's extra share counts
+	if {godlike-ULT-USE::%{_u}%::EA} is set:
+		set {_base} to 20
+	set {_share} to ({gp-dmgReduction} - {_base}) / 100
+	if {_share} <= 0:
+		stop
+	if {rd-active::%{_u}%} is set:
+		if {playerDefense::%{_u}%} = {gp-dmgReduction}: # it really is reducing this hit
+			set {rdPrevNote::%{_u}%} to {_pre} * {_share}
+		stop
+	if {rdShadow::%{_u}%} is set:
+		set {rdBlockNote::%{_u}%} to {_pre} * {_share}
+
+on damage of player with priority monitor: # the hit landed: apply this hit's notes to the life and the fight
+	set {_v} to victim
+	set {_u} to {_v}'s uuid
+	if {rdPrevNote::%{_u}%} isn't set:
+		if {rdBlockNote::%{_u}%} isn't set:
+			if {rdFightRD::%{_u}%} isn't true:
+				stop
+	if event is cancelled:
+		delete {rdPrevNote::%{_u}%}
+		delete {rdBlockNote::%{_u}%}
+		stop
+	if {inMatch::%{_u}%} isn't set:
+		delete {rdPrevNote::%{_u}%}
+		delete {rdBlockNote::%{_u}%}
+		stop
+	if {respawning::%{_u}%} is set:
+		delete {rdPrevNote::%{_u}%}
+		delete {rdBlockNote::%{_u}%}
+		stop
+	set {_dmg} to damage
+	set {_abs} to ({_v}.getAbsorptionAmount()) / 2
+	set {_hpLoss} to {_dmg} - {_abs}
+	if {_hpLoss} < 0:
+		set {_hpLoss} to 0
+	set {_hp} to health of {_v}
+	set {_inFight} to false
+	if {hbFight} is set: # the current fight (Healthy Boy section above)
+		if {hbFightClass::%{_u}%} is set:
+			if {rdFightRD::%{_u}%} is true:
+				set {_inFight} to true
+	if {_inFight} is true:
+		add {_dmg} to {rdF::%{_u}%::taken}
+	if {rdPrevNote::%{_u}%} is set:
+		set {_prev} to {rdPrevNote::%{_u}%}
+		delete {rdPrevNote::%{_u}%}
+		add {_prev} to {rdL::%{_u}%::prev}
+		if {rdActUseful::%{_u}%} isn't set: # the first hit this activation blocked
+			set {rdActUseful::%{_u}%} to true
+			add 1 to {rdL::%{_u}%::useful}
+		if {_inFight} is true:
+			add {_prev} to {rdF::%{_u}%::prev}
+			if {_hpLoss} < {_hp}: # survives — would the full hit have killed them?
+				set {_without} to ({_dmg} + {_prev}) - {_abs}
+				if {_without} >= {_hp}:
+					set {rdF::%{_u}%::save} to true
+	if {rdBlockNote::%{_u}%} is set:
+		set {_blk} to {rdBlockNote::%{_u}%}
+		delete {rdBlockNote::%{_u}%}
+		add {_blk} to {rdL::%{_u}%::block}
+		if {_inFight} is true:
+			add {_blk} to {rdF::%{_u}%::block}
+			if {_hpLoss} >= {_hp}: # dies to it — would the reduced hit have left them alive?
+				set {_with} to ({_dmg} - {_blk}) - {_abs}
+				if {_with} < {_hp}:
+					set {rdF::%{_u}%::msave} to true
+
+# ---- fights (started / ended by hbFightHit() / hbEndFight() above) ----
+
+function rdFightStart(p: player):
+	set {_u} to {_p}'s uuid
+	delete {rdF::%{_u}%::*}
+	set {rdFightRD::%{_u}%} to rdHas({_p})
+
+function rdFightEnd(p: player, c: text, o: text, won: boolean, survived: boolean):
+	set {_u} to {_p}'s uuid
+	if {rdFightRD::%{_u}%} is true:
+		rdAdd("fights-rd", {_c}, {_o}, 1)
+		if {_won} is true:
+			rdAdd("wins-rd", {_c}, {_o}, 1)
+		rdAdd("prev", {_c}, {_o}, bd({rdF::%{_u}%::prev}))
+		rdAdd("taken", {_c}, {_o}, bd({rdF::%{_u}%::taken}))
+		rdAdd("block", {_c}, {_o}, bd({rdF::%{_u}%::block}))
+		if {rdF::%{_u}%::save} is set:
+			if {_survived} is true: # won it or escaped it alive
+				rdAdd("saves", {_c}, {_o}, 1)
+		if {rdF::%{_u}%::msave} is set:
+			rdAdd("msaves", {_c}, {_o}, 1)
+	else:
+		rdAdd("fights-no", {_c}, {_o}, 1)
+		if {_won} is true:
+			rdAdd("wins-no", {_c}, {_o}, 1)
+	delete {rdF::%{_u}%::*}
+	delete {rdFightRD::%{_u}%}
+
+# ---- lives ----
+
+function rdFlushLife(p: player): # a life ends: its death (hbOnDeath above) or the match ending (10-match-manager.sk's endMatch)
+	set {_u} to {_p}'s uuid
+	set {_c} to {class::%{_u}%}
+	if {_c} is set:
+		if {respawning::%{_u}%} isn't set:
+			if rdHas({_p}) is true:
+				rdAddLife("lives", {_c}, 1)
+				rdAddLife("lprev", {_c}, bd({rdL::%{_u}%::prev}))
+				rdAddLife("lblock", {_c}, bd({rdL::%{_u}%::block}))
+				rdAddLife("acts", {_c}, bd({rdL::%{_u}%::acts}))
+				rdAddLife("useful", {_c}, bd({rdL::%{_u}%::useful}))
+				rdAddLife("btrig", {_c}, bd({rdL::%{_u}%::btrig}))
+	delete {rdL::%{_u}%::*}
+	delete {rdActUseful::%{_u}%}
+	delete {rdPrevNote::%{_u}%}
+	delete {rdBlockNote::%{_u}%}
+
+function rdResetMatch(): # hbResetMatch() above — match start / end: nothing carries over
+	delete {rdL::*}
+	delete {rdF::*}
+	delete {rdFightRD::*}
+	delete {rdActUseful::*}
+	delete {rdPrevNote::*}
+	delete {rdBlockNote::*}
+	delete {rdShadow::*}
+	delete {rdShadowHold::*}
+
+# ---- PAGE: Reinforced Movement Value ----
+
+function rdNum(x: number) :: text: # hearts, 2 decimals
+	return "%round({_x} * 100) / 100%❤"
+
+function rdPer(sum: number, n: number) :: text: # average per fight / life, in hearts
+	if {_n} <= 0:
+		return "&8—"
+	return rdNum({_sum} / {_n})
+
+function rdShare(part: number, whole: number) :: text:
+	if {_whole} <= 0:
+		return "&8—"
+	return "%round(({_part} / {_whole}) * 1000) / 10%%%"
+
+function rdLore(c: text, o: text, recent: boolean) :: strings: # one class (o = "ALL", with the per-life numbers) or one matchup
+	set {_m::*} to "fights-rd", "wins-rd", "fights-no", "wins-no", "prev", "taken", "block", "saves", "msaves", "lives", "lprev", "lblock", "acts", "useful" and "btrig"
+	loop {_m::*}:
+		set {_t::%loop-value%} to rdGet(loop-value, {_c}, {_o}, {_recent})
+	set {_life} to false
+	if {_o} is "ALL":
+		set {_life} to true
+	return rdLoreFrom({_t::fights-rd}, {_t::wins-rd}, {_t::fights-no}, {_t::wins-no}, {_t::prev}, {_t::taken}, {_t::block}, {_t::saves}, {_t::msaves}, {_t::lives}, {_t::lprev}, {_t::lblock}, {_t::acts}, {_t::useful}, {_t::btrig}, {_life})
+
+function rdLoreCategory(cat: text, recent: boolean) :: strings: # a class category: every one of its classes added together
+	set {_m::*} to "fights-rd", "wins-rd", "fights-no", "wins-no", "prev", "taken", "block", "saves", "msaves", "lives", "lprev", "lblock", "acts", "useful" and "btrig"
+	loop {_m::*}:
+		set {_t::%loop-value%} to 0
+	loop {category-classes::%{_cat}%::*}: # 02-class-data.sk
+		set {_c} to loop-value
+		loop {_m::*}:
+			add rdGet(loop-value-2, {_c}, "ALL", {_recent}) to {_t::%loop-value-2%}
+	return rdLoreFrom({_t::fights-rd}, {_t::wins-rd}, {_t::fights-no}, {_t::wins-no}, {_t::prev}, {_t::taken}, {_t::block}, {_t::saves}, {_t::msaves}, {_t::lives}, {_t::lprev}, {_t::lblock}, {_t::acts}, {_t::useful}, {_t::btrig}, true)
+
+function rdLoreFrom(fr: number, wr: number, fn: number, wn: number, prev: number, taken: number, blk: number, sv: number, ms: number, lives: number, lprev: number, lblk: number, acts: number, useful: number, btrig: number, life: boolean) :: strings:
+	set {_min} to bmin("rd") # 19-balance-stats.sk — fewer than this on a side = not enough data yet (shown grayed out)
+	set {_cw} to "&e"
+	if {_fr} < {_min}:
+		set {_cw} to "&8"
+	set {_cn} to "&e"
+	if {_fn} < {_min}:
+		set {_cn} to "&8"
+	set {_lore::*} to "" and "&7Fights: &f%{_fr} + {_fn}% &8(%{_fr}% with RM, %{_fn}% without)" and ""
+	add "&7Win rate with RM: %{_cw}%%hbPct({_wr}, {_fr})%" to {_lore::*} # hbPct: Healthy Boy section above
+	add "&7Win rate without: %{_cn}%%hbPct({_wn}, {_fn})%" to {_lore::*}
+	set {_diffOk} to false
+	if {_fr} >= {_min}:
+		if {_fn} >= {_min}:
+			set {_diffOk} to true
+	if {_diffOk} is true:
+		set {_diff} to round((({_wr} / {_fr}) - ({_wn} / {_fn})) * 1000) / 10
+		if {_diff} >= 0:
+			add "&7Difference: &a+%{_diff}%" to {_lore::*}
+		else:
+			add "&7Difference: &c%{_diff}%" to {_lore::*}
+	else:
+		add "&7Difference: &8needs %{_min}%+ fights each way" to {_lore::*}
+	set {_full} to {_taken} + {_prev} # what they'd have taken with no reduction at all
+	add "" and "&6&lWITH ITS COOLDOWN &8(per fight with RM)" to {_lore::*}
+	add "&7Prevented: %{_cw}%%rdPer({_prev}, {_fr})%" to {_lore::*}
+	add "&7Share of damage taken: %{_cw}%%rdShare({_prev}, {_full})%" to {_lore::*}
+	add "&7Save rate: %{_cw}%%hbPct({_sv}, {_fr})% &8(%{_sv}% saves)" to {_lore::*}
+	add "" and "&b&lWITHOUT ITS COOLDOWN" to {_lore::*}
+	add "&7Blocked by the cooldown: %{_cw}%%rdPer({_blk}, {_fr})%" to {_lore::*}
+	add "&7Prevented: %{_cw}%%rdPer({_prev} + {_blk}, {_fr})%" to {_lore::*}
+	add "&7Share of damage taken: %{_cw}%%rdShare({_prev} + {_blk}, {_full})%" to {_lore::*}
+	add "&7Missed saves: %{_cw}%%hbPct({_ms}, {_fr})% &8(%{_ms}% fights)" to {_lore::*}
+	if {_life} is true:
+		set {_cl} to "&e"
+		if {_lives} < {_min}:
+			set {_cl} to "&8"
+		add "" and "&a&lPER LIFE &8(%{_lives}% lives with RM, any damage)" to {_lore::*}
+		add "&7Prevented: %{_cl}%%rdPer({_lprev}, {_lives})% &8(+%rdPer({_lblk}, {_lives})% blocked by cooldown)" to {_lore::*}
+		set {_actsPer} to "&8—"
+		set {_btrigPer} to "&8—"
+		if {_lives} > 0:
+			set {_actsPer} to "%round(({_acts} / {_lives}) * 10) / 10%"
+			set {_btrigPer} to "%round(({_btrig} / {_lives}) * 10) / 10%"
+		add "&7Activations: %{_cl}%%{_actsPer}% &8(%hbPct({_useful}, {_acts})% blocked a hit)" to {_lore::*}
+		add "&7Movements blocked by cooldown: %{_cl}%%{_btrigPer}%" to {_lore::*}
+	add "" to {_lore::*}
+	return {_lore::*}
+
+function openBalanceRDPage(p: player, recent: boolean):
+	set {rdView::%{_p}'s uuid%::recent} to {_recent}
+	if {_recent} is true:
+		set {_title} to "Reinforced Movement (Recent)"
+	else:
+		set {_title} to "Reinforced Movement (Lifetime)"
+	set metadata tag "balance rd" of {_p} to chest inventory with 6 rows named {_title}
+	set slot (integers between 0 and 53) of metadata tag "balance rd" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance rd" of {_p} to black stained glass pane named " "
+	set slot (integers between 45 and 53) of metadata tag "balance rd" of {_p} to black stained glass pane named " "
+	set {_min} to bmin("rd")
+	set slot 4 of metadata tag "balance rd" of {_p} to (iron chestplate named "&6&lReinforced Movement Value" with lore "" and "&7Damage it prevents per fight and per" and "&7life, saves, win rate with and without," and "&7and what the 2.5 s cooldown costs it" and "&7(the same windows tracked with no" and "&7cooldown). &8Grayed = under %{_min}% fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31
+	delete {rdViewSlot::%{_p}'s uuid%::*}
+	loop {menu::classlist::*}:
+		set {_c} to loop-value
+		set {_slot} to {_slots::%loop-index%}
+		set {rdViewSlot::%{_p}'s uuid%::%{_slot}%} to {_c}
+		set {_lore::*} to rdLore({_c}, "ALL", {_recent})
+		add "&e[CLICK] &7Matchups" to {_lore::*}
+		set slot {_slot} of metadata tag "balance rd" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_cats::*} to "STRIKER", "JUGGERNAUT" and "SKIRMISHER"
+	set {_catSlots::*} to 38, 40 and 42
+	loop {_cats::*}:
+		set {_lore::*} to rdLoreCategory(loop-value, {_recent})
+		set slot {_catSlots::%loop-index%} of metadata tag "balance rd" of {_p} to (categoryIcon(loop-value) with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 02-class-data.sk
+	set slot 49 of metadata tag "balance rd" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 48 of metadata tag "balance rd" of {_p} to balRecentInfoIcon() # 19-balance-stats.sk
+	open (metadata tag "balance rd" of {_p}) to {_p}
+
+function openBalanceRDMatchups(p: player, c: text, recent: boolean): # one class against every opponent class (fight numbers only)
+	set metadata tag "balance rdmu" of {_p} to chest inventory with 5 rows named "RM: %{class-name::%{_c}%}% vs..."
+	set slot (integers between 0 and 44) of metadata tag "balance rdmu" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance rdmu" of {_p} to black stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "balance rdmu" of {_p} to black stained glass pane named " "
+	set {_lore::*} to rdLore({_c}, "ALL", {_recent})
+	set slot 4 of metadata tag "balance rdmu" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}% &7— all matchups" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31
+	set {_i} to 0
+	loop {menu::classlist::*}:
+		add 1 to {_i}
+		set {_o} to loop-value
+		set {_lore::*} to rdLore({_c}, {_o}, {_recent})
+		set slot {_slots::%{_i}%} of metadata tag "balance rdmu" of {_p} to ({class::weapon::%{_o}%} named "&7vs &e%{class-name::%{_o}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 40 of metadata tag "balance rdmu" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] All classes") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	open (metadata tag "balance rdmu" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "balance rd" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		if {_slot} is 49:
+			openBalanceMainMenu(player) # 19-balance-stats.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {rdViewSlot::%player's uuid%::%{_slot}%} is set:
+			openBalanceRDMatchups(player, {rdViewSlot::%player's uuid%::%{_slot}%}, {rdView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "balance rdmu" of player):
+		cancel event
+		if index of event-slot is 40:
+			openBalanceRDPage(player, {rdView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+# ============================================
+# ENCHANTED CONSUMABLES VALUE (balance dashboard page "Enchanted Consumables Value", /balancestats slot 25)
+# Measures how many fights the Enchanted Consumables general perk (+0.75 hearts on every consumable — 07-consumables.sk) saves, on each
+# class, overall and against each opponent class.
+#
+# FIGHTS: the same fights as Healthy Boy Value (the Healthy Boy section above — first hit between the two match players until a death or 5 s with
+#   no hits). A fight is "won" by the player who killed the other.
+#
+# SHADOW HEALTH: a player with Enchanted Consumables carries a second health value — what their health WOULD be without the perk: every
+#   bonus heal it actually gave (the part that fit under max health) makes the shadow that much lower ({ecDelta::uuid}, an offset from the
+#   real health). It takes the same damage as the real health (and the same Skirmisher execute rule), and catches back up the moment the
+#   real health is full again (the heal that filled them up would have filled the shadow too — a close approximation). Reset every death.
+#
+# SAVE: during a fight their shadow health drops to 0 or below while they're still alive (without the perk they'd have died), and the
+#   fight then ends with them winning it or escaping it alive.
+#
+# Stored as {balance-ec::<metric>::<class>::<opponent class>} plus a "::ALL" total per class, and in the recent-games window the same way.
+# Metrics: fights-ec, wins-ec, saves, eats, bonus (hearts actually healed by the perk), fights-no, wins-no. Test duels record nothing.
+# ============================================
+
+function ecHas(p: player) :: boolean: # running Enchanted Consumables right now
+	if {general-perk::%{_p}'s uuid%::selected} is "enchantedconsumables":
+		return true
+	return false
+
+function ecAdd(m: text, c: text, o: text, amt: number):
+	if {testMatch} is set:
+		stop
+	add {_amt} to {balance-ec::%{_m}%::%{_c}%::%{_o}%}
+	add {_amt} to {balance-ec::%{_m}%::%{_c}%::ALL}
+	set {_s} to {balance-recent-slot}
+	if {_s} is set:
+		add {_amt} to {balance-recent::%{_s}%::ec::%{_m}%::%{_c}%::%{_o}%}
+		add {_amt} to {balance-recent::%{_s}%::ec::%{_m}%::%{_c}%::ALL}
+
+function ecGet(m: text, c: text, o: text, recent: boolean) :: number:
+	if {_recent} isn't true:
+		return bd({balance-ec::%{_m}%::%{_c}%::%{_o}%}) # 19-balance-stats.sk
+	set {_t} to 0
+	set {_si} to 1
+	while {_si} <= bd({balance-recent-size}):
+		if {balance-recent-valid::%{_si}%} is set:
+			add bd({balance-recent::%{_si}%::ec::%{_m}%::%{_c}%::%{_o}%}) to {_t}
+		add 1 to {_si}
+	return {_t}
+
+# ---- recording ----
+
+function ecBonusHealed(p: player, amt: number): # 07-consumables.sk's enchantedConsumablesCheck() — the perk just healed {_amt} hearts (only what fit under max)
+	set {_u} to {_p}'s uuid
+	if {inMatch::%{_u}%} isn't set:
+		stop
+	if {respawning::%{_u}%} is set:
+		stop
+	if {_amt} > 0:
+		if {ecDelta::%{_u}%} isn't set:
+			set {ecDelta::%{_u}%} to 0
+		remove {_amt} from {ecDelta::%{_u}%} # without the perk, they'd be this much lower
+	if {hbFight} is set: # Healthy Boy section above — eaten during the current fight
+		if {hbFightClass::%{_u}%} is set:
+			if {ecFightEC::%{_u}%} is true:
+				add 1 to {ecF::%{_u}%::eats}
+				add {_amt} to {ecF::%{_u}%::bonus}
+
+every 5 ticks: # the shadow catches up once the real health is full again
+	loop all players:
+		set {_u} to loop-player's uuid
+		if {ecDelta::%{_u}%} is set:
+			if health of loop-player >= max health of loop-player:
+				delete {ecDelta::%{_u}%}
+
+on damage of player with priority monitor:
+	set {_v} to victim
+	set {_u} to {_v}'s uuid
+	if {ecDelta::%{_u}%} isn't set:
+		delete {ecExec::%{_u}%}
+		stop
+	if event is cancelled:
+		delete {ecExec::%{_u}%}
+		stop
+	if {inMatch::%{_u}%} isn't set:
+		delete {ecExec::%{_u}%}
+		stop
+	set {_dmg} to damage
+	set {_abs} to ({_v}.getAbsorptionAmount()) / 2
+	set {_hpLoss} to {_dmg} - {_abs}
+	if {_hpLoss} < 0:
+		set {_hpLoss} to 0
+	set {_hp} to health of {_v}
+	set {_sLoss} to {_hpLoss}
+	set {_exec} to false
+	if {ecExec::%{_u}%} is set: # 08-damage.sk — Skirmisher Execute: the hit's damage before any execute; the shadow follows the same rule
+		set {_exec} to true
+		set {_sLoss} to {ecExec::%{_u}%} - {_abs}
+		if {_sLoss} < 0:
+			set {_sLoss} to 0
+		delete {ecExec::%{_u}%}
+	set {_shadowAfter} to ({_hp} + {ecDelta::%{_u}%}) - {_sLoss}
+	if {_exec} is true:
+		if {_shadowAfter} <= 0.5:
+			set {_shadowAfter} to 0
+	if {_hpLoss} < {_hp}: # survives this hit
+		if {_shadowAfter} <= 0:
+			if {hbFight} is set:
+				if {hbFightClass::%{_u}%} is set:
+					if {ecFightEC::%{_u}%} is true:
+						set {ecF::%{_u}%::save} to true # without the perk they'd be dead right now
+
+# ---- fights (started / ended by hbFightHit() / hbEndFight() above) ----
+
+function ecFightStart(p: player):
+	set {_u} to {_p}'s uuid
+	delete {ecF::%{_u}%::*}
+	set {ecFightEC::%{_u}%} to ecHas({_p})
+
+function ecFightEnd(p: player, c: text, o: text, won: boolean, survived: boolean):
+	set {_u} to {_p}'s uuid
+	if {ecFightEC::%{_u}%} is true:
+		ecAdd("fights-ec", {_c}, {_o}, 1)
+		if {_won} is true:
+			ecAdd("wins-ec", {_c}, {_o}, 1)
+		ecAdd("eats", {_c}, {_o}, bd({ecF::%{_u}%::eats}))
+		ecAdd("bonus", {_c}, {_o}, bd({ecF::%{_u}%::bonus}))
+		if {ecF::%{_u}%::save} is set:
+			if {_survived} is true: # won it or escaped it alive
+				ecAdd("saves", {_c}, {_o}, 1)
+	else:
+		ecAdd("fights-no", {_c}, {_o}, 1)
+		if {_won} is true:
+			ecAdd("wins-no", {_c}, {_o}, 1)
+	delete {ecF::%{_u}%::*}
+	delete {ecFightEC::%{_u}%}
+
+function ecOnDeath(p: player): # hbOnDeath above — a new life gets a fresh shadow
+	delete {ecDelta::%{_p}'s uuid%}
+	delete {ecExec::%{_p}'s uuid%}
+
+function ecResetMatch(): # hbResetMatch() above — match start / end: nothing carries over
+	delete {ecDelta::*}
+	delete {ecExec::*}
+	delete {ecF::*}
+	delete {ecFightEC::*}
+
+# ---- PAGE: Enchanted Consumables Value ----
+
+function ecLore(c: text, o: text, recent: boolean) :: strings:
+	set {_m::*} to "fights-ec", "wins-ec", "saves", "eats", "bonus", "fights-no" and "wins-no"
+	loop {_m::*}:
+		set {_t::%loop-value%} to ecGet(loop-value, {_c}, {_o}, {_recent})
+	return ecLoreFrom({_t::fights-ec}, {_t::wins-ec}, {_t::saves}, {_t::eats}, {_t::bonus}, {_t::fights-no}, {_t::wins-no})
+
+function ecLoreCategory(cat: text, recent: boolean) :: strings:
+	set {_m::*} to "fights-ec", "wins-ec", "saves", "eats", "bonus", "fights-no" and "wins-no"
+	loop {_m::*}:
+		set {_t::%loop-value%} to 0
+	loop {category-classes::%{_cat}%::*}: # 02-class-data.sk
+		set {_c} to loop-value
+		loop {_m::*}:
+			add ecGet(loop-value-2, {_c}, "ALL", {_recent}) to {_t::%loop-value-2%}
+	return ecLoreFrom({_t::fights-ec}, {_t::wins-ec}, {_t::saves}, {_t::eats}, {_t::bonus}, {_t::fights-no}, {_t::wins-no})
+
+function ecLoreFrom(fe: number, we: number, sv: number, eats: number, bonus: number, fn: number, wn: number) :: strings:
+	set {_min} to bmin("ec") # 19-balance-stats.sk
+	set {_cw} to "&e"
+	if {_fe} < {_min}:
+		set {_cw} to "&8"
+	set {_cn} to "&e"
+	if {_fn} < {_min}:
+		set {_cn} to "&8"
+	set {_lore::*} to "" and "&7Fights: &f%{_fe} + {_fn}% &8(%{_fe}% with EC, %{_fn}% without)" and ""
+	add "&7Win rate with EC: %{_cw}%%hbPct({_we}, {_fe})%" to {_lore::*} # hbPct: Healthy Boy section above
+	add "&7Win rate without: %{_cn}%%hbPct({_wn}, {_fn})%" to {_lore::*}
+	set {_diffOk} to false
+	if {_fe} >= {_min}:
+		if {_fn} >= {_min}:
+			set {_diffOk} to true
+	if {_diffOk} is true:
+		set {_diff} to round((({_we} / {_fe}) - ({_wn} / {_fn})) * 1000) / 10
+		if {_diff} >= 0:
+			add "&7Difference: &a+%{_diff}%" to {_lore::*}
+		else:
+			add "&7Difference: &c%{_diff}%" to {_lore::*}
+	else:
+		add "&7Difference: &8needs %{_min}%+ fights each way" to {_lore::*}
+	add "" to {_lore::*}
+	add "&7Save rate: %{_cw}%%hbPct({_sv}, {_fe})% &8(%{_sv}% saves)" to {_lore::*}
+	add "&7Saves per 10 consumables: %{_cw}%%ecPer10({_sv}, {_eats})%" to {_lore::*}
+	add "" and "&8Per fight with EC:" to {_lore::*}
+	add "&7Consumables used: %{_cw}%%ecAvg({_eats}, {_fe})%" to {_lore::*}
+	add "&7Bonus healing: %{_cw}%%ecAvg({_bonus}, {_fe})%❤" to {_lore::*}
+	add "" to {_lore::*}
+	return {_lore::*}
+
+function ecAvg(sum: number, n: number) :: text:
+	if {_n} <= 0:
+		return "&8—"
+	return "%round(({_sum} / {_n}) * 100) / 100%"
+
+function ecPer10(sv: number, eats: number) :: text:
+	if {_eats} <= 0:
+		return "&8—"
+	return "%round(({_sv} / {_eats}) * 100) / 10%"
+
+function openBalanceECPage(p: player, recent: boolean):
+	set {ecView::%{_p}'s uuid%::recent} to {_recent}
+	if {_recent} is true:
+		set {_title} to "Enchanted Consumables (Recent)"
+	else:
+		set {_title} to "Enchanted Consumables (Lifetime)"
+	set metadata tag "balance ec" of {_p} to chest inventory with 6 rows named {_title}
+	set slot (integers between 0 and 53) of metadata tag "balance ec" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance ec" of {_p} to black stained glass pane named " "
+	set slot (integers between 45 and 53) of metadata tag "balance ec" of {_p} to black stained glass pane named " "
+	set {_min} to bmin("ec")
+	set slot 4 of metadata tag "balance ec" of {_p} to (enchanted golden apple named "&6&lEnchanted Consumables Value" with lore "" and "&7Win rate in fights with and without" and "&7Enchanted Consumables, and how often" and "&7its bonus healing saves a fight." and "&8Grayed = under %{_min}% fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31
+	delete {ecViewSlot::%{_p}'s uuid%::*}
+	loop {menu::classlist::*}:
+		set {_c} to loop-value
+		set {_slot} to {_slots::%loop-index%}
+		set {ecViewSlot::%{_p}'s uuid%::%{_slot}%} to {_c}
+		set {_lore::*} to ecLore({_c}, "ALL", {_recent})
+		add "&e[CLICK] &7Matchups" to {_lore::*}
+		set slot {_slot} of metadata tag "balance ec" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_cats::*} to "STRIKER", "JUGGERNAUT" and "SKIRMISHER"
+	set {_catSlots::*} to 38, 40 and 42
+	loop {_cats::*}:
+		set {_lore::*} to ecLoreCategory(loop-value, {_recent})
+		set slot {_catSlots::%loop-index%} of metadata tag "balance ec" of {_p} to (categoryIcon(loop-value) with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # 02-class-data.sk
+	set slot 49 of metadata tag "balance ec" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] Return") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	if {_recent} is true:
+		set slot 48 of metadata tag "balance ec" of {_p} to balRecentInfoIcon() # 19-balance-stats.sk
+	open (metadata tag "balance ec" of {_p}) to {_p}
+
+function openBalanceECMatchups(p: player, c: text, recent: boolean):
+	set metadata tag "balance ecmu" of {_p} to chest inventory with 5 rows named "EC: %{class-name::%{_c}%}% vs..."
+	set slot (integers between 0 and 44) of metadata tag "balance ecmu" of {_p} to gray stained glass pane named " "
+	set slot (integers between 0 and 8) of metadata tag "balance ecmu" of {_p} to black stained glass pane named " "
+	set slot (integers between 36 and 44) of metadata tag "balance ecmu" of {_p} to black stained glass pane named " "
+	set {_lore::*} to ecLore({_c}, "ALL", {_recent})
+	set slot 4 of metadata tag "balance ecmu" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}% &7— all matchups" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31
+	set {_i} to 0
+	loop {menu::classlist::*}:
+		add 1 to {_i}
+		set {_o} to loop-value
+		set {_lore::*} to ecLore({_c}, {_o}, {_recent})
+		set slot {_slots::%{_i}%} of metadata tag "balance ecmu" of {_p} to ({class::weapon::%{_o}%} named "&7vs &e%{class-name::%{_o}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	set slot 40 of metadata tag "balance ecmu" of {_p} to (arrow named "&7&lBack" with lore "" and "&7[CLICK] All classes") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
+	open (metadata tag "balance ecmu" of {_p}) to {_p}
+
+on inventory click:
+	if event-inventory = (metadata tag "balance ec" of player):
+		cancel event
+		set {_slot} to index of event-slot
+		if {_slot} is 49:
+			openBalanceMainMenu(player) # 19-balance-stats.sk
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+		else if {ecViewSlot::%player's uuid%::%{_slot}%} is set:
+			openBalanceECMatchups(player, {ecViewSlot::%player's uuid%::%{_slot}%}, {ecView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+	else if event-inventory = (metadata tag "balance ecmu" of player):
+		cancel event
+		if index of event-slot is 40:
+			openBalanceECPage(player, {ecView::%player's uuid%::recent})
+			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
+
+# ============================================
+# PERK & CONSUMABLE FIGHT LIFT (shown on 19-balance-stats.sk's "General Perk Pick Rate & K/D" and "Consumable Pick Rate & K/D" pages)
+# Every fight (the Healthy Boy fights above) is recorded for each player under the general perk and the consumable they had selected for
+# that life, by class and opponent class. On the pages, per item:
+#   LIFT (per class): that class's fight win rate WITH the item minus its fight win rate WITHOUT it (the same class using anything else) —
+#     comparing a class against itself cancels out how strong the class is.
+#   OVERALL LIFT: the class lifts averaged, weighted by each class's fights with the item (only classes with enough data each way).
+#   ABOVE EXPECTED: (wins with the item - expected wins) / fights with it, where every fight's expected win chance is that matchup's usual
+#     fight win rate (class vs opponent class, every item) — so an item used more into bad matchups isn't punished for it.
+# Stored as {balance-pf::<perk|cons>::<item id>::<class>::<opponent class>::<fights|wins>}; the item id "ALL" holds every fight. Also in
+# the recent-games window. Test duels record nothing. Minimum data: {config::balance::min-pf} fights on each side of a comparison.
+# ============================================
+
+function pfConsId(p: player) :: text: # the id of the consumable this player has selected right now ("GA", "HP", ...)
+	set {_it} to {health-item::%{_p}'s uuid%::item}
+	if {_it} is set:
+		loop "GA", "HP", "GP", "GM", "CF", "MP" and "SP":
+			if name of {_it} is name of {health-item::%loop-value%}:
+				return loop-value
+	return "GA"
+
+function pfFightStart(p: player): # hbFightHit() above — the perk and consumable for this fight
+	set {_u} to {_p}'s uuid
+	set {pfPerk::%{_u}%} to {general-perk::%{_u}%::selected}
+	if {pfPerk::%{_u}%} isn't set:
+		set {pfPerk::%{_u}%} to "none"
+	set {pfCons::%{_u}%} to pfConsId({_p})
+
+function pfAdd(kind: text, id: text, c: text, o: text, m: text):
+	add 1 to {balance-pf::%{_kind}%::%{_id}%::%{_c}%::%{_o}%::%{_m}%}
+	set {_s} to {balance-recent-slot}
+	if {_s} is set:
+		add 1 to {balance-recent::%{_s}%::pf::%{_kind}%::%{_id}%::%{_c}%::%{_o}%::%{_m}%}
+
+function pfFightEnd(p: player, c: text, o: text, won: boolean): # hbEndFight() above
+	set {_u} to {_p}'s uuid
+	if {testMatch} isn't set:
+		if {pfPerk::%{_u}%} is set:
+			loop {pfPerk::%{_u}%} and "ALL":
+				pfAdd("perk", loop-value, {_c}, {_o}, "fights")
+				if {_won} is true:
+					pfAdd("perk", loop-value, {_c}, {_o}, "wins")
+		if {pfCons::%{_u}%} is set:
+			loop {pfCons::%{_u}%} and "ALL":
+				pfAdd("cons", loop-value, {_c}, {_o}, "fights")
+				if {_won} is true:
+					pfAdd("cons", loop-value, {_c}, {_o}, "wins")
+	delete {pfPerk::%{_u}%}
+	delete {pfCons::%{_u}%}
+
+function pfGet(kind: text, id: text, c: text, o: text, m: text, recent: boolean) :: number:
+	if {_recent} isn't true:
+		return bd({balance-pf::%{_kind}%::%{_id}%::%{_c}%::%{_o}%::%{_m}%})
+	set {_t} to 0
+	set {_si} to 1
+	while {_si} <= bd({balance-recent-size}):
+		if {balance-recent-valid::%{_si}%} is set:
+			add bd({balance-recent::%{_si}%::pf::%{_kind}%::%{_id}%::%{_c}%::%{_o}%::%{_m}%}) to {_t}
+		add 1 to {_si}
+	return {_t}
+
+function pfSigned(x: number) :: text: # +4.2 (green) / -3.1 (red), percentage points
+	set {_r} to round({_x} * 1000) / 10
+	if {_r} >= 0:
+		return "&a+%{_r}%"
+	return "&c%{_r}%"
+
+function pfLines(kind: text, id: text, recent: boolean): # fills {balance-pflines::*} with one item's lift lines for its page icon
+	delete {balance-pflines::*}
+	set {_min} to bmin("pf") # 19-balance-stats.sk
+	set {_sumF} to 0 # fights with the item, every class
+	set {_sumW} to 0
+	set {_sumE} to 0 # expected wins in those fights
+	set {_wF} to 0 # weighted lift: only classes with enough data each way
+	set {_wLift} to 0
+	loop {menu::classlist::*}:
+		set {_c} to loop-value
+		set {_fi} to 0
+		set {_wi} to 0
+		set {_fa} to 0
+		set {_wa} to 0
+		loop {menu::classlist::*}:
+			set {_o} to loop-value-2
+			set {_f} to pfGet({_kind}, {_id}, {_c}, {_o}, "fights", {_recent})
+			set {_w} to pfGet({_kind}, {_id}, {_c}, {_o}, "wins", {_recent})
+			set {_fA} to pfGet({_kind}, "ALL", {_c}, {_o}, "fights", {_recent})
+			set {_wA} to pfGet({_kind}, "ALL", {_c}, {_o}, "wins", {_recent})
+			add {_f} to {_fi}
+			add {_w} to {_wi}
+			add {_fA} to {_fa}
+			add {_wA} to {_wa}
+			if {_f} > 0:
+				set {_sumE} to {_sumE} + ({_f} * ({_wA} / {_fA})) # this matchup's usual win rate, every item
+		add {_fi} to {_sumF}
+		add {_wi} to {_sumW}
+		set {_fn} to {_fa} - {_fi} # the same class without the item
+		set {_wn} to {_wa} - {_wi}
+		set {_name} to {class-name::%{_c}%}
+		if {_fi} >= {_min}:
+			if {_fn} >= {_min}:
+				set {_lift} to ({_wi} / {_fi}) - ({_wn} / {_fn})
+				set {_wLift} to {_wLift} + ({_fi} * {_lift})
+				add {_fi} to {_wF}
+				add "&7%{_name}%: %pfSigned({_lift})% &8(%hbPct({_wi}, {_fi})% vs %hbPct({_wn}, {_fn})%, %{_fi}%/%{_fn}% fights)" to {_lines::*}
+			else:
+				add "&7%{_name}%: &8needs %{_min}%+ fights without (%{_fn}%)" to {_lines::*}
+		else if {_fi} > 0:
+			add "&7%{_name}%: &8needs %{_min}%+ fights with (%{_fi}%)" to {_lines::*}
+		else:
+			add "&7%{_name}%: &8No data" to {_lines::*}
+	add "&6&lFight Lift" to {balance-pflines::*}
+	add "&8&o(fight win rate with it vs the same class without it)" to {balance-pflines::*}
+	if {_wF} > 0:
+		add "&7Overall lift: %pfSigned({_wLift} / {_wF})% &8(%{_wF}% fights)" to {balance-pflines::*}
+	else:
+		add "&7Overall lift: &8needs %{_min}%+ fights each way on a class" to {balance-pflines::*}
+	if {_sumF} >= {_min}:
+		add "&7Above expected: %pfSigned(({_sumW} - {_sumE}) / {_sumF})% &8(matchup-adjusted, %{_sumF}% fights)" to {balance-pflines::*}
+	else:
+		add "&7Above expected: &8needs %{_min}%+ fights (%{_sumF}%)" to {balance-pflines::*}
+	add "" to {balance-pflines::*}
+	add {_lines::*} to {balance-pflines::*}

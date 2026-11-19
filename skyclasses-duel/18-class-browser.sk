@@ -37,6 +37,7 @@ on load:
 	set {class-rating::CB::*} to "&a●●&7●● &cClose Damage" and "&a●●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●●●&7● &bMobility"
 	set {class-rating::TS::*} to "&a●●&7●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●●●&7● &bMobility"
 	set {class-rating::EA::*} to "&a●●●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●&7●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●●&7●● &bMobility"
+	set {class-rating::FG::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&a●●●&7● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&2●&7●●● &bMobility" # 2 + 1 + 3 + 2 + 0.5 = 8.5
 
 	# ---- LEVEL UNLOCK INFO (Level 1 = ultimate, Level 2 = Perk 1, Level 3 = Perk 2) ----
 	# category feeds the item's display name ("Level N: <category>"); name is the
@@ -49,8 +50,8 @@ on load:
 	set {classlevel-name::VBA::2} to "&6Joyful to Furious"
 	set {classlevel-desc::VBA::2::*} to "&8&oWhile Little Rage is active, +0.25" and "&8&odamage per heart of max health your" and "&8&oopponent has over yours (max 4)."
 	set {classlevel-category::VBA::3} to "Ultimate Upgrade"
-	set {classlevel-name::VBA::3} to "&6Victim Chase"
-	set {classlevel-desc::VBA::3::*} to "&8&oWhile the ultimate is active, empowers" and "&8&othe tactical's on-hit speed from 2 to 3."
+	set {classlevel-name::VBA::3} to "&6Crippling Blows"
+	set {classlevel-desc::VBA::3::*} to "&8&oYour melee hits slow the target" and "&8&o(Slowness I for 1 second)."
 
 	set {classlevel-category::DS::1} to "Unlocks Ultimate"
 	set {classlevel-name::DS::1} to "&4Blood Harvest"
@@ -121,6 +122,15 @@ on load:
 	set {classlevel-category::PGS::3} to "Ultimate Upgrade"
 	set {classlevel-name::PGS::3} to "&6Supreme Radiance"
 	set {classlevel-desc::PGS::3::*} to "&8&oLarger ultimate radius."
+	set {classlevel-category::FG::1} to "Unlocks Ultimate"
+	set {classlevel-name::FG::1} to "&4Fire & Steel"
+	set {classlevel-desc::FG::1::*} to "&8&oSummon an iron golem that protects you" and "&8&oand fights your opponent."
+	set {classlevel-category::FG::2} to "Tactical Upgrade"
+	set {classlevel-name::FG::2} to "&6Wildfire"
+	set {classlevel-desc::FG::2::*} to "&8&oThe last Flamethrower burst reaches" and "&8&o1 block further."
+	set {classlevel-category::FG::3} to "Ultimate Upgrade"
+	set {classlevel-name::FG::3} to "&6Tempered Steel"
+	set {classlevel-desc::FG::3::*} to "&8&oYour golem walks faster: Slowness I" and "&8&oinstead of II, and Speed I instead of" and "&8&onormal speed when enhanced."
 
 	set {classlevel-category::RB::1} to "Unlocks Ultimate"
 	set {classlevel-name::RB::1} to "&6Rapid Bow"
@@ -136,8 +146,8 @@ on load:
 	set {classlevel-name::CB::1} to "&6Cyber Glitch"
 	set {classlevel-desc::CB::1::*} to "&8&oPhase through doors and solid" and "&8&oterrain."
 	set {classlevel-category::CB::2} to "Tactical Upgrade"
-	set {classlevel-name::CB::2} to "&6Stamina Lockout"
-	set {classlevel-desc::CB::2::*} to "&8&oMalicious Dart disables stamina" and "&8&olonger."
+	set {classlevel-name::CB::2} to "&6Full Lockout"
+	set {classlevel-desc::CB::2::*} to "&8&oMalicious Dart also disables the" and "&8&otarget's stamina for 3 seconds."
 	set {classlevel-category::CB::3} to "Ultimate Upgrade"
 	set {classlevel-name::CB::3} to "&6Overclock"
 	set {classlevel-desc::CB::3::*} to "&8&oThe recharge time of your Ultimate" and "&8&ocharges is reduced."

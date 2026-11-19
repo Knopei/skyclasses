@@ -5,8 +5,8 @@
 # Perk 1 (level 2) "Joyful to Furious": while Little Rage is active (below 50% of max health), hits also deal +0.25 for every heart of max
 #   health the target has over Viking's own, counting at most 4 hearts (+1 max).
 # Ultimate "Big Rage": melee hits use a x8 multiplier with no crit bonus — a full swing does 4, the most it can do (08-damage.sk).
-# Perk 2 (level 3) "Victim Chase": while the ultimate is active, the tactical arrow's on-hit speed is Speed 3 instead of Speed 2.
-#   (It used to upgrade the ultimate's own speed from 2 to 3 instead, which didn't match its description.)
+# Perk 2 (level 3) "Crippling Blows": every melee hit gives the target Slowness I for 1 second (refreshed by each hit). Bosses excluded —
+#   they keep their own slowness. (Replaced "Victim Chase", Speed 3 instead of 2 on the tactical's hit during the ultimate.)
 # ============================================
 
 on right click with iron axe: # TACTICAL
@@ -29,17 +29,19 @@ on damage of living entity: # tactical arrow hit effect
 			if metadata value "type" of event-projectile is "VBA":
 				set {_attacker} to metadata value "attacker" of event-projectile
 				updateAttacker({_attacker}, victim)
-				set {_victimChase} to false
-				if {godlike-ULT-USE::%{_attacker}'s uuid%::VBA} is set:
-					if classLevel({_attacker}, "VBA") >= 3: # Perk 2 (Victim Chase) — Speed 3 on hit while the ultimate is active
-						set {_victimChase} to true
-				if {_victimChase} is true:
-					add potion effect of speed 3 for 3 seconds to potion effects of {_attacker}
-				else:
-					add potion effect of speed 2 for 3 seconds to potion effects of {_attacker}
+				add potion effect of speed 2 for 3 seconds to potion effects of {_attacker}
 				add potion effect of slowness 1 for 3 seconds to potion effects of victim
 				make 25 of block particle using redstone block at block 1.5 above location of victim
 				play sound "BLOCK_STONE_BREAK" at volume 5 at location of victim
+
+on damage of living entity with priority monitor: # Perk 2 (Crippling Blows) — Slowness I on every melee hit
+	if event is not cancelled:
+		if event-damagecause is attack:
+			if attacker is a player:
+				if name of attacker's held item is "%{wc}%Viking Battle Axe":
+					if classLevel(attacker, "VBA") >= 3:
+						if metadata value "isMajorBoss" of victim isn't set: # bosses keep their own slowness (12-major-boss.sk)
+							add potion effect of slowness 1 without particles for 1 second to potion effects of victim
 
 on damage of living entity: # ultimate hit sound cue
 	if event-damagecause is attack:
@@ -62,7 +64,7 @@ on drop of iron axe with priority low: # ULTIMATE
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::VBA::ULT-COST}) is true:
 			set {godlike-ULT-USE::%player's uuid%::VBA} to now
-			add potion effect of speed 2 without particles for 8 seconds to potion effects of player # (Victim Chase no longer changes this — see the tactical hit above)
+			add potion effect of speed 2 without particles for 8 seconds to potion effects of player
 			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1 at player
 			# VISUAL
 			set {_shapes::circle} to a circle with radius 1.25

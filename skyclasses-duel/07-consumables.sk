@@ -153,7 +153,9 @@ function giveKillReward(p: player): # called from 09-death-match.sk when {_p} ge
 
 function enchantedConsumablesCheck(p: player): # 06-perks-general.sk — Enchanted Consumables: every one of the 7 consumables below calls this right after recordConsumableUse(), so the bonus applies uniformly whether or not that item already heals on its own
 	if {general-perk::%{_p}'s uuid%::selected} is "enchantedconsumables":
+		set {_before} to health of {_p}
 		heal {_p} by 0.75 hearts
+		ecBonusHealed({_p}, (health of {_p}) - {_before}) # 25-balance-stats-advanced.sk — Enchanted Consumables Value: what the bonus actually healed
 
 on consume:
 	if name of event-item is "&cGolden Apple":
@@ -333,13 +335,23 @@ on right click:
 		set item of last shot entity to fire charge of unbreaking 1 named "%unix timestamp of now%"
 		set {_e} to last shot entity
 		{_e}.setPickupDelay(32767) # prevents the thrown grenade from being picked back up mid-flight/on the ground before it explodes
+		set metadata value "isNade" of {_e} to true # forge.sk — Forge's Flamethrower sets off any grenade it touches ("nadeDetonate")
+		set {_molotov} to false
+		if {class::%player's uuid%} is "FG": # forge.sk — Forge's passive (Molotov): a fire area instead of the explosion
+			set {_molotov} to true
 		set {_radius} to 3
 		play sound "entity.tnt.primed" at volume 10 at pitch 1 at player
 
 		loop {_fuseTicks} times:
+			if metadata value "nadeDetonate" of {_e} is set: # set off early by a Flamethrower (forge.sk)
+				stop loop
 			if {_e}.isOnGround() is true:
 				draw 1 of large_smoke at {_e} with extra 0.1
 			wait 1 tick
+		if {_molotov} is true:
+			forgeMolotov(player, location of {_e}) # forge.sk — no explosion, no damage or knockback
+			kill {_e}
+			stop
 		grenadeExplosion({_e}, {_radius})
 
 		loop all living entities in radius {_radius} around {_e}:

@@ -25,7 +25,7 @@
 #   one of each: ultimate cooldowns -10%% (06-perks-general.sk / cyberpunk.sk)
 #
 # HIGH-LEVEL BUFFS:
-#   Harbinger: +1 damage on every melee hit (08-damage.sk)
+#   Harbinger: +0.5 damage on every melee hit (08-damage.sk)
 #   Magmaroth: +0.5 damage on hits within 2 s of a movement ability, and a hit that leaves an enemy at 1.5 hearts or less ignites them
 #              for 3 s (08-damage.sk; movement tracked in 06-perks-general.sk)
 #   Doomhoof: +1 max health (04-leveling.sk) and permanent Regeneration I (ticker below)
@@ -68,7 +68,7 @@ on load:
 	set {mbSoulName::vindicator} to "&7Vindicator Soul &7(+20%% stamina regeneration)"
 	set {mbSoulName::pillager} to "&8Pillager Soul &7(grenades recharge 50%% faster)"
 	set {mbSoulName::mixed} to "&dRaid Soul &7(ultimate cooldowns -10%%)"
-	set {mbBuffName::harbinger} to "&3Harbinger's Might &7(+1 damage on every melee hit)"
+	set {mbBuffName::harbinger} to "&3Harbinger's Might &7(+0.5 damage on every melee hit)"
 	set {mbBuffName::magmaroth} to "&6Magmaroth's Fury &7(+0.5 damage for 2 s after a movement ability, once every 2 s; hits that leave an enemy at 1.5 hearts or less ignite them)"
 	set {mbClaimName::evoker} to "&5Evoker Soul" # short names for the "<player> has claimed ..." line
 	set {mbClaimName::vindicator} to "&7Vindicator Soul"

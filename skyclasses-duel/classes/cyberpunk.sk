@@ -1,13 +1,15 @@
 # ============================================
 # CYBERPUNK (CB) — Cyberpunk Blade
 # Tactical: always available (Malicious Dart — a damaging utility dart that
-#   disables stamina usage). Ultimate: unlocks at class level 1 (Cyber
-#   Glitch — a short phase-dash through doors/terrain, on a 2-charge system
-#   instead of a normal single-use cooldown; see cbULT() below).
-# Passive: Mana Breach — while below half max mana, damage you deal steals
-#   some of the target's mana.
-# Perk 1 (level 2) "Stamina Lockout": Malicious Dart's stamina-disable lasts
-#   longer.
+#   locks the target's mana: for 3 seconds they can't use their tactical or
+#   ultimate). Ultimate: unlocks at class level 1 (Cyber Glitch — a short
+#   phase-dash through doors/terrain, on a 2-charge system instead of a normal
+#   single-use cooldown; see cbULT() below).
+# Passive: Backup Power — when you don't have the mana for a phase, it costs
+#   2 stamina instead (if you have 2+ stamina and stamina isn't disabled).
+#   It still needs a charge.
+# Perk 1 (level 2) "Full Lockout": Malicious Dart also disables the target's
+#   stamina for the same 3 seconds.
 # Perk 2 (level 3) "Overclock": ultimate charges recharge faster.
 #
 # NOTE on the ultimate's charge system: cbULT() is a background loop started
@@ -22,13 +24,18 @@
 # often it can be used even with full mana banked.
 # ============================================
 
-function cbPSS(a: player, v: living entity, mana: integer): # Mana Breach — passive mana steal while below half mana
-	set {_uuid} to {_a}'s uuid
-	set {_check} to {mana::%{_uuid}%::max} / 2
-	if {mana::%{_uuid}%::curr} <= {_check}:
-		set {_mana} to {_mana} * 10 # internal units — actionBar()/03-resources.sk store mana at x10
-		add {_mana} to {mana::%{_uuid}%::curr}
-		remove {_mana} from {mana::%{_v}'s uuid%::curr}
+function cbHasPhaseMana(p: player) :: boolean: # enough mana for Cyber Glitch, the same way ultCHECK() counts it (Spell Caster's cut included) — and not mana-locked
+	if {manaLock::%{_p}'s uuid%} is set:
+		if (unix timestamp of now) < {manaLock::%{_p}'s uuid%}:
+			return false
+	set {_cost} to {weapons::CB::ULT-COST}
+	if {general-perk::%{_p}'s uuid%::selected} is "spellcaster":
+		remove {gp-ultManaReduction} from {_cost} # 06-perks-general.sk
+		if {_cost} < 0:
+			set {_cost} to 0
+	if {mana::%{_p}'s uuid%::curr} >= ({_cost} * 10):
+		return true
+	return false
 
 function cbDart(p: player): # Malicious Dart (TAC)
 	shoot a arrow from {_p} at speed 2.5
@@ -208,9 +215,17 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 	# --- step 3: mana/charge gating (unchanged), then teleport ---
 	if {_type} = "ult":
 		if {cb-ULT-count::%{_p}'s uuid%} > 0:
-			if ultCHECK({_p}, {weapons::CB::ULT-COST}) is true: # MANA CHECK — 19-balance-stats.sk's recordAbilityCast() fires from inside here
-				set {_manaPass} to true
-				remove 1 from {cb-ULT-count::%{_p}'s uuid%}
+			if cbHasPhaseMana({_p}) is false: # PASSIVE (Backup Power): no mana for it — 2 stamina instead, if they have it
+				if {stamina::%{_p}'s uuid%::curr} >= 600: # 2 stamina points (300 internal units each)
+					if staminaCHECK({_p}, 2) is true: # 03-resources.sk — spends the 2 stamina (and refuses while stamina is disabled)
+						set {_manaPass} to true
+						remove 1 from {cb-ULT-count::%{_p}'s uuid%}
+						recordAbilityCast({_p}, "ULT", 0) # 19-balance-stats.sk — still a cast, just paid in stamina
+						play sound "BLOCK_RESPAWN_ANCHOR_CHARGE" with volume 1 and pitch 1.6 at {_p}
+			if {_manaPass} isn't set:
+				if ultCHECK({_p}, {weapons::CB::ULT-COST}) is true: # MANA CHECK — 19-balance-stats.sk's recordAbilityCast() fires from inside here
+					set {_manaPass} to true
+					remove 1 from {cb-ULT-count::%{_p}'s uuid%}
 	else if {_type} = "tac":
 		if tacCHECK({_p}, {weapons::CB::TAC-COST}) is true: # MANA CHECK
 			set {_manaPass} to true
@@ -242,8 +257,14 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 		teleport {_p} to {_loc} # this should be a teleport, this is not used to set player velocity to 0
 		updateNametag({_p}) # 04-leveling.sk — respawns the tag at the player's new (post-teleport) location
 		perkPhaseReduction({_p}) # 06-perks-general.sk — Reinforced Dash: half a second of damage reduction from the moment the phase is used
-		add potion effect of speed 2 without particles for 2 seconds to potion effects of {_p}
+		add potion effect of speed 3 without particles for 1 second to potion effects of {_p} # Speed III for 1 s after the phase (was Speed II for 2 s)
+		set {cbPhaseBoost::%{_p}'s uuid%} to (unix timestamp of now) + 1 # 03-resources.sk's speed ticker leaves it alone until then
 		cbUltParticle({_oldLoc}, {_loc})
+		wait 20 ticks # Speed III over — back to the permanent Skirmisher Speed II right away (no gap until the next ticker pass)
+		if {_p} is online:
+			if {class::%{_p}'s uuid%} is "CB":
+				if (unix timestamp of now) >= {cbPhaseBoost::%{_p}'s uuid%}:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of {_p}
 
 on right click with diamond sword: # TAC
 	if name of player's held item contains "%{wc}%Cyberpunk Blade":
@@ -257,15 +278,14 @@ on damage of living entity: # Malicious Dart hit effect — the damage itself (w
 			if metadata value "type" of event-projectile is "CB":
 				set {_attacker} to metadata value "attacker" of event-projectile
 				updateAttacker({_attacker}, victim)
-				cbPSS({_attacker}, victim, 5)
-				add potion effect of speed 2 without particles for 2 seconds to potion effects of {_attacker} # TAC now rewards the shooter with a speed burst instead of slowing the target
-				if classLevel({_attacker}, "CB") >= 2: # Perk 1 (Stamina Lockout)
-					staminaPause(victim, 3)
-				else:
-					staminaPause(victim, 2)
-	else if {_cause} = "attack":
-		if name of attacker's held item contains "%{wc}%Cyberpunk Blade":
-			cbPSS(attacker, victim, 5)
+				add potion effect of speed 2 without particles for 2 seconds to potion effects of {_attacker} # TAC rewards the shooter with a speed burst
+				if victim is a player:
+					set {manaLock::%victim's uuid%} to (unix timestamp of now) + 3 # 03-resources.sk — no mana for a tactical or ultimate for 3 seconds
+					send action bar "&9Mana disabled for 3 seconds!" to victim
+					play sound "BLOCK_BEACON_DEACTIVATE" with volume 1 and pitch 1.5 to victim
+					draw 15 of dust_color_transition using dustTransition(cyan, blue, 0.75) at victim with offset vector(0.4, 1, 0.4) with extra 0
+					if classLevel({_attacker}, "CB") >= 2: # Perk 1 (Full Lockout): stamina disabled for the same 3 seconds
+						staminaPause(victim, 3) # 01-utils.sk
 
 function cbCalcCooldownULT(p: player) :: timespan: # per-charge recharge time (Spell Caster doesn't apply — its cooldown cut only affects ultimates with a 50+ second cooldown)
 	if classLevel({_p}, "CB") >= 3: # Perk 2 (Overclock)

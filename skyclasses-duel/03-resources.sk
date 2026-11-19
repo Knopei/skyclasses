@@ -17,12 +17,24 @@ function atkCHECK(p: player, mana: integer) :: boolean:
 	actionBar({_p})
 	return true
 
+# Mana Lock (cyberpunk.sk's Malicious Dart): for a few seconds the player can't spend mana on a tactical or an ultimate.
+function manaLocked(p: player) :: boolean:
+	if {manaLock::%{_p}'s uuid%} is set:
+		if (unix timestamp of now) < {manaLock::%{_p}'s uuid%}:
+			send "&cMana Disabled!" to {_p}
+			play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+			return true
+		delete {manaLock::%{_p}'s uuid%}
+	return false
+
 function tacCHECK(p: player, mana: integer) :: boolean:
 	set {_mana} to {_mana}*10
 	if {ability-cooldown::%{_p}'s uuid%} is set:
 		if difference between now and {ability-cooldown::%{_p}'s uuid%} < 15 ticks:
 			send "&cAbility on Cooldown!" to {_p}
 			stop
+	if manaLocked({_p}) is true:
+		stop
 	if {mana::%{_p}'s uuid%::curr} < {_mana}:
 		send "&cNot enough Mana!" to {_p}
 		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
@@ -47,6 +59,8 @@ function ultCHECK(p: player, mana: integer) :: boolean:
 		if {_mana} < 0:
 			set {_mana} to 0
 	set {_mana} to {_mana}*10
+	if manaLocked({_p}) is true:
+		stop
 	if {mana::%{_p}'s uuid%::curr} < {_mana}:
 		send "&cNot enough Mana!" to {_p}
 		play sound "ENTITY_ENDERMAN_TELEPORT" at volume 0.8 at pitch 0.5 to {_p}
@@ -165,7 +179,11 @@ function actionBar(p: player):
 		set {_sc} to "&7"
 	else:
 		set {_sc} to "&e"
-	send action bar "%{_sc}%%{_sCurr}%/%{_sMax}% Stamina  &9%{_mCurr}%/%{_mMax}% Mana  %{_ultText}%" to {_p}
+	set {_mc} to "&9"
+	if {manaLock::%{_uuid}%} is set: # Malicious Dart's mana lock (cyberpunk.sk) — gray while it lasts, like disabled stamina
+		if (unix timestamp of now) < {manaLock::%{_uuid}%}:
+			set {_mc} to "&7"
+	send action bar "%{_sc}%%{_sCurr}%/%{_sMax}% Stamina  %{_mc}%%{_mCurr}%/%{_mMax}% Mana  %{_ultText}%" to {_p}
 
 on xp spawn: # prevents vanilla XP orbs from interfering with the class-level display (sidebar/nametag only, no XP bar usage)
 	cancel event
@@ -198,7 +216,12 @@ every 1 seconds:
 				if {godlike-ULT-USE::%loop-player's uuid%::NS} isn't set:
 					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
 			else if classCategory({class::%loop-player's uuid%}) is "SKIRMISHER": # RS, CB, TS — Skirmisher (TESTING: permanent speed 2)
-				add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
+				set {_boosted} to false
+				if {cbPhaseBoost::%loop-player's uuid%} is set: # cyberpunk.sk — Speed III for 1 s after a phase; don't downgrade it
+					if (unix timestamp of now) < {cbPhaseBoost::%loop-player's uuid%}:
+						set {_boosted} to true
+				if {_boosted} is false:
+					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
 			else: # baseline speed for all other classes (Viking included — Little Rage no longer gives speed)
 				add potion effect of speed 1 without particles for 1 seconds to potion effects of loop-player
 
