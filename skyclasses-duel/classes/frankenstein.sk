@@ -54,33 +54,39 @@ on drop of mace with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::FH::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::FH} to now
-			if classLevel(player, "FH") >= 3: # Perk 2 (Undying)
-				add potion effect of absorption 2 without particles for 4 seconds to potion effects of player
-			else:
-				add potion effect of absorption 1 without particles for 4 seconds to potion effects of player
-			play sound "entity.warden.emerge" with volume 1 and pitch 1.5 at player
-			set {_shapes::triangle} to a triangle with radius 1.5
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
-			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
-			while (absorption amount of player) > 0:
-				if {godlike-ULT-CANCEL::%player's uuid%::FH} is set:
-					stop loop
-				add potion effect of slowness 2 without particles for 5 ticks to potion effects of player # the shield's drawback — lasts exactly as long as the absorption does
-				set {_loc} to player's location
-				add 1 to y-coord of {_loc}
-				rotate shapes {_shapes::*} by {_rotation}
-				draw shapes {_shapes::*} at {_loc}
-				wait 2 tick
+			ultFH(player, {_ultCooldown}, classLevel(player, "FH"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			set {godlike-ULT-CD::%player's uuid%::FH} to now
-			delete {godlike-ULT-USE::%player's uuid%::FH}
-			delete {godlike-ULT-CANCEL::%player's uuid%::FH}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::FH}
-			if {class::%player's uuid%} = "FH":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+function ultFH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::FH} to now
+	if {_lvl} >= 3: # Perk 2 (Undying)
+		add potion effect of absorption 2 without particles for 4 seconds to potion effects of {_p}
+	else:
+		add potion effect of absorption 1 without particles for 4 seconds to potion effects of {_p}
+	play sound "entity.warden.emerge" with volume 1 and pitch 1.5 at {_p}
+	set {_shapes::triangle} to a triangle with radius 1.5
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
+	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+	while (absorption amount of {_p}) > 0:
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::FH} is set:
+			stop loop
+		add potion effect of slowness 2 without particles for 5 ticks to potion effects of {_p} # the shield's drawback — lasts exactly as long as the absorption does
+		set {_loc} to {_p}'s location
+		add 1 to y-coord of {_loc}
+		rotate shapes {_shapes::*} by {_rotation}
+		draw shapes {_shapes::*} at {_loc}
+		wait 2 tick
+
+	set {godlike-ULT-CD::%{_p}'s uuid%::FH} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::FH}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::FH}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::FH}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::FH}
+	if {class::%{_p}'s uuid%} = "FH":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 function fhULT(a: living entity, p: player, dmg: number) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
 	fhULTWorker({_a}, {_p}, {_dmg})
@@ -105,7 +111,10 @@ function fhULTWorker(a: living entity, p: player, dmg: number): # {_p} is the Fr
 
 on damage of player: # visual cue while the ultimate's shield is absorbing hits
 	if (absorption amount of victim) > 0:
-		if {class::%victim's uuid%} = "FH":
+		if {class::%victim's uuid%} = "FH" or "SB": # SB: a Spell Breaker's stolen It's Alive! (absorption outside it is Paladin-style, so it needs the ultimate running)
+			if {class::%victim's uuid%} = "SB":
+				if {godlike-ULT-USE::%victim's uuid%::FH} isn't set:
+					stop
 			set {_loc} to location of victim
 			set {_x} to random number between -1 and 1
 			set {_y} to random number between 1 and 1.5

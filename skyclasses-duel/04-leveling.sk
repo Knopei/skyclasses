@@ -116,6 +116,7 @@ function resetPlayerLeveling(p: player): # called by 09-death-match.sk / match-m
 	delete {match-override-consumable::%{_p}'s uuid%::*}
 	delete {pendingPerkChoice::%{_p}'s uuid%} # an in-progress in-match pick that never got applied to a class
 	delete {pendingConsumableChoice::%{_p}'s uuid%}
+	sbResetMatch({_p}) # spellbreaker.sk — a stolen ultimate and the "no repeat" memory never carry into the next match
 
 # ---- MAX HEALTH (class-level-based bonuses + the general perk of the same theme) ----
 

@@ -164,6 +164,8 @@ function actionBar(p: player):
 				if {_time} < {_cooldown}:
 					set {_pct} to floor(({_time} / {_cooldown}) * 100)
 			set {_ultText} to "&b%{_charges}%/2 ULT &7(%{_pct}%%%)"
+	else if sbHeldText({_p}) is not "": # spellbreaker.sk — a Spell Breaker holding a stolen ultimate: "22s ULT: Viking" in purple
+		set {_ultText} to sbHeldText({_p})
 	else:
 		if {godlike-ULT-CD::%{_uuid}%::%{_class}%} is set:
 			set {_time} to difference between now and {godlike-ULT-CD::%{_uuid}%::%{_class}%}
@@ -215,8 +217,13 @@ every 1 seconds:
 			else if {class::%loop-player's uuid%} = "NS": # Skirmisher (TESTING: permanent speed 2) — skipped during Dragon Blade so its Speed 3 isn't downgraded
 				if {godlike-ULT-USE::%loop-player's uuid%::NS} isn't set:
 					add potion effect of speed 2 without particles for 1 seconds to potion effects of loop-player
-			else if classCategory({class::%loop-player's uuid%}) is "SKIRMISHER": # RS, CB, TS — Skirmisher (TESTING: permanent speed 2)
+			else if classCategory({class::%loop-player's uuid%}) is "SKIRMISHER": # RS, CB, TS, SB — Skirmisher (TESTING: permanent speed 2)
 				set {_boosted} to false
+				if {class::%loop-player's uuid%} = "SB": # spellbreaker.sk — a stolen Ghost / Dragon Blade gives Speed III; don't downgrade it
+					if {godlike-ULT-USE::%loop-player's uuid%::GD} is set:
+						set {_boosted} to true
+					if {godlike-ULT-USE::%loop-player's uuid%::NS} is set:
+						set {_boosted} to true
 				if {cbPhaseBoost::%loop-player's uuid%} is set: # cyberpunk.sk — Speed III for 1 s after a phase; don't downgrade it
 					if (unix timestamp of now) < {cbPhaseBoost::%loop-player's uuid%}:
 						set {_boosted} to true
@@ -247,6 +254,8 @@ on sneak toggle:
 						else:
 							push player upward at speed 1
 					else:
+						if {class::%player's uuid%} = "SB": # spellbreaker.sk — a stolen Dragon Blade's fiery dash (nkStamina() only acts while it runs)
+							nkStamina(player) # ninja.sk
 						set velocity of player to vector(0, 0, 0)
 						push player upward at speed 1
 				else:
@@ -259,6 +268,8 @@ on sneak toggle:
 							wait 1 tick
 							push player horizontally forward at speed 0.25
 					else:
+						if {class::%player's uuid%} = "SB": # spellbreaker.sk — a stolen Dragon Blade's fiery dash
+							nkStamina(player) # ninja.sk
 						push player horizontally forward at speed 0.5
 						wait 1 tick
 						push player horizontally forward at speed 0.5

@@ -193,11 +193,11 @@ on drop of copper sword with priority low:
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::FG::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::FG} to now
-			forgeGolemRun(player, {_ultCooldown}) # the golem's whole life, then the cooldown (a function with waits returns to here at once)
+			forgeGolemRun(player, {_ultCooldown}, classLevel(player, "FG"), false) # the golem's whole life, then the cooldown (a function with waits returns to here at once)
 
-function forgeGolemRun(p: player, cd: timespan):
+function forgeGolemRun(p: player, cd: timespan, lvl: number, sb: boolean): # {_lvl} = the level the ultimate runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
 	set {_u} to {_p}'s uuid
+	set {godlike-ULT-USE::%{_u}%::FG} to now
 	set {_hp} to {forge::golem-health}
 	set {_inMatch} to false
 	if {inMatch::%{_u}%} is set:
@@ -211,7 +211,8 @@ function forgeGolemRun(p: player, cd: timespan):
 	set metadata value "forgeOwner" of {_g} to {_p}
 	set max health of {_g} to {_hp}
 	set health of {_g} to {_hp}
-	if classLevel({_p}, "FG") >= 3: # Perk 2 (Tempered Steel): Slowness I instead of II
+	set metadata value "forgeLvl" of {_g} to {_lvl} # read by forgeEnhance()
+	if {_lvl} >= 3: # Perk 2 (Tempered Steel): Slowness I instead of II
 		add potion effect of slowness 1 without particles for 16 seconds to potion effects of {_g}
 	else:
 		add potion effect of slowness 2 without particles for 16 seconds to potion effects of {_g} # Slowness II (removed when enhanced)
@@ -288,6 +289,9 @@ function forgeGolemRun(p: player, cd: timespan):
 	set {godlike-ULT-CD::%{_u}%::FG} to now
 	delete {godlike-ULT-USE::%{_u}%::FG}
 	delete {godlike-ULT-CANCEL::%{_u}%::FG}
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_u}%::FG}
+		stop
 	wait {_cd}
 	delete {godlike-ULT-CD::%{_u}%::FG}
 	if {_p} is online:
@@ -313,7 +317,7 @@ function forgeEnhance(g: living entity): # set on fire by its own Scorch: faster
 	remove slowness from active potion effects of {_g} # normal speed
 	set {_owner} to metadata value "forgeOwner" of {_g}
 	if {_owner} is a player:
-		if classLevel({_owner}, "FG") >= 3: # Perk 2 (Tempered Steel): Speed I when enhanced
+		if metadata value "forgeLvl" of {_g} >= 3: # Perk 2 (Tempered Steel): Speed I when enhanced (the level the ultimate was cast at — a Spell Breaker's stolen golem carries its own)
 			add potion effect of speed 1 without particles for 16 seconds to potion effects of {_g}
 	play sound "item.firecharge.use" with volume 2 and pitch 0.6 at {_g}
 	play sound "entity.blaze.ambient" with volume 1 and pitch 0.7 at {_g}

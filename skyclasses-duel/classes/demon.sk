@@ -63,56 +63,62 @@ on drop of netherite sword with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::DS::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::DS} to now
-			play sound "entity_blaze_death" with volume 5 and pitch 0.5 at player
-			set {_shapes::circle} to a circle with radius 1.25
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(red, black, 0.5)
-			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
-			set {_n} to 39
-			loop 161 times:
-				if {godlike-ULT-CANCEL::%player's uuid%::DS} is set:
-					stop loop
-				add 1 to {_n}
-				if {_n} = 40:
-					set {_n} to 0
-					set {_max} to 0
-					set {balance-abilitySource::%player's uuid%} to "ULT" # 19-balance-stats.sk
-					loop all living entities in radius 6 around player:
-						if loop-entity is not an armor stand: # excludes armor stands (including the per-player level-tag stands from 04-leveling.sk) from being targeted, damaged, or healed off of
-							if loop-entity is not player:
-								if loop-entity is a player:
-									set {_v} to vector from player to loop-entity
-									if {_max} < 3:
-										demonicBeam(player, loop-entity, {_v}, 1.25)
-										damage loop-entity by 0.5 hearts
-										add 1 to {_hits}
-										add 1 to {_max}
-								else:
-									set {_v} to vector from player to loop-entity
-									demonicBeam(player, loop-entity, {_v}, 1.25)
-									damage loop-entity by 0.5 hearts
-									add 1 to {_hits}
-					if {_hits} > 0: # 0.5 hearts for the first enemy hit by this pulse, +0.25 hearts for each additional one
-						set {_amt} to 0.5 + (({_hits} - 1) * 0.25)
-						heal player by {_amt}
-					delete {_hits}
-					delete {_v}
-					delete {_max}
-					delete {balance-abilitySource::%player's uuid%}
+			ultDS(player, {_ultCooldown}, classLevel(player, "DS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-				set {_loc} to player's location
-				add 1 to y-coord of {_loc}
-				rotate shapes {_shapes::*} by {_rotation}
-				draw shapes {_shapes::*} at {_loc}
-				wait 1 tick
-			set {godlike-ULT-CD::%player's uuid%::DS} to now
-			delete {godlike-ULT-USE::%player's uuid%::DS}
-			delete {godlike-ULT-CANCEL::%player's uuid%::DS}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::DS}
-			if {class::%player's uuid%} = "DS":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+function ultDS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::DS} to now
+	play sound "entity_blaze_death" with volume 5 and pitch 0.5 at {_p}
+	set {_shapes::circle} to a circle with radius 1.25
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(red, black, 0.5)
+	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+	set {_n} to 39
+	loop 161 times:
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::DS} is set:
+			stop loop
+		add 1 to {_n}
+		if {_n} = 40:
+			set {_n} to 0
+			set {_max} to 0
+			set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
+			loop all living entities in radius 6 around {_p}:
+				if loop-entity is not an armor stand: # excludes armor stands (including the per-player level-tag stands from 04-leveling.sk) from being targeted, damaged, or healed off of
+					if loop-entity is not {_p}:
+						if loop-entity is a player:
+							set {_v} to vector from {_p} to loop-entity
+							if {_max} < 3:
+								demonicBeam({_p}, loop-entity, {_v}, 1.25)
+								damage loop-entity by 0.5 hearts
+								add 1 to {_hits}
+								add 1 to {_max}
+						else:
+							set {_v} to vector from {_p} to loop-entity
+							demonicBeam({_p}, loop-entity, {_v}, 1.25)
+							damage loop-entity by 0.5 hearts
+							add 1 to {_hits}
+			if {_hits} > 0: # 0.5 hearts for the first enemy hit by this pulse, +0.25 hearts for each additional one
+				set {_amt} to 0.5 + (({_hits} - 1) * 0.25)
+				heal {_p} by {_amt}
+			delete {_hits}
+			delete {_v}
+			delete {_max}
+			delete {balance-abilitySource::%{_p}'s uuid%}
+
+		set {_loc} to {_p}'s location
+		add 1 to y-coord of {_loc}
+		rotate shapes {_shapes::*} by {_rotation}
+		draw shapes {_shapes::*} at {_loc}
+		wait 1 tick
+	set {godlike-ULT-CD::%{_p}'s uuid%::DS} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::DS}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::DS}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::DS}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::DS}
+	if {class::%{_p}'s uuid%} = "DS":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on damage of living entity: # PASSIVE — lifesteal on melee hit, boosted during ultimate by Perk 2
 	if attacker is a player:
@@ -125,3 +131,10 @@ on damage of living entity: # PASSIVE — lifesteal on melee hit, boosted during
 						heal attacker by 0.25 hearts
 				else:
 					heal attacker by 0.25 hearts
+		else if name of attacker's held item is "%{wc}%Spell Breaker": # spellbreaker.sk — a stolen Blood Harvest gives the shovel the ultimate's lifesteal (not the passive's)
+			if {godlike-ULT-USE::%attacker's uuid%::DS} is set:
+				if attack cooldown of attacker >= 0.75:
+					if sbStolenLevel(attacker) >= 3: # Mastered Theft — the Vampire version
+						heal attacker by 0.75 hearts
+					else:
+						heal attacker by 0.25 hearts

@@ -191,57 +191,63 @@ on drop of shield with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::BS::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::BS} to now
-			set {_pauseDuration} to 1.25
-			set {_tickDamage} to 1.5
-			if classLevel(player, "BS") >= 3: # Perk 2 (Unsteady Grounds)
-				set {_pauseDuration} to 1.75
-				set {_tickDamage} to 1.75
-			set {_shapes::outer-circle} to a circle of radius 4.5
-			set {_shapes::inner-circle} to a circle of radius 3
-			set {_shapes::tiny-circle} to a circle of radius 1.5
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 1)
-			loop 3 times:
-				if {godlike-ULT-CANCEL::%player's uuid%::BS} is set:
-					stop loop
-				play sound "ITEM_MACE_SMASH_GROUND_HEAVY" with volume 3 and pitch 0.5 at player
-				set {_loc} to location of player
-				set {_loc2} to location of player
-				add 0.5 to y-coord of {_loc}
-				add 1 to y-coord of {_loc2}
-				draw shapes {_shapes::*} at {_loc}
-				draw shapes {_shapes::*} at {_loc2}
-				set {_y-max} to y-coord of {_loc}+1
-				set {_y-min} to y-coord of {_loc}-2
-				loop all blocks in radius 4 around {_loc}:
-					if y-coord of loop-block < {_y-max}:
-						if y-coord of loop-block > {_y-min}:
-							if loop-block is not air:
-								set {_block} to type of loop-block
-								draw 1 of block particle using {_block} at block 0.5 above loop-block with extra 0.5
-				set {balance-abilitySource::%player's uuid%} to "ULT" # 19-balance-stats.sk
-				loop all living entities in radius 4.5 around player:
-					if loop-entity is not player:
-						updateAttacker(player, loop-entity)
-						directAttack(loop-entity)
-						damage loop-entity by {_tickDamage}
-						add potion effect of slowness 1 without particles for 3 seconds to potion effects of loop-entity
-						push loop-entity upward at speed 0.85
-						staminaPause(loop-entity, {_pauseDuration})
-						set {_hit} to true
-				delete {balance-abilitySource::%player's uuid%}
-				if {_hit} is set:
-					delete {_hit}
-				wait 2 seconds
+			ultBS(player, {_ultCooldown}, classLevel(player, "BS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			set {godlike-ULT-CD::%player's uuid%::BS} to now
-			delete {godlike-ULT-USE::%player's uuid%::BS}
-			delete {godlike-ULT-CANCEL::%player's uuid%::BS}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::BS}
-			if {class::%player's uuid%} = "BS":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+function ultBS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::BS} to now
+	set {_pauseDuration} to 1.25
+	set {_tickDamage} to 1.5
+	if {_lvl} >= 3: # Perk 2 (Unsteady Grounds)
+		set {_pauseDuration} to 1.75
+		set {_tickDamage} to 1.75
+	set {_shapes::outer-circle} to a circle of radius 4.5
+	set {_shapes::inner-circle} to a circle of radius 3
+	set {_shapes::tiny-circle} to a circle of radius 1.5
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 1)
+	loop 3 times:
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::BS} is set:
+			stop loop
+		play sound "ITEM_MACE_SMASH_GROUND_HEAVY" with volume 3 and pitch 0.5 at {_p}
+		set {_loc} to location of {_p}
+		set {_loc2} to location of {_p}
+		add 0.5 to y-coord of {_loc}
+		add 1 to y-coord of {_loc2}
+		draw shapes {_shapes::*} at {_loc}
+		draw shapes {_shapes::*} at {_loc2}
+		set {_y-max} to y-coord of {_loc}+1
+		set {_y-min} to y-coord of {_loc}-2
+		loop all blocks in radius 4 around {_loc}:
+			if y-coord of loop-block < {_y-max}:
+				if y-coord of loop-block > {_y-min}:
+					if loop-block is not air:
+						set {_block} to type of loop-block
+						draw 1 of block particle using {_block} at block 0.5 above loop-block with extra 0.5
+		set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
+		loop all living entities in radius 4.5 around {_p}:
+			if loop-entity is not {_p}:
+				updateAttacker({_p}, loop-entity)
+				directAttack(loop-entity)
+				damage loop-entity by {_tickDamage}
+				add potion effect of slowness 1 without particles for 3 seconds to potion effects of loop-entity
+				push loop-entity upward at speed 0.85
+				staminaPause(loop-entity, {_pauseDuration})
+				set {_hit} to true
+		delete {balance-abilitySource::%{_p}'s uuid%}
+		if {_hit} is set:
+			delete {_hit}
+		wait 2 seconds
+
+	set {godlike-ULT-CD::%{_p}'s uuid%::BS} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::BS}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::BS}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::BS}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::BS}
+	if {class::%{_p}'s uuid%} = "BS":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on load:
 	delete {bsReflecting} # the shield reflect's re-entry guard (bsReflect) — never left set across a reload

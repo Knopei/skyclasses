@@ -5,6 +5,7 @@
 # Perk 1 (level 2) "Joyful to Furious": while Little Rage is active (below 50% of max health), hits also deal +0.25 for every heart of max
 #   health the target has over Viking's own, counting at most 4 hearts (+1 max).
 # Ultimate "Big Rage": melee hits use a x8 multiplier with no crit bonus — a full swing does 4, the most it can do (08-damage.sk).
+# Spell Breaker (spellbreaker.sk) can steal Big Rage: ultVBA() runs for it with its shovel as the axe (08-damage.sk's x8 hit, the hit sound, and Crippling Blows at Mastered Theft).
 # Perk 2 (level 3) "Crippling Blows": every melee hit gives the target Slowness I for 1 second (refreshed by each hit). Bosses excluded —
 #   they keep their own slowness. (Replaced "Victim Chase", Speed 3 instead of 2 on the tactical's hit during the ultimate.)
 # ============================================
@@ -38,14 +39,21 @@ on damage of living entity with priority monitor: # Perk 2 (Crippling Blows) —
 	if event is not cancelled:
 		if event-damagecause is attack:
 			if attacker is a player:
+				set {_cripple} to false
 				if name of attacker's held item is "%{wc}%Viking Battle Axe":
 					if classLevel(attacker, "VBA") >= 3:
-						if metadata value "isMajorBoss" of victim isn't set: # bosses keep their own slowness (12-major-boss.sk)
-							add potion effect of slowness 1 without particles for 1 second to potion effects of victim
+						set {_cripple} to true
+				else if name of attacker's held item is "%{wc}%Spell Breaker": # spellbreaker.sk — a stolen Big Rage at Mastered Theft (level 3) brings Crippling Blows with it, for as long as it runs
+					if {godlike-ULT-USE::%attacker's uuid%::VBA} is set:
+						if sbStolenLevel(attacker) >= 3:
+							set {_cripple} to true
+				if {_cripple} is true:
+					if metadata value "isMajorBoss" of victim isn't set: # bosses keep their own slowness (12-major-boss.sk)
+						add potion effect of slowness 1 without particles for 1 second to potion effects of victim
 
 on damage of living entity: # ultimate hit sound cue
 	if event-damagecause is attack:
-		if name of attacker's held item is "%{wc}%Viking Battle Axe":
+		if name of attacker's held item is "%{wc}%Viking Battle Axe" or "%{wc}%Spell Breaker": # Spell Breaker: a stolen Big Rage (spellbreaker.sk)
 			if {godlike-ULT-USE::%attacker's uuid%::VBA} is set:
 				play sound "ENTITY_ENDER_DRAGON_HURT" with volume 1 and pitch 1 at victim
 
@@ -63,30 +71,36 @@ on drop of iron axe with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::VBA::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::VBA} to now
-			add potion effect of speed 2 without particles for 8 seconds to potion effects of player
-			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1 at player
-			# VISUAL
-			set {_shapes::circle} to a circle with radius 1.25
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(orange, red, 0.5)
-			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
-			loop 160 times: # 8 seconds (was 10)
-				if {godlike-ULT-CANCEL::%player's uuid%::VBA} is set: # set by 09-death-match.sk when Viking dies — the ult ends with it
-					stop loop
-				set {_loc} to player's location
-				add 1 to y-coord of {_loc}
-				rotate shapes {_shapes::*} by {_rotation}
-				draw shapes {_shapes::*} at {_loc}
-				draw 1 of angry villager at block above player with offset vector(0.5, 0.5, 0.5) with extra 0.1
-				wait 1 tick
-			set {godlike-ULT-CD::%player's uuid%::VBA} to now
-			delete {godlike-ULT-USE::%player's uuid%::VBA}
-			delete {godlike-ULT-CANCEL::%player's uuid%::VBA}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::VBA}
-			if {class::%player's uuid%} = "VBA":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+			ultVBA(player, {_ultCooldown}, classLevel(player, "VBA"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
+
+function ultVBA(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::VBA} to now
+	add potion effect of speed 2 without particles for 8 seconds to potion effects of {_p}
+	play sound "entity_ender_dragon_growl" with volume 5 and pitch 1 at {_p}
+	# VISUAL
+	set {_shapes::circle} to a circle with radius 1.25
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(orange, red, 0.5)
+	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+	loop 160 times: # 8 seconds (was 10)
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::VBA} is set: # set by 09-death-match.sk when Viking dies — the ult ends with it
+			stop loop
+		set {_loc} to {_p}'s location
+		add 1 to y-coord of {_loc}
+		rotate shapes {_shapes::*} by {_rotation}
+		draw shapes {_shapes::*} at {_loc}
+		draw 1 of angry villager at block above {_p} with offset vector(0.5, 0.5, 0.5) with extra 0.1
+		wait 1 tick
+	set {godlike-ULT-CD::%{_p}'s uuid%::VBA} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::VBA}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::VBA}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::VBA}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::VBA}
+	if {class::%{_p}'s uuid%} = "VBA":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 function vbaCHECK(a: living entity, v: living entity, dmg: number, crit: text, cause: text) :: number: # extra damage ADDED to Viking's hit (returns nothing for no bonus)
 	if {_a} is a player:

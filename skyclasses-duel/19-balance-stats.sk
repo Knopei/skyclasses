@@ -634,7 +634,7 @@ function openBalanceAbilityPage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance ability" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance ability" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row
 	loop {menu::classlist::*}: # 05-class-menu.sk
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
@@ -672,7 +672,7 @@ function openBalanceDamageSourcePage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance damage" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance damage" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
@@ -705,7 +705,7 @@ function openBalanceTimeToKillPage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance ttk" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance ttk" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
@@ -762,7 +762,7 @@ function openBalanceMatchupPage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance matchup" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance matchup" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row; 25 was added for Executioner (EA), the 14th class
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row; 25 was added for Executioner (EA), the 14th class
 	set {_opps} to {_count} - 1 # opponents per class
 	set {_cats::*} to "STRIKER", "JUGGERNAUT", and "SKIRMISHER"
 	set {_ci} to 1
@@ -852,7 +852,7 @@ function openBalanceDraftCarryPage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance draftcarry" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance draftcarry" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
@@ -893,7 +893,7 @@ function openBalanceBossesPage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance bosses" of {_p} to black stained glass pane named " "
 	set slot (integers between 45 and 53) of metadata tag "balance bosses" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
@@ -936,7 +936,7 @@ function openBalanceLevelLivesPage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance levellives" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance levellives" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}
@@ -1110,7 +1110,7 @@ function openBalanceLevelKDPage(p: player, recent: boolean):
 	set slot (integers between 0 and 8) of metadata tag "balance levelkd" of {_p} to black stained glass pane named " "
 	set slot (integers between 36 and 44) of metadata tag "balance levelkd" of {_p} to black stained glass pane named " "
 
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, and 31 # 15 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Forge centered on the third row; 25 was added for Executioner (EA), the 14th class
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 slots — one per class in {menu::classlist::*} (05-class-menu.sk): two rows of 7, then Scorch and Spell Breaker on the third row; 25 was added for Executioner (EA), the 14th class
 	loop {menu::classlist::*}:
 		set {_class} to loop-value
 		set {_slot} to {_slots::%loop-index%}

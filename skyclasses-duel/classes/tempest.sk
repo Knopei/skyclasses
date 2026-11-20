@@ -87,17 +87,23 @@ on drop of iron hoe with priority low: # ULTIMATE (Tornado)
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::TS::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::TS} to now
+			ultTS(player, {_ultCooldown}, classLevel(player, "TS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			tornado(player)
+function ultTS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::TS} to now
 
-			set {godlike-ULT-CD::%player's uuid%::TS} to now
-			delete {godlike-ULT-USE::%player's uuid%::TS}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::TS}
-			if {class::%player's uuid%} = "TS":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+	tornado({_p}, {_lvl})
+
+	set {godlike-ULT-CD::%{_p}'s uuid%::TS} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::TS}
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::TS}
+		stop
+	# ULT CD
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::TS}
+	if {class::%{_p}'s uuid%} = "TS":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 function tornadoPHY(loc: location, ploc: location, a: player):
 	add 3 to y coord of {_loc}
@@ -119,7 +125,7 @@ function tornadoPHY(loc: location, ploc: location, a: player):
 
 				play sound "entity.breeze.wind_burst" with volume 5 and pitch 1.25 at loop-entity
 
-function tornado(p: player):
+function tornado(p: player, lvl: number): # {_lvl} = the level the ultimate runs at (Spell Breaker's stolen cast passes its own)
 	set {_ploc} to location of {_p}
 	set {_loc} to location of {_p}
 
@@ -134,7 +140,7 @@ function tornado(p: player):
 	set {_radius::3} to 3
 	set {_radius::4} to 2
 
-	if classLevel({_p}, "TS") >= 3: # Perk 2 (Category 5)
+	if {_lvl} >= 3: # Perk 2 (Category 5)
 		set {_times} to 40 # ( 20 blocks travel )
 	else:
 		set {_times} to 30 # ( 15 blocks travel )

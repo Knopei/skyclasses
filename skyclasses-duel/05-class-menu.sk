@@ -11,7 +11,7 @@
 
 on load:
 	set {class-bottom::back} to spectral arrow named "&7Back"
-	set {menu::classlist::*} to "VBA", "DS", "FH", "GD", "BS", "MH", "NS", "PGS", "RB", "RS", "ZT", "CB", "TS", "EA", "FG"
+	set {menu::classlist::*} to "VBA", "DS", "FH", "GD", "BS", "MH", "NS", "PGS", "RB", "RS", "ZT", "CB", "TS", "EA", "FG", "SB"
 
 # ---- IN-BASE CLASS MENU (mid-match swap) ----
 
@@ -166,6 +166,10 @@ function classSelect(p: player, class: text):
 		set level progress of {_p} to 0.99
 	else if {_class} = "CB": # cyberpunk.sk — starts the background ultimate-charge recharge loop for this life; the loop checks {class-ID::%uuid%} against {_id} every cycle and stops itself the moment the player dies/switches away from CB, so it never needs to be manually cancelled here. {cb-ULT-count::*} is NOT reset here — just like other classes' ult cooldown persists across death, a player who already banked 1 or 2 charges keeps them into their next life (cbULT() itself only initializes it to 0 the very first time this player ever plays CB)
 		cbULT({_p}, {_id})
+	else if {_class} = "SB": # spellbreaker.sk — the tactical starts on Phase Step (empty XP bar)
+		delete {sbTacNext::%{_uuid}%}
+		set level of {_p} to 0
+		set level progress of {_p} to 0
 	else if {_class} = "TS": # tempest.sk — clears the one-time self-push flag Tornado uses, so a leftover flag from a previous life doesn't suppress the self-push the next time this player casts Tornado
 		delete {tornadoMovement::%{_uuid}%}
 

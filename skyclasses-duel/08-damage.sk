@@ -68,33 +68,25 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 	else if {class::%{_a}'s uuid%} is "EA": # Executioner — executioner.sk
 		if {_cause} = "attack":
 			if {godlike-ULT-USE::%{_a}'s uuid%::EA} is set: # Death's Toll — this melee hit consumes the charge and overrides the damage, then ends the ultimate (the charge loop in executioner.sk polls this flag every tick and stops once it's gone)
-				set {_level} to {ea-chargeLevel::%{_a}'s uuid%}
-				if {_level} = 1:
-					set {_dmg} to 2.5
-				else if {_level} = 2:
-					set {_dmg} to 5
-				else:
-					set {_dmg} to 7.5
-				if classLevel({_a}, "EA") >= 3: # Perk 2 (Execution) — +1 for every heart of max health the target has over Executioner's own (absorption counts, 01-utils.sk)
-					hbScaleNote({_a}, {_v}, 1) # 25-balance-stats-advanced.sk — Healthy Boy Value
-					set {_over} to effMaxHealth({_v}) - effMaxHealth({_a})
-					if {_over} > 4: # counts at most 4 hearts over — +4 max
-						set {_over} to 4
-					if {_over} > 0:
-						add {_over} to {_dmg}
-				play sound "entity.player.attack.strong" with volume 1.8 and pitch 0.6 at {_v} # a heavy, devastating slash — slightly louder than before
-				play sound "entity.player.attack.sweep" with volume 1.6 and pitch 0.5 at {_v}
-				play sound "block.anvil.land" with volume 0.5 and pitch 1.4 at {_v} # a noticeable but quiet anvil layer underneath the slash
-				eaRedstoneEffect({_v}) # executioner.sk — same redstone block-break particle + sound as the TAC's buffed hit
-				set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk
-				delete {godlike-ULT-USE::%{_a}'s uuid%::EA}
-				delete {ea-chargeLevel::%{_a}'s uuid%}
+				set {_dmg} to eaTollHit({_a}, {_v}) # executioner.sk — charge tiers, Perk 2 (Execution), effects
 			else if {ea-tacBuff::%{_a}'s uuid%} is set: # Cleaving Rush's +40% next-hit buff
 				set {_dmg} to {_dmg}*1.4
 				set {balance-abilitySource::%{_a}'s uuid%} to "TAC"
 				delete {ea-tacBuff::%{_a}'s uuid%}
 				eaRedstoneEffect({_v}) # executioner.sk
 			eaMarkCheck({_a}, {_v}) # executioner.sk — Executioner's Mark; just registers the victim for the real-health check on the global 1-second ticker, no health math happens here
+	else if {class::%{_a}'s uuid%} is "SB": # Spell Breaker — spellbreaker.sk: a stolen ultimate runs on the shovel as if it were that class's weapon
+		if {_cause} = "attack":
+			if {godlike-ULT-USE::%{_a}'s uuid%::VBA} is set: # Big Rage — the x8 hit itself is in the base-damage handler below
+				set {balance-abilitySource::%{_a}'s uuid%} to "ULT"
+			else if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set: # Ghost — the empowered hit
+				set {_temp} to gdCHECK({_a}, {_v})
+			else if {godlike-ULT-USE::%{_a}'s uuid%::EA} is set: # Death's Toll — the charged hit
+				set {_dmg} to eaTollHit({_a}, {_v}) # executioner.sk
+		else if {_cause} = "projectile":
+			if {_other} = "RB": # Rapid Bow's arrows — the same 7.5-block scaling as Rapid's
+				if (distance between {_a} and {_v}) >= 7.5:
+					set {_dmg} to {_dmg}*1.5
 	if {_temp} is set: # checks if any addon changed the damage
 		if {_temp} > 0:
 			set {_dmg} to {_dmg}+{_temp}
@@ -103,7 +95,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 
 	# Frankenstein's ultimate reflects projectiles — checked HERE, after the attacker's own modifiers, instead of inside the attacker chain above: every attacker class with its own branch (Rapid, Viking, Zeus, Cyberpunk, Mighty, Ghost...) matched first and never reached the old victim-side check, so their projectiles were never reflected (Rapid's ult arrows are the case that showed it). The reflected hit is half of this final damage, and Frankenstein takes none of it.
 	if {_cause} = "projectile":
-		if {class::%{_v}'s uuid%} is "FH":
+		if {class::%{_v}'s uuid%} is "FH" or "SB": # SB: a Spell Breaker's stolen It's Alive! (spellbreaker.sk)
 			if {godlike-ULT-USE::%{_v}'s uuid%::FH} is set:
 				if {_a} is set:
 					if {_a} is not {_v}:
@@ -134,7 +126,13 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 
 	# Damage Reductions
 	if {_cause} is "lightning":
-		if {class::%{_a}'s uuid%} is "ZT": # Zeus's lightning (tactical + ultimate): 1.5 base, +0.25 for every heart the hit target has over Zeus's own max health, capped at 2.5 — replaces the old flat 0.6x of vanilla lightning (which also came out to 1.5)
+		set {_zAtk} to false
+		if {class::%{_a}'s uuid%} is "ZT":
+			set {_zAtk} to true
+		else if {class::%{_a}'s uuid%} is "SB": # spellbreaker.sk — a stolen Thunderstorm's lightning uses Zeus's formula too
+			if {godlike-ULT-USE::%{_a}'s uuid%::ZT} is set:
+				set {_zAtk} to true
+		if {_zAtk} is true: # Zeus's lightning (tactical + ultimate): 1.5 base, +0.25 for every heart the hit target has over Zeus's own max health, capped at 2.5 — replaces the old flat 0.6x of vanilla lightning (which also came out to 1.5)
 			hbScaleNote({_a}, {_v}, 0.25) # 25-balance-stats-advanced.sk — Healthy Boy Value: how much an extra heart changes this
 			set {_over} to effMaxHealth({_v}) - effMaxHealth({_a}) # 01-utils.sk — absorption counts as max health
 			if {_over} < 0:
@@ -331,7 +329,7 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 					set {_dmgMult} to {weapons::%{_w}%::AD}
 					if {_w} is set:
 						set {_vbaUlt} to false
-						if {class::%attacker's uuid%} is "VBA":
+						if {class::%attacker's uuid%} is "VBA" or "SB": # SB: a Spell Breaker's stolen Big Rage (spellbreaker.sk)
 							if {godlike-ULT-USE::%attacker's uuid%::VBA} is set: # Viking ultimate (Big Rage): x8 multiplier, and crits add nothing — a full swing is 4, the most it can do
 								set {_vbaUlt} to true
 								set {_dmgMult} to 8

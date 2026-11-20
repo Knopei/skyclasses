@@ -229,6 +229,8 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 	else if {_type} = "tac":
 		if tacCHECK({_p}, {weapons::CB::TAC-COST}) is true: # MANA CHECK
 			set {_manaPass} to true
+	else if {_type} = "sb": # spellbreaker.sk — a stolen Cyber Glitch: one free phase, no charge or mana
+		set {_manaPass} to true
 
 	if {_manaPass} is set:
 		# TELEPORT FIRST, THEN PARTICLES — this is the actual reason the player
@@ -255,6 +257,7 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 		# silently blocking the move and fixes the tag floating at the old spot.
 		killLevelTag({_p}) # 04-leveling.sk
 		teleport {_p} to {_loc} # this should be a teleport, this is not used to set player velocity to 0
+		set {cbPhaseOK::%{_p}'s uuid%} to true # spellbreaker.sk — tells a stolen cast the phase happened (a "Target too far!" keeps the stolen ultimate)
 		updateNametag({_p}) # 04-leveling.sk — respawns the tag at the player's new (post-teleport) location
 		perkPhaseReduction({_p}) # 06-perks-general.sk — Reinforced Dash: half a second of damage reduction from the moment the phase is used
 		add potion effect of speed 3 without particles for 1 second to potion effects of {_p} # Speed III for 1 s after the phase (was Speed II for 2 s)
@@ -262,7 +265,7 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 		cbUltParticle({_oldLoc}, {_loc})
 		wait 20 ticks # Speed III over — back to the permanent Skirmisher Speed II right away (no gap until the next ticker pass)
 		if {_p} is online:
-			if {class::%{_p}'s uuid%} is "CB":
+			if {class::%{_p}'s uuid%} is "CB" or "SB": # (SB: a Spell Breaker's stolen phase — also a Skirmisher)
 				if (unix timestamp of now) >= {cbPhaseBoost::%{_p}'s uuid%}:
 					add potion effect of speed 2 without particles for 1 seconds to potion effects of {_p}
 
@@ -344,7 +347,14 @@ function cbUltParticle(oldLoc: location, newLoc: location):
 		wait 10 ticks
 
 on damage of player with priority low: # suffocation mitigate — phasing into a wall shouldn't be able to suffocate the player
+	set {_cb} to false
 	if {class::%victim's uuid%} = "CB":
+		set {_cb} to true
+	else if {class::%victim's uuid%} = "SB": # spellbreaker.sk — right after a stolen phase
+		if {cbPhaseBoost::%victim's uuid%} is set:
+			if (unix timestamp of now) < ({cbPhaseBoost::%victim's uuid%} + 2):
+				set {_cb} to true
+	if {_cb} is true:
 		set {_cause} to "%event-damagecause%"
 		if {_cause} = "suffocation":
 			cancel event

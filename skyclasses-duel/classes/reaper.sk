@@ -180,62 +180,68 @@ on drop of netherite hoe with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::RS::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::RS} to now
-			add potion effect of speed 2 without particles for 6 seconds to potion effects of player
-			set {_loc} to location of player
-			set {_y-max} to y-coord of {_loc}+2.5
-			set {_y-min} to y-coord of {_loc}-2.5
+			ultRS(player, {_ultCooldown}, classLevel(player, "RS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			reaperSlash({_loc}, 9, 3, 1.5)
-			reaperSlash({_loc}, 7, 6, 1)
-			reaperSlash({_loc}, 3.5, 9, 0.75)
-			play sound "entity.player.attack.sweep" with volume 5 and pitch 1.5 at {_loc}
-			set {balance-abilitySource::%player's uuid%} to "ULT" # 19-balance-stats.sk
-			loop all living entities in radius 9.5 around {_loc}:
-				if loop-entity is not player:
-					if y-coord of loop-entity is between {_y-max} and {_y-min}:
-						updateAttacker(player, loop-entity)
-						add loop-entity to {_hitEnemies::*}
-						set {_amount} to 1
-						if distance between player and loop-entity >= 7:
-							set {_amount} to 2.25
-							play sound "entity.wither.hurt" with volume 0.5 and pitch 0.75 to player
-						add potion effect of wither 2 without particles for 6 seconds to potion effects of loop-entity
-						damage loop-entity by {_amount}
-			delete {balance-abilitySource::%player's uuid%}
-			wait 1 second
-			loop {_hitEnemies::*}:
-				set {_entity} to loop-value
-				if {_entity} is a living entity:
-					set {_v} to vector from player to {_entity}
-					reaperBeam(player, {_entity}, {_v})
-					if classLevel(player, "RS") >= 3: # Perk 2 (Blinding Scythe) — the base ultimate no longer blinds
-						add potion effect of blindness 1 without particles for 5 seconds to potion effects of {_entity}
-					set {_shapes::%{_entity}%} to a circle with radius 0.5
-					play sound "entity_wither_spawn" with volume 1 and pitch 1 to {_entity}
+function ultRS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::RS} to now
+	add potion effect of speed 2 without particles for 6 seconds to potion effects of {_p}
+	set {_loc} to location of {_p}
+	set {_y-max} to y-coord of {_loc}+2.5
+	set {_y-min} to y-coord of {_loc}-2.5
 
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(black, gray, 0.75)
-			set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
-			loop 100 times:
-				if {godlike-ULT-CANCEL::%player's uuid%::RS} is set:
-					stop loop
-				loop {_shapes::*}:
-					set {_e} to loop-index parsed as player
-					set {_loc} to {_e}'s location
-					add 1.5 to y-coord of {_loc}
-					if {_e} is not invisible:
-						draw shapes {_shapes::%loop-index%} at {_loc}
-				rotate shapes {_shapes::*} by {_rotation}
-				wait 1 tick
+	reaperSlash({_loc}, 9, 3, 1.5)
+	reaperSlash({_loc}, 7, 6, 1)
+	reaperSlash({_loc}, 3.5, 9, 0.75)
+	play sound "entity.{_p}.attack.sweep" with volume 5 and pitch 1.5 at {_loc}
+	set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
+	loop all living entities in radius 9.5 around {_loc}:
+		if loop-entity is not {_p}:
+			if y-coord of loop-entity is between {_y-max} and {_y-min}:
+				updateAttacker({_p}, loop-entity)
+				add loop-entity to {_hitEnemies::*}
+				set {_amount} to 1
+				if distance between {_p} and loop-entity >= 7:
+					set {_amount} to 2.25
+					play sound "entity.wither.hurt" with volume 0.5 and pitch 0.75 to {_p}
+				add potion effect of wither 2 without particles for 6 seconds to potion effects of loop-entity
+				damage loop-entity by {_amount}
+	delete {balance-abilitySource::%{_p}'s uuid%}
+	wait 1 second
+	loop {_hitEnemies::*}:
+		set {_entity} to loop-value
+		if {_entity} is a living entity:
+			set {_v} to vector from {_p} to {_entity}
+			reaperBeam({_p}, {_entity}, {_v})
+			if {_lvl} >= 3: # Perk 2 (Blinding Scythe) — the base ultimate no longer blinds
+				add potion effect of blindness 1 without particles for 5 seconds to potion effects of {_entity}
+			set {_shapes::%{_entity}%} to a circle with radius 0.5
+			play sound "entity_wither_spawn" with volume 1 and pitch 1 to {_entity}
 
-			set {godlike-ULT-CD::%player's uuid%::RS} to now
-			delete {godlike-ULT-USE::%player's uuid%::RS}
-			delete {godlike-ULT-CANCEL::%player's uuid%::RS}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::RS}
-			if {class::%player's uuid%} = "RS":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(black, gray, 0.75)
+	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
+	loop 100 times:
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::RS} is set:
+			stop loop
+		loop {_shapes::*}:
+			set {_e} to loop-index parsed as player
+			set {_loc} to {_e}'s location
+			add 1.5 to y-coord of {_loc}
+			if {_e} is not invisible:
+				draw shapes {_shapes::%loop-index%} at {_loc}
+		rotate shapes {_shapes::*} by {_rotation}
+		wait 1 tick
+
+	set {godlike-ULT-CD::%{_p}'s uuid%::RS} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::RS}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::RS}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::RS}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::RS}
+	if {class::%{_p}'s uuid%} = "RS":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on damage of living entity: # PASSIVE — every 3rd hit is empowered
 	if name of attacker's held item is "%{wc}%Reaper Scythe":

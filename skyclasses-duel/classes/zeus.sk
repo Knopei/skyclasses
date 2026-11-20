@@ -79,63 +79,69 @@ on drop of trident with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::ZT::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::ZT} to now
+			ultZT(player, {_ultCooldown}, classLevel(player, "ZT"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			set {_shapes::outer-circle} to a circle of radius 6
-			set {_shapes::inner-circle} to a circle of radius 4
-			set {_shapes::tiny-circle} to a circle of radius 1.5
+function ultZT(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::ZT} to now
 
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(white, light blue, 1)
-			set {_loc} to location of player
+	set {_shapes::outer-circle} to a circle of radius 6
+	set {_shapes::inner-circle} to a circle of radius 4
+	set {_shapes::tiny-circle} to a circle of radius 1.5
 
-			loop blocks in radius 5 around {_loc}:
-				set {_y} to y-coord of {_loc}
-				if y-coord of loop-block < {_y}+1:
-					if y-coord of loop-block > {_y}-1:
-						add location of loop-block to {_strike::*}
-			set {_s} to size of {_strike::*}
-			loop all entities in radius 5 around {_loc}:
-				if loop-entity is not player:
-					add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(white, light blue, 1)
+	set {_loc} to location of {_p}
 
-			play sound "entity.elder_guardian.curse" at volume 10 at pitch 0.75 at block 10 above {_loc}
+	loop blocks in radius 5 around {_loc}:
+		set {_y} to y-coord of {_loc}
+		if y-coord of loop-block < {_y}+1:
+			if y-coord of loop-block > {_y}-1:
+				add location of loop-block to {_strike::*}
+	set {_s} to size of {_strike::*}
+	loop all entities in radius 5 around {_loc}:
+		if loop-entity is not {_p}:
+			add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
 
-			if classLevel(player, "ZT") >= 3: # Perk 2 (Lightning Speed)
-				set {_ticks} to 5 ticks
-			else:
-				set {_ticks} to 15 ticks
+	play sound "entity.elder_guardian.curse" at volume 10 at pitch 0.75 at block 10 above {_loc}
 
-			draw shapes {_shapes::tiny-circle} at {_loc}
-			wait {_ticks}
-			draw shapes {_shapes::inner-circle} at {_loc}
-			wait {_ticks}
-			draw shapes {_shapes::outer-circle} at {_loc}
+	if {_lvl} >= 3: # Perk 2 (Lightning Speed)
+		set {_ticks} to 5 ticks
+	else:
+		set {_ticks} to 15 ticks
 
-			loop 60 times:
-				if {godlike-ULT-CANCEL::%player's uuid%::ZT} is set:
-					stop loop
-				set {_r} to random integer between 1 and {_s} # index 0 doesn't exist, so a 0 roll used to skip the strike entirely
-				loop all entities in radius 5 around {_strike::%{_r}%}: # vanilla lightning damages everything within ~3 blocks horizontally of the bolt (6 vertically), so the attacker has to be recorded for ALL of them — it used to only cover radius 2, and anything hit outside that fell through to the "no Zeus attacker" damage path (flat vanilla-based number instead of the 1.5-3 Zeus formula, wrong credit)
-					if loop-entity is not player:
-						if loop-entity is not an armor stand:
-							updateAttacker(player, loop-entity)
-							if distance between loop-entity and {_strike::%{_r}%} <= 2:
-								add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
-				setAbilitySourceTimed(player, "ULT", 10) # 19-balance-stats.sk — matches the extinguishMobsFor() window below
-				strike lightning at {_strike::%{_r}%}
-				extinguishMobsFor({_strike::%{_r}%}, 2, 10) # shorter window is fine here — the next strike is only 2 ticks away and re-covers the same ground
-				draw 10 of large_smoke at {_strike::%{_r}%}
-				draw shapes {_shapes::outer-circle} at {_loc}
-				wait 2 tick
-			wait 1 second
-			set {godlike-ULT-CD::%player's uuid%::ZT} to now
-			delete {godlike-ULT-USE::%player's uuid%::ZT}
-			delete {godlike-ULT-CANCEL::%player's uuid%::ZT}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::ZT}
-			if {class::%player's uuid%} = "ZT":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+	draw shapes {_shapes::tiny-circle} at {_loc}
+	wait {_ticks}
+	draw shapes {_shapes::inner-circle} at {_loc}
+	wait {_ticks}
+	draw shapes {_shapes::outer-circle} at {_loc}
+
+	loop 60 times:
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::ZT} is set:
+			stop loop
+		set {_r} to random integer between 1 and {_s} # index 0 doesn't exist, so a 0 roll used to skip the strike entirely
+		loop all entities in radius 5 around {_strike::%{_r}%}: # vanilla lightning damages everything within ~3 blocks horizontally of the bolt (6 vertically), so the attacker has to be recorded for ALL of them — it used to only cover radius 2, and anything hit outside that fell through to the "no Zeus attacker" damage path (flat vanilla-based number instead of the 1.5-3 Zeus formula, wrong credit)
+			if loop-entity is not {_p}:
+				if loop-entity is not an armor stand:
+					updateAttacker({_p}, loop-entity)
+					if distance between loop-entity and {_strike::%{_r}%} <= 2:
+						add potion effect of slowness 2 for 1 seconds to potion effects of loop-entity
+		setAbilitySourceTimed({_p}, "ULT", 10) # 19-balance-stats.sk — matches the extinguishMobsFor() window below
+		strike lightning at {_strike::%{_r}%}
+		extinguishMobsFor({_strike::%{_r}%}, 2, 10) # shorter window is fine here — the next strike is only 2 ticks away and re-covers the same ground
+		draw 10 of large_smoke at {_strike::%{_r}%}
+		draw shapes {_shapes::outer-circle} at {_loc}
+		wait 2 tick
+	wait 1 second
+	set {godlike-ULT-CD::%{_p}'s uuid%::ZT} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::ZT}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::ZT}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::ZT}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::ZT}
+	if {class::%{_p}'s uuid%} = "ZT":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on damage of player: # ultimate's lightning shouldn't hurt Zeus themself
 	if "%damage cause%" is "lightning":

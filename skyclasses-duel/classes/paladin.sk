@@ -56,56 +56,62 @@ on drop of iron sword with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::PGS::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::PGS} to now
-			heal player by 0.5 # half a heart the moment the radiance is placed
-			set {_pal} to player
-			if classLevel(player, "PGS") >= 3: # Perk 2 (Supreme Radiance)
-				set {_shapes::outer-circle} to a circle of radius 7.5
-				set {_shapes::inner-circle} to a circle of radius 7.25
-				set {_shapes::tiny-circle} to a circle of radius 3
-				set {_shapes::teeny-circle} to a circle of radius 1.5
-				set {_shapes::triangle-1} to a triangle with radius 7
-				set {_shapes::triangle-2} to a triangle with radius 7
-				set {_ultDmgRadius} to 7.75
-			else:
-				set {_shapes::outer-circle} to a circle of radius 5
-				set {_shapes::inner-circle} to a circle of radius 4.75
-				set {_shapes::tiny-circle} to a circle of radius 1.5
-				set {_shapes::triangle-1} to a triangle with radius 4.5
-				set {_shapes::triangle-2} to a triangle with radius 4.5
-				set {_ultDmgRadius} to 5.25
+			ultPGS(player, {_ultCooldown}, classLevel(player, "PGS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			rotate shapes {_shapes::triangle-2} around y axis by 60 degrees
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 1)
-			set {_loc} to player's location
-			set {_y-max} to y-coord of {_loc}+2
-			set {_y-min} to y-coord of {_loc}-2
-			loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
-				if {godlike-ULT-CANCEL::%player's uuid%::PGS} is set: # set by 09-death-match.sk when the Paladin dies — the radiance ends with it
-					stop loop
-				add 1 to {_n}
-				draw shapes {_shapes::*} at {_loc}
-				if {_n} = 4:
-					delete {_n}
-					loop all living entities in radius {_ultDmgRadius} around {_loc}:
-						if loop-entity is {_pal}: # only the Paladin itself is buffed (this used to be every player in the radius — enemies included)
-							add potion effect of speed 2 for 1 seconds to potion effects of loop-entity
-							add potion effect of regeneration 3 for 1 seconds to potion effects of loop-entity
-						else if loop-entity is not an armor stand: # everyone else — enemy players and mobs: slowness 1 + 1 heart per tick
-							if y-coord of loop-entity is between {_y-max} and {_y-min}:
-								updateAttacker(player, loop-entity)
-								add potion effect of slowness 1 for 1 seconds to potion effects of loop-entity
-								damage loop-entity by 1
-								play sound "BLOCK_ANVIL_PLACE" with volume 0.5 and pitch 3 at {_loc}
-				wait 5 tick
-			set {godlike-ULT-CD::%player's uuid%::PGS} to now
-			delete {godlike-ULT-USE::%player's uuid%::PGS}
-			delete {godlike-ULT-CANCEL::%player's uuid%::PGS}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::PGS}
-			if {class::%player's uuid%} = "PGS":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+function ultPGS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::PGS} to now
+	heal {_p} by 0.5 # half a heart the moment the radiance is placed
+	set {_pal} to {_p}
+	if {_lvl} >= 3: # Perk 2 (Supreme Radiance)
+		set {_shapes::outer-circle} to a circle of radius 7.5
+		set {_shapes::inner-circle} to a circle of radius 7.25
+		set {_shapes::tiny-circle} to a circle of radius 3
+		set {_shapes::teeny-circle} to a circle of radius 1.5
+		set {_shapes::triangle-1} to a triangle with radius 7
+		set {_shapes::triangle-2} to a triangle with radius 7
+		set {_ultDmgRadius} to 7.75
+	else:
+		set {_shapes::outer-circle} to a circle of radius 5
+		set {_shapes::inner-circle} to a circle of radius 4.75
+		set {_shapes::tiny-circle} to a circle of radius 1.5
+		set {_shapes::triangle-1} to a triangle with radius 4.5
+		set {_shapes::triangle-2} to a triangle with radius 4.5
+		set {_ultDmgRadius} to 5.25
+
+	rotate shapes {_shapes::triangle-2} around y axis by 60 degrees
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(yellow, white, 1)
+	set {_loc} to {_p}'s location
+	set {_y-max} to y-coord of {_loc}+2
+	set {_y-min} to y-coord of {_loc}-2
+	loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::PGS} is set: # set by 09-death-match.sk when the Paladin dies — the radiance ends with it
+			stop loop
+		add 1 to {_n}
+		draw shapes {_shapes::*} at {_loc}
+		if {_n} = 4:
+			delete {_n}
+			loop all living entities in radius {_ultDmgRadius} around {_loc}:
+				if loop-entity is {_pal}: # only the Paladin itself is buffed (this used to be every player in the radius — enemies included)
+					add potion effect of speed 2 for 1 seconds to potion effects of loop-entity
+					add potion effect of regeneration 3 for 1 seconds to potion effects of loop-entity
+				else if loop-entity is not an armor stand: # everyone else — enemy players and mobs: slowness 1 + 1 heart per tick
+					if y-coord of loop-entity is between {_y-max} and {_y-min}:
+						updateAttacker({_p}, loop-entity)
+						add potion effect of slowness 1 for 1 seconds to potion effects of loop-entity
+						damage loop-entity by 1
+						play sound "BLOCK_ANVIL_PLACE" with volume 0.5 and pitch 3 at {_loc}
+		wait 5 tick
+	set {godlike-ULT-CD::%{_p}'s uuid%::PGS} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::PGS}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::PGS}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::PGS}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::PGS}
+	if {class::%{_p}'s uuid%} = "PGS":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 # Passive (Believer): the Juggernaut level 2 out-of-combat regeneration heals at the Regeneration II rate (half a heart every 1.25 s)
 # instead of Regeneration I — handled in 20-combat.sk. (The old "regeneration I below 40%% health" passive was removed.)

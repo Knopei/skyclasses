@@ -10,6 +10,8 @@
 
 on right click with nether star or diamond sword: # TACTICAL
 	if name of player's held item is "%{wc}%Ninja Shurikens" or "%{wc}%Ninja Katana":
+		if {class::%player's uuid%} is "SB": # a Spell Breaker holding a stolen katana uses its own tactical instead (spellbreaker.sk)
+			stop
 		if tacCHECK(player, {weapons::NS::TAC-COST}) is true:
 			set {_cast} to "%player's uuid%-%random integer between 1 and 999999999%" # one id per throw: the first shuriken of this throw to hit an enemy does 1.5, the rest 1 (08-damage.sk)
 			loop 3 times:
@@ -66,45 +68,57 @@ on drop of nether star with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::NS::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::NS} to now
-			play sound "entity_ender_dragon_growl" with volume 5 and pitch 1.5 at player
-			wait 20 ticks # 1s telegraph after the sound, before the speed/jump buffs and katana swap actually apply — gives the opponent a moment to react
-			if {godlike-ULT-CANCEL::%player's uuid%::NS} isn't set: # died during the telegraph window (09-death-match.sk) — skip straight to cleanup below rather than granting buffs/swapping weapons on a dead player
-				add potion effect of speed 3 without particles for 8 seconds to potion effects of player
-				add potion effect of jump boost 4 without particles for 8 seconds to potion effects of player
-				wait 5 ticks
-				if name of player's held item is "%{wc}%Ninja Shurikens":
-					set player's held item to {class::weapon::NK}
-				else:
-					wait 5 ticks
-					loop player's inventory:
-						if name of loop-value is "%{wc}%Ninja Shurikens":
-							set {_i} to index of loop-value
-							set slot {_i} of player's inventory to {class::weapon::NK}
-							stop loop
+			ultNS(player, {_ultCooldown}, classLevel(player, "NS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
-				if {godlike-ULT-CANCEL::%player's uuid%::NS} is set:
-					stop loop
-				set {_loc} to player's location
-				add 1 to y-coord of {_loc}
-				draw 1 of flame particle at block above player with extra 0.1
-				draw 1 of lava particle at block above player with extra 0.1
-				wait 5 tick
-
-			loop player's inventory:
-				if name of loop-value is "%{wc}%Ninja Katana":
+function ultNS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::NS} to now
+	play sound "entity_ender_dragon_growl" with volume 5 and pitch 1.5 at {_p}
+	wait 20 ticks # 1s telegraph after the sound, before the speed/jump buffs and katana swap actually apply — gives the opponent a moment to react
+	if {godlike-ULT-CANCEL::%{_p}'s uuid%::NS} isn't set: # died during the telegraph window (09-death-match.sk) — skip straight to cleanup below rather than granting buffs/swapping weapons on a dead player
+		add potion effect of speed 3 without particles for 8 seconds to potion effects of {_p}
+		add potion effect of jump boost 4 without particles for 8 seconds to potion effects of {_p}
+		wait 5 ticks
+		set {_wn} to "%{wc}%Ninja Shurikens"
+		if {_sb} is true: # Spell Breaker's shovel becomes the katana for the ultimate
+			set {_wn} to "%{wc}%Spell Breaker"
+		if name of {_p}'s held item is {_wn}:
+			set {_p}'s held item to {class::weapon::NK}
+		else:
+			wait 5 ticks
+			loop {_p}'s inventory:
+				if name of loop-value is {_wn}:
 					set {_i} to index of loop-value
-					set slot {_i} of player's inventory to {class::weapon::NS}
+					set slot {_i} of {_p}'s inventory to {class::weapon::NK}
+					stop loop
 
-			set {godlike-ULT-CD::%player's uuid%::NS} to now
-			delete {godlike-ULT-USE::%player's uuid%::NS}
-			delete {godlike-ULT-CANCEL::%player's uuid%::NS}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::NS}
-			if {class::%player's uuid%} = "NS":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+	loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::NS} is set:
+			stop loop
+		set {_loc} to {_p}'s location
+		add 1 to y-coord of {_loc}
+		draw 1 of flame particle at block above {_p} with extra 0.1
+		draw 1 of lava particle at block above {_p} with extra 0.1
+		wait 5 tick
+
+	set {_back} to {class::weapon::NS}
+	if {_sb} is true: # back to Spell Breaker's shovel
+		set {_back} to {class::weapon::SB}
+	loop {_p}'s inventory:
+		if name of loop-value is "%{wc}%Ninja Katana":
+			set {_i} to index of loop-value
+			set slot {_i} of {_p}'s inventory to {_back}
+
+	set {godlike-ULT-CD::%{_p}'s uuid%::NS} to now
+	delete {godlike-ULT-USE::%{_p}'s uuid%::NS}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::NS}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::NS}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::NS}
+	if {class::%{_p}'s uuid%} = "NS":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on damage of living entity: # Ninja Katana form always ignites on hit
 	if name of attacker's held item is "%{wc}%Ninja Katana":

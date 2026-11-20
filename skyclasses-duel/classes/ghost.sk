@@ -76,66 +76,72 @@ on drop of golden sword with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::GD::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::GD} to now
-			if classLevel(player, "GD") >= 3: # Perk 2 (Supportive Ghost)
-				removeBadEffects(player, "victim")
-				add potion effect of regeneration 3 without particles for 5 seconds to potion effects of player
-			if {gd-tacInvis::%player's uuid%} is set: # the passive's invisibility was still up from a lunge — put the armor back first so the ult captures it properly
-				gdTacInvisOff(player)
-			add potion effect of speed 3 without particles for 5 seconds to potion effects of player
-			add potion effect of invisibility without particles for 5 seconds to potion effects of player
-			setLevelTagNameVisible(player, false) # 04-leveling.sk — the nametag armor stand isn't affected by the player's own invisibility, so it needs hiding separately
-			player.setArrowsInBody(0)
-			set {_ta} to {total-armor::%player's uuid%}
-			set {_pa} to {projectile-armor::%player's uuid%}
-			set {_armor::1} to player's helmet
-			set {_armor::2} to player's chestplate
-			set {_armor::3} to player's leggings
-			set {_armor::4} to player's boots
-			set player's helmet to air
-			set player's chestplate to air
-			set player's leggings to air
-			set player's boots to air
-			play sound "block_fire_extinguish" with volume 5 and pitch 1 at player
-			draw 25 of large_smoke at player with offset vector(0.5, 0.5, 0.5) with extra 0.1
-			wait 2 tick
-			set {total-armor::%player's uuid%} to {_ta}
-			set {projectile-armor::%player's uuid%} to {_pa}
+			ultGD(player, {_ultCooldown}, classLevel(player, "GD"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			while {godlike-ULT-USE::%player's uuid%::GD} is set:
-				if {godlike-ULT-CANCEL::%player's uuid%::GD} is set:
-					stop loop
-				add 1 to {_n}
-				if {_n} = 100:
-					stop loop
-				if {godlike-ULT-USE::%player's uuid%::GD} is false:
-					if {_n} > 20:
-						stop loop
-					else: # allows a guaranteed 1 second of ult
-						wait 1 second
-						stop loop
-				else:
-					wait 1 tick
-			delete {godlike-ULT-USE::%player's uuid%::GD}
-			delete {godlike-ULT-CANCEL::%player's uuid%::GD}
-			remove speed from active potion effects of player
-			remove invisibility from active potion effects of player
-			setLevelTagNameVisible(player, true) # 04-leveling.sk
-			if classLevel(player, "GD") >= 3:
-				remove regeneration from active potion effects of player
+function ultGD(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::GD} to now
+	if {_lvl} >= 3: # Perk 2 (Supportive Ghost)
+		removeBadEffects({_p}, "victim")
+		add potion effect of regeneration 3 without particles for 5 seconds to potion effects of {_p}
+	if {gd-tacInvis::%{_p}'s uuid%} is set: # the passive's invisibility was still up from a lunge — put the armor back first so the ult captures it properly
+		gdTacInvisOff({_p})
+	add potion effect of speed 3 without particles for 5 seconds to potion effects of {_p}
+	add potion effect of invisibility without particles for 5 seconds to potion effects of {_p}
+	setLevelTagNameVisible({_p}, false) # 04-leveling.sk — the nametag armor stand isn't affected by the player's own invisibility, so it needs hiding separately
+	{_p}.setArrowsInBody(0)
+	set {_ta} to {total-armor::%{_p}'s uuid%}
+	set {_pa} to {projectile-armor::%{_p}'s uuid%}
+	set {_armor::1} to {_p}'s helmet
+	set {_armor::2} to {_p}'s chestplate
+	set {_armor::3} to {_p}'s leggings
+	set {_armor::4} to {_p}'s boots
+	set {_p}'s helmet to air
+	set {_p}'s chestplate to air
+	set {_p}'s leggings to air
+	set {_p}'s boots to air
+	play sound "block_fire_extinguish" with volume 5 and pitch 1 at {_p}
+	draw 25 of large_smoke at {_p} with offset vector(0.5, 0.5, 0.5) with extra 0.1
+	wait 2 tick
+	set {total-armor::%{_p}'s uuid%} to {_ta}
+	set {projectile-armor::%{_p}'s uuid%} to {_pa}
 
-			set player's helmet to {_armor::1}
-			set player's chestplate to {_armor::2}
-			set player's leggings to {_armor::3}
-			set player's boots to {_armor::4}
-			play sound "block_fire_extinguish" with volume 5 and pitch 1 at player
-			draw 25 of large_smoke at player with offset vector(0.5, 0.5, 0.5) with extra 0.1
-			set {godlike-ULT-CD::%player's uuid%::GD} to now
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::GD}
-			if {class::%player's uuid%} = "GD":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+	while {godlike-ULT-USE::%{_p}'s uuid%::GD} is set:
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::GD} is set:
+			stop loop
+		add 1 to {_n}
+		if {_n} = 100:
+			stop loop
+		if {godlike-ULT-USE::%{_p}'s uuid%::GD} is false:
+			if {_n} > 20:
+				stop loop
+			else: # allows a guaranteed 1 second of ult
+				wait 1 second
+				stop loop
+		else:
+			wait 1 tick
+	delete {godlike-ULT-USE::%{_p}'s uuid%::GD}
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::GD}
+	remove speed from active potion effects of {_p}
+	remove invisibility from active potion effects of {_p}
+	setLevelTagNameVisible({_p}, true) # 04-leveling.sk
+	if {_lvl} >= 3:
+		remove regeneration from active potion effects of {_p}
+
+	set {_p}'s helmet to {_armor::1}
+	set {_p}'s chestplate to {_armor::2}
+	set {_p}'s leggings to {_armor::3}
+	set {_p}'s boots to {_armor::4}
+	play sound "block_fire_extinguish" with volume 5 and pitch 1 at {_p}
+	draw 25 of large_smoke at {_p} with offset vector(0.5, 0.5, 0.5) with extra 0.1
+	set {godlike-ULT-CD::%{_p}'s uuid%::GD} to now
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::GD}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::GD}
+	if {class::%{_p}'s uuid%} = "GD":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 function gdTacInvisOn(p: player): # Passive (Spectral Lunge) — same look as the ultimate: invisibility potion, hidden nametag, armor stripped (stats preserved)
 	if {gd-tacInvis::%{_p}'s uuid%} is set:
@@ -192,7 +198,7 @@ function gdCHECK(a: living entity, v: living entity) :: number: # wrapper - see 
 	# returns when its conditions are met, leaving the caller's {_temp} unset otherwise
 
 function gdCHECKWorker(a: living entity, v: living entity): # empowered next-hit after the tactical dash, or a weaker version if the ultimate has already ended
-	if name of {_a}'s held item is "%{wc}%Ghost Dagger":
+	if name of {_a}'s held item is "%{wc}%Ghost Dagger" or "%{wc}%Spell Breaker": # Spell Breaker: a stolen Ghost (spellbreaker.sk / 08-damage.sk)
 		if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
 			set {_h} to 2.5 # flat damage: 2.5, +0.5 for every full second spent in the ultimate (max 4.5 at 4+ s); crits add nothing (this is its own hit)
 			if {godlike-ULT-USE::%{_a}'s uuid%::GD} isn't false: # hit during the ultimate -> stays at the 2.5 base

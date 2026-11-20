@@ -1,0 +1,471 @@
+# ============================================
+# SPELL BREAKER (SB) — Spell Breaker (netherite shovel)
+# Skirmisher (x4 melee, permanent Speed II, the level 2 execute). Tactical: always available. Ultimate: unlocks at class level 1.
+#
+# Passive "Arcane Siphon": while you are at or below 40% of your max health (60% with Perk 1), every hit on the opponent steals
+#   mana from them and gives it to you: 5 per melee hit, 10 per Breaker Chains hit. (Cyberpunk's old passive, moved here.)
+# Tactical (30 mana), alternating — the XP bar shows which one is next (empty = Phase Step, full = Breaker Chains):
+#   1. "Phase Step": a short dash forward (the same push as Executioner's Cleaving Rush), no damage.
+#   2. "Breaker Chains": two dark purple chains shoot from your hands (Reaper grapple height) and meet at the first thing in front
+#      of you, up to 7 blocks (2 less than Reaper's base grapple). One target at most. An enemy (player or mob) has its velocity
+#      cancelled and takes 3.5 damage, and
+#      you're pulled toward it, stopping about 1.5 blocks short; a wall pulls you to the wall. A miss still counts — the next cast
+#      is Phase Step again.
+# Ultimate "Spell Theft" (60 mana, 80 s cooldown): with your opponent alive within 6 blocks, a chain links you and you copy their
+#   current class's ultimate (it does nothing to them). For 30 seconds the action bar shows it in purple ("22s ULT: Viking");
+#   [DROP] again to cast it for free. The 80 s cooldown starts when you cast it, or when the 30 s run out. You can't steal the
+#   same ultimate twice in a row.
+#   A stolen ultimate is the real thing — each class's ultimate body is a function (ultVBA(), ultDS(), ... forgeGolemRun(),
+#   cbPhase(p, "sb")) that runs for the Spell Breaker too. Melee-based ultimates work on the shovel as if it were that class's
+#   weapon (08-damage.sk's SB branch, plus the Viking / Demon / Ghost / Frankenstein hooks); Dragon Blade and Rapid Bow swap the
+#   shovel for the katana / bow and back. A stolen Cyber Glitch is one free phase; a stolen golem lives its normal 15 s.
+# Perk 1 (level 2) "Deep Siphon": Arcane Siphon works at or below 60% health instead of 40%.
+# Perk 2 (level 3) "Mastered Theft": stolen ultimates are cast as their level 3 version (level 1 otherwise).
+#   (Dragon Blade's level 3 — Fiery Shurikens — has no shurikens to ignite on a Spell Breaker, so it adds nothing there.)
+# ============================================
+
+# ---- shared helpers (also used by the class files and 03-resources.sk) ----
+
+function sbStolenLevel(p: player) :: number: # the level the running stolen ultimate was cast at: 3 with Mastered Theft, 1 otherwise
+	if {sbStolenLvl::%{_p}'s uuid%} is set:
+		return {sbStolenLvl::%{_p}'s uuid%}
+	return 1
+
+function sbHeldCode(p: player) :: text: # the class code of the ultimate this Spell Breaker is holding right now ("" if none / expired)
+	set {_u} to {_p}'s uuid
+	if {class::%{_u}%} isn't "SB":
+		return ""
+	if {sbStore::%{_u}%} isn't set:
+		return ""
+	if (unix timestamp of now) > ({sbStoreAt::%{_u}%} + 30):
+		return ""
+	return {sbStore::%{_u}%}
+
+function sbHeldText(p: player) :: text: # 03-resources.sk's action bar: "22s ULT: Viking" in purple while one is held
+	set {_code} to sbHeldCode({_p})
+	if {_code} is "":
+		return ""
+	set {_left} to ceil(({sbStoreAt::%{_p}'s uuid%} + 30) - (unix timestamp of now))
+	if {_left} < 0:
+		set {_left} to 0
+	return "&5%{_left}%s ULT: %{class-name::%{_code}%}%"
+
+function sbResetMatch(p: player): # 04-leveling.sk's resetPlayerLeveling() — nothing stolen carries into a new match
+	set {_u} to {_p}'s uuid
+	delete {sbStore::%{_u}%}
+	delete {sbStoreAt::%{_u}%}
+	delete {sbStoreId::%{_u}%}
+	delete {sbLast::%{_u}%}
+	delete {sbStolenLvl::%{_u}%}
+	delete {sbCdId::%{_u}%}
+	delete {sbTacNext::%{_u}%}
+
+on load:
+	delete {sbChain::*}
+	delete {sbTargetResult::*}
+
+# ---- particles ----
+
+function sbLine(a: location, b: location, size: number): # a dark purple chain between two points, its links alternating two shades
+	set {_w} to world of {_a}
+	set {_ax} to x-coord of {_a}
+	set {_ay} to y-coord of {_a}
+	set {_az} to z-coord of {_a}
+	set {_dx} to (x-coord of {_b}) - {_ax}
+	set {_dy} to (y-coord of {_b}) - {_ay}
+	set {_dz} to (z-coord of {_b}) - {_az}
+	set {_n} to ceil((distance between {_a} and {_b}) / 0.25)
+	if {_n} < 1:
+		stop
+	set {_i} to 0
+	while {_i} <= {_n}:
+		set {_f} to {_i} / {_n}
+		set {_pt} to location({_ax} + ({_dx} * {_f}), {_ay} + ({_dy} * {_f}), {_az} + ({_dz} * {_f}), {_w})
+		if mod({_i}, 2) = 0:
+			draw 1 of dust using dustOption(rgb(80, 0, 125), {_size}) at {_pt}
+		else:
+			draw 1 of dust using dustOption(rgb(35, 0, 60), {_size}) at {_pt}
+		add 1 to {_i}
+
+function sbDrawChains(p: player, tip: location): # both chains: from each hand (Reaper grapple height) to the shared tip
+	set {_yaw} to yaw of {_p}
+	set {_rx} to cos({_yaw}) * 0.4 # sideways, perpendicular to where the player faces
+	set {_rz} to sin({_yaw}) * 0.4
+	set {_px} to x-coord of {_p}
+	set {_py} to (y-coord of {_p}) + 1.5
+	set {_pz} to z-coord of {_p}
+	set {_w} to world of {_p}
+	set {_left} to location({_px} + {_rx}, {_py}, {_pz} + {_rz}, {_w})
+	set {_right} to location({_px} - {_rx}, {_py}, {_pz} - {_rz}, {_w})
+	sbLine({_left}, {_tip}, 0.8)
+	sbLine({_right}, {_tip}, 0.8)
+
+# ---- PASSIVE: Arcane Siphon ----
+
+function sbSiphon(p: player, v: living entity, amt: number): # amt in mana points (5 melee, 10 chains) — 10 internal units each
+	if {_v} is not a player:
+		stop
+	if {_v} is {_p}:
+		stop
+	if {class::%{_p}'s uuid%} isn't "SB":
+		stop
+	set {_limit} to 0.4
+	if classLevel({_p}, "SB") >= 2: # Perk 1 (Deep Siphon)
+		set {_limit} to 0.6
+	if ((health of {_p}) / (max health of {_p})) > {_limit}:
+		stop
+	set {_m} to {_amt} * 10
+	if {mana::%{_v}'s uuid%::curr} < {_m}: # only what they actually have
+		set {_m} to {mana::%{_v}'s uuid%::curr}
+	if {_m} <= 0:
+		stop
+	remove {_m} from {mana::%{_v}'s uuid%::curr}
+	add {_m} to {mana::%{_p}'s uuid%::curr}
+	if {mana::%{_p}'s uuid%::curr} > {mana::%{_p}'s uuid%::max}:
+		set {mana::%{_p}'s uuid%::curr} to {mana::%{_p}'s uuid%::max}
+	set {_from} to (location of {_v}) offset by vector(0, 1.2, 0)
+	set {_to} to (location of {_p}) offset by vector(0, 1.2, 0)
+	sbLine({_from}, {_to}, 0.5)
+	draw 8 of witch at {_v} with offset vector(0.3, 0.6, 0.3) with extra 0
+	play sound "block.amethyst_block.chime" with volume 1 and pitch 1.6 at {_p}
+	actionBar({_p}) # 03-resources.sk
+	actionBar({_v})
+
+on damage of living entity with priority monitor: # Arcane Siphon on melee hits (the shovel, or a stolen katana)
+	if event is not cancelled:
+		if event-damagecause is attack:
+			if attacker is a player:
+				if {class::%attacker's uuid%} is "SB":
+					sbSiphon(attacker, victim, 5)
+
+# ---- TACTICAL: Phase Step / Breaker Chains ----
+
+on right click with netherite shovel or diamond sword:
+	if {class::%player's uuid%} is "SB":
+		if name of player's held item is "%{wc}%Spell Breaker" or "%{wc}%Ninja Katana": # (the katana: a stolen Dragon Blade)
+			cancel event # a shovel would otherwise flatten grass into a path
+			sbTactical(player)
+
+function sbTactical(p: player):
+	set {_u} to {_p}'s uuid
+	if tacCHECK({_p}, {weapons::SB::TAC-COST}) is true: # 03-resources.sk
+		if {sbTacNext::%{_u}%} is "chain":
+			delete {sbTacNext::%{_u}%}
+			set level of {_p} to 0
+			set level progress of {_p} to 0 # empty bar: Phase Step is next
+			sbChains({_p})
+		else:
+			set {sbTacNext::%{_u}%} to "chain"
+			set level of {_p} to 0
+			set level progress of {_p} to 0.99 # full bar: Breaker Chains is next
+			sbPhaseStep({_p})
+
+function sbPhaseStep(p: player):
+	push {_p} horizontally forward at speed 0.6 # same dash as Executioner's Cleaving Rush
+	perkDashReduction({_p}) # 06-perks-general.sk — Reinforced Dash (+ the movement-ability tracking)
+	play sound "entity.illusioner.mirror_move" with volume 1 and pitch 1.3 at {_p}
+	draw 12 of portal at {_p} with offset vector(0.3, 0.6, 0.3) with extra 0.4
+	set {_l} to (location of {_p}) offset by vector(0, 1, 0)
+	draw 6 of dust using dustOption(rgb(80, 0, 125), 1) at {_l} with offset vector(0.3, 0.5, 0.3)
+
+function sbChainScan(p: player): # the chains' path (14 steps of 0.5 = 7 blocks, 1.5 above, like Reaper's grapple) and what it hits first — results in {sbChain::<uuid>::*}
+	set {_u} to {_p}'s uuid
+	delete {sbChain::%{_u}%::*}
+	set {sbChain::%{_u}%::n} to 14
+	set {_x} to 0
+	set {_l} to 0
+	loop 14 times:
+		add 1 to {_x}
+		add 0.5 to {_l}
+		set {_pt} to location {_l} blocks infront of {_p}
+		set {_pt} to location 1.5 blocks above {_pt}
+		set {sbChain::%{_u}%::pt::%{_x}%} to {_pt}
+	sbChainScanWorker({_p})
+
+function sbChainScanWorker(p: player): # same hit rules as reaper.sk's reaperGrappleCHECKWorker(); "stop" ends the scan at the first hit
+	set {_u} to {_p}'s uuid
+	set {_x} to 0
+	loop 14 times:
+		add 1 to {_x}
+		set {_loc} to {sbChain::%{_u}%::pt::%{_x}%}
+		set {_height} to 0
+		loop 3 times:
+			loop all living entities in radius 0.5 around {_loc}:
+				if loop-entity is not a armor stand:
+					if loop-entity is not {_p}:
+						set {_ok} to true
+						if metadata value "forgeOwner" of loop-entity is {_p}: # your own stolen golem
+							set {_ok} to false
+						if {_ok} is true:
+							if {_height} = 0:
+								set {_hit} to true
+							else if {_height} = 1:
+								if loop-entity is not a wolf:
+									set {_hit} to true
+							else if {_height} = 2:
+								if loop-entity is a cave spider:
+									set {_hit} to true
+							if {_hit} is set:
+								set {sbChain::%{_u}%::n} to {_x}
+								set {sbChain::%{_u}%::ent} to loop-entity
+								stop
+			add 1 to {_height}
+			set {_loc} to location 1 blocks below {_loc}
+		loop blocks in radius 0.5 around {sbChain::%{_u}%::pt::%{_x}%}:
+			if loop-block is not fern, short grass, air or water:
+				set {sbChain::%{_u}%::n} to {_x}
+				set {sbChain::%{_u}%::wall} to {sbChain::%{_u}%::pt::%{_x}%}
+				stop
+
+function sbChains(p: player):
+	set {_u} to {_p}'s uuid
+	sbChainScan({_p})
+	set {_n} to {sbChain::%{_u}%::n}
+	set {_ent} to {sbChain::%{_u}%::ent}
+	set {_wall} to {sbChain::%{_u}%::wall}
+	loop 14 times: # keep the path the scan used, so the drawn chains follow exactly where the hit was checked
+		set {_path::%loop-number%} to {sbChain::%{_u}%::pt::%loop-number%}
+	delete {sbChain::%{_u}%::*}
+	play sound "block.chain.place" with volume 3 and pitch 0.6 at {_p}
+	play sound "entity.evoker.cast_spell" with volume 0.6 and pitch 1.6 at {_p}
+	set {_shown} to 0
+	while {_shown} < {_n}: # the chains shoot out 1.5 blocks per tick
+		add 3 to {_shown}
+		if {_shown} > {_n}:
+			set {_shown} to {_n}
+		sbDrawChains({_p}, {_path::%{_shown}%})
+		wait 1 tick
+		if {_p} isn't online:
+			stop
+		if health of {_p} <= 0:
+			stop
+	if {_ent} is set:
+		if {_ent} is alive:
+			sbChainHit({_p}, {_ent})
+			loop 3 times: # the chains stay on the target for a moment while you're pulled in
+				if {_ent} is alive:
+					set {_t} to (location of {_ent}) offset by vector(0, 1, 0)
+					sbDrawChains({_p}, {_t})
+				wait 1 tick
+	else if {_wall} is set:
+		play sound "block.chain.hit" with volume 3 and pitch 0.7 at {_wall}
+		draw 6 of crit at {_wall} with extra 0.1
+		sbPull({_p}, {_wall})
+		loop 3 times:
+			sbDrawChains({_p}, {_wall})
+			wait 1 tick
+	else: # a miss — the chains just fall away (the next tactical is Phase Step anyway)
+		play sound "block.chain.fall" with volume 2 and pitch 0.8 at {_p}
+
+function sbChainHit(p: player, v: living entity): # an enemy hit by Breaker Chains: 3.5 damage, Arcane Siphon, pulled toward it
+	updateAttacker({_p}, {_v}) # 01-utils.sk
+	directAttack({_v})
+	set {balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk
+	set velocity of {_v} to vector(0, 0, 0) # the chains stop the target dead (the same velocity reset Ghost's lunge does)
+	damage {_v} by 3.5
+	set velocity of {_v} to vector(0, 0, 0) # ...including the hit's own knockback
+	delete {balance-abilitySource::%{_p}'s uuid%}
+	sbSiphon({_p}, {_v}, 10)
+	play sound "block_chain_break" with volume 5 and pitch 0.75 at {_v}
+	set {_burst} to (location of {_v}) offset by vector(0, 1, 0)
+	draw 12 of dust using dustOption(rgb(80, 0, 125), 1) at {_burst} with offset vector(0.35, 0.5, 0.35)
+	# pull: toward the target, stopping about 1.5 blocks short of it
+	set {_d} to distance between {_p} and {_v}
+	if {_d} > 2:
+		set {_f} to ({_d} - 1.5) / {_d}
+		set {_px} to x-coord of {_p}
+		set {_py} to y-coord of {_p}
+		set {_pz} to z-coord of {_p}
+		set {_tx} to {_px} + (((x-coord of {_v}) - {_px}) * {_f})
+		set {_ty} to {_py} + (((y-coord of {_v}) - {_py}) * {_f})
+		set {_tz} to {_pz} + (((z-coord of {_v}) - {_pz}) * {_f})
+		sbPull({_p}, location({_tx}, {_ty}, {_tz}, world of {_p}))
+
+function sbPull(p: player, loc: location): # Reaper's base grapple pull (reaper.sk's rgMovement(), without Extended Grapple)
+	set {_d} to distance between {_p} and {_loc}
+	set {_d} to {_d}/5
+	if {_d} > 1.75:
+		set {_d} to 1.75
+		set {_h} to 0.3
+	else if {_d} > 1.25:
+		set {_h} to 0.35
+	else:
+		set {_h} to 0.4
+	set {_v} to vector between {_p} and {_loc}
+	set velocity of {_p} to vector(0, 0, 0)
+	push {_p} upward at speed {_h}
+	push {_p} {_v} at speed {_d}
+	perkDashReduction({_p}) # 06-perks-general.sk — Reinforced Dash
+	play sound "entity_bat_takeoff" with volume 0.5 and pitch 1 at {_p}
+
+# ---- ULTIMATE: Spell Theft ----
+
+on drop of netherite shovel with priority low:
+	if name of event-item is "%{wc}%Spell Breaker":
+		cancel event
+		sbUltimate(player)
+
+function sbUltimate(p: player):
+	set {_u} to {_p}'s uuid
+	if {mighty-DASH::%{_u}%} is set: # a stolen Mighty Leap: [DROP] mid-air dashes, same as mighty.sk
+		push {_p} forward at speed 3
+		perkDashReduction({_p}) # 06-perks-general.sk — Reinforced Dash
+		play sound "entity_bat_takeoff" with volume 1 and pitch 1 at {_p}
+		delete {mighty-DASH::%{_u}%}
+		stop
+	if classLevel({_p}, "SB") < 1:
+		send "&cUltimate locked! Reach class level 1 to unlock." to {_p}
+		stop
+	set {_held} to sbHeldCode({_p})
+	if {_held} is not "": # holding a stolen ultimate — cast it, free
+		sbCastStolen({_p}, {_held})
+		stop
+	if {godlike-ULT-CD::%{_u}%::SB} is set:
+		set {_time} to difference between now and {godlike-ULT-CD::%{_u}%::SB}
+		if {_time} < ultCooldownFor({_p}, {weapons::SB::ULT-CD}): # 06-perks-general.sk — Spell Caster
+			send "&cULT NOT READY!" to {_p}
+			stop
+	delete {sbTargetResult::%{_u}%}
+	sbFindTarget({_p})
+	set {_t} to {sbTargetResult::%{_u}%}
+	delete {sbTargetResult::%{_u}%}
+	if {_t} isn't set:
+		send "&cNo opponent within 6 blocks!" to {_p}
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		stop
+	set {_code} to {class::%{_t}'s uuid%}
+	if {_code} is "SB":
+		send "&cYou can't steal Spell Theft!" to {_p}
+		stop
+	if {_code} is {sbLast::%{_u}%}:
+		send "&cYou can't steal the same ultimate twice in a row!" to {_p}
+		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+		stop
+	if ultCHECK({_p}, {weapons::SB::ULT-COST}) is true: # 03-resources.sk
+		set {_id} to "%unix timestamp of now%-%random integer between 1 and 999999999%"
+		set {sbStore::%{_u}%} to {_code}
+		set {sbStoreAt::%{_u}%} to unix timestamp of now
+		set {sbStoreId::%{_u}%} to {_id}
+		set {sbLast::%{_u}%} to {_code}
+		send "&5&lSPELL THEFT &7You stole &d%{class-name::%{_code}%}%&7's ultimate! &8[DROP] &7to cast it within 30 seconds." to {_p}
+		send "&5Your ultimate was copied by a Spell Breaker!" to {_t}
+		play sound "entity.illusioner.prepare_mirror" with volume 2 and pitch 0.8 at {_p}
+		play sound "block.chain.break" with volume 2 and pitch 0.5 at {_t}
+		actionBar({_p})
+		sbStoreTimer({_p}, {_id})
+		sbStealFx({_p}, {_t})
+
+function sbFindTarget(p: player): # result in {sbTargetResult::<uuid>}: the match opponent if alive and within 6 blocks (outside a match: the nearest player with a class)
+	set {_u} to {_p}'s uuid
+	set {_opp} to {matchOpponent::%{_u}%}
+	if {_opp} is set:
+		if sbStealable({_p}, {_opp}) is true:
+			set {sbTargetResult::%{_u}%} to {_opp}
+		stop
+	set {_best} to 7
+	loop all players in radius 6 around {_p}:
+		if loop-player is not {_p}:
+			if sbStealable({_p}, loop-player) is true:
+				if distance between {_p} and loop-player < {_best}:
+					set {_best} to distance between {_p} and loop-player
+					set {sbTargetResult::%{_u}%} to loop-player
+
+function sbStealable(p: player, t: player) :: boolean:
+	if {_t} isn't online:
+		return false
+	if world of {_t} is not world of {_p}:
+		return false
+	if health of {_t} <= 0:
+		return false
+	if {respawning::%{_t}'s uuid%} is set:
+		return false
+	if {class::%{_t}'s uuid%} isn't set:
+		return false
+	if distance between {_p} and {_t} > 6:
+		return false
+	return true
+
+function sbStealFx(p: player, t: player): # the chain linking you to the opponent while you steal
+	loop 12 times:
+		if {_p} is online:
+			if {_t} is online:
+				sbLine((location of {_p}) offset by vector(0, 1.2, 0), (location of {_t}) offset by vector(0, 1.2, 0), 0.9)
+		wait 1 tick
+
+function sbStoreTimer(p: player, id: text): # 30 seconds to cast it — then it fades and the cooldown starts
+	wait 30 seconds
+	set {_u} to {_p}'s uuid
+	if {sbStoreId::%{_u}%} = {_id}:
+		delete {sbStore::%{_u}%}
+		delete {sbStoreAt::%{_u}%}
+		delete {sbStoreId::%{_u}%}
+		if {_p} is online:
+			send "&7Your stolen ultimate faded." to {_p}
+			play sound "block.fire.extinguish" with volume 1 and pitch 0.8 to {_p}
+		sbStartCooldown({_p})
+
+function sbCastStolen(p: player, code: text):
+	set {_u} to {_p}'s uuid
+	set {_lvl} to 1
+	if classLevel({_p}, "SB") >= 3: # Perk 2 (Mastered Theft) — the level 3 version
+		set {_lvl} to 3
+	if {_code} is "CB": # one free phase — if there's nowhere to phase to ("Target too far!"), keep the stolen ultimate
+		delete {cbPhaseOK::%{_u}%}
+		cbPhase({_p}, "sb") # cyberpunk.sk
+		if {cbPhaseOK::%{_u}%} isn't set:
+			stop
+		delete {cbPhaseOK::%{_u}%}
+	delete {sbStore::%{_u}%}
+	delete {sbStoreAt::%{_u}%}
+	delete {sbStoreId::%{_u}%} # stops the 30 s timer
+	set {sbStolenLvl::%{_u}%} to {_lvl}
+	sbStartCooldown({_p})
+	play sound "entity.illusioner.cast_spell" with volume 2 and pitch 1 at {_p}
+	draw 20 of witch at {_p} with offset vector(0.4, 0.8, 0.4) with extra 0
+	actionBar({_p})
+	# the class's own ultimate body, at {_lvl}, with no cooldown of its own (the last argument)
+	set {_noCd} to 0 seconds # (a timespan written straight into the call doesn't parse as an argument, so it goes through a variable)
+	if {_code} is "VBA":
+		ultVBA({_p}, {_noCd}, {_lvl}, true) # viking.sk
+	else if {_code} is "DS":
+		ultDS({_p}, {_noCd}, {_lvl}, true) # demon.sk
+	else if {_code} is "FH":
+		ultFH({_p}, {_noCd}, {_lvl}, true) # frankenstein.sk
+	else if {_code} is "GD":
+		ultGD({_p}, {_noCd}, {_lvl}, true) # ghost.sk
+	else if {_code} is "BS":
+		ultBS({_p}, {_noCd}, {_lvl}, true) # basher.sk
+	else if {_code} is "MH":
+		ultMH({_p}, {_noCd}, {_lvl}, true) # mighty.sk
+	else if {_code} is "NS":
+		ultNS({_p}, {_noCd}, {_lvl}, true) # ninja.sk
+	else if {_code} is "PGS":
+		ultPGS({_p}, {_noCd}, {_lvl}, true) # paladin.sk
+	else if {_code} is "RB":
+		ultRB({_p}, {_noCd}, {_lvl}, true) # rapid.sk
+	else if {_code} is "RS":
+		ultRS({_p}, {_noCd}, {_lvl}, true) # reaper.sk
+	else if {_code} is "ZT":
+		ultZT({_p}, {_noCd}, {_lvl}, true) # zeus.sk
+	else if {_code} is "TS":
+		ultTS({_p}, {_noCd}, {_lvl}, true) # tempest.sk
+	else if {_code} is "EA":
+		ultEA({_p}, {_noCd}, {_lvl}, true) # executioner.sk
+	else if {_code} is "FG":
+		forgeGolemRun({_p}, {_noCd}, {_lvl}, true) # scorch.sk
+
+function sbStartCooldown(p: player): # Spell Theft's 80 s (Spell Caster shortens it, like every ultimate)
+	set {_id} to "%unix timestamp of now%-%random integer between 1 and 999999999%"
+	set {sbCdId::%{_p}'s uuid%} to {_id}
+	set {godlike-ULT-CD::%{_p}'s uuid%::SB} to now
+	sbCooldownWait({_p}, {_id})
+
+function sbCooldownWait(p: player, id: text):
+	set {_cd} to ultCooldownFor({_p}, {weapons::SB::ULT-CD}) # 06-perks-general.sk
+	wait {_cd}
+	if {sbCdId::%{_p}'s uuid%} = {_id}: # (a new match wipes it — 04-leveling.sk)
+		delete {sbCdId::%{_p}'s uuid%}
+		delete {godlike-ULT-CD::%{_p}'s uuid%::SB}
+		if {_p} is online:
+			if {class::%{_p}'s uuid%} = "SB":
+				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}

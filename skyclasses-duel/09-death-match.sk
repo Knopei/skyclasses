@@ -45,6 +45,10 @@ on death of player: # ----------------------------------------------------------
 
 	if {godlike-ULT-USE::%victim's uuid%::%{_vClass}%} is set: # their ultimate is currently active — flag it to stop immediately rather than continuing to run/deal damage after death. Checked inside each class's own ultimate loop (mighty.sk already had its own version of this; this generalizes it to every class).
 		set {godlike-ULT-CANCEL::%victim's uuid%::%{_vClass}%} to true
+	if {_vClass} is "SB": # spellbreaker.sk — a Spell Breaker's running stolen ultimate is filed under the stolen class's code, so stop that one
+		loop {menu::classlist::*}:
+			if {godlike-ULT-USE::%victim's uuid%::%loop-value%} is set:
+				set {godlike-ULT-CANCEL::%victim's uuid%::%loop-value%} to true
 
 	# Only the victim's actual registered match opponent can trigger kill-crediting
 	# below — guards against a bystander in the arena (e.g. an admin) accidentally

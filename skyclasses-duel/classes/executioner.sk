@@ -85,71 +85,102 @@ on drop of netherite axe with priority low: # ULTIMATE — Death's Toll
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::EA::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::EA} to now
-			set {ea-chargeLevel::%player's uuid%} to 1 # level 1 is reached instantly (0 seconds) — hitting right away locks in the minimum tier
-			play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at player
-			loop 100 times: # 2 seconds to reach full charge (1s per level) + 3 more seconds of grace to land the hit = 5 seconds total
-				if {godlike-ULT-USE::%player's uuid%::EA} isn't set: # consumed by a landed hit — see 08-damage.sk's dmgUpdate() EA branch
-					stop loop
-				add 1 to {_tick}
-				if {_tick} = 20: # 1 second — level 2
-					set {ea-chargeLevel::%player's uuid%} to 2
-				else if {_tick} = 40: # 2 seconds — level 3, full charge, turns red
-					set {ea-chargeLevel::%player's uuid%} to 3
-					play sound "entity.wither.death" with volume 0.4 and pitch 2 at player
-				set {_level} to {ea-chargeLevel::%player's uuid%}
+			ultEA(player, {_ultCooldown}, classLevel(player, "EA"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-				# 20%% damage reduction for the whole charge + grace window. Shares {playerDefense} with Reinforced Dash (06-perks-general.sk), which uses the same variable for its own (stronger, 40%%) reduction — so this only sets ours when nothing stronger is already active, and Reinforced Dash's higher value naturally wins while its own dash is in progress; the moment Reinforced Dash's loop ends and deletes {playerDefense}, this notices on the very next tick and restores our 20%% for as long as the ult is still charging/in grace
-				if {playerDefense::%player's uuid%} isn't set:
-					set {playerDefense::%player's uuid%} to 20
-				else if {playerDefense::%player's uuid%} < 20:
-					set {playerDefense::%player's uuid%} to 20
+function ultEA(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::EA} to now
+	set {ea-ultLvl::%{_p}'s uuid%} to {_lvl} # read by eaTollHit() below (Perk 2 — Execution)
+	set {ea-chargeLevel::%{_p}'s uuid%} to 1 # level 1 is reached instantly (0 seconds) — hitting right away locks in the minimum tier
+	play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at {_p}
+	loop 100 times: # 2 seconds to reach full charge (1s per level) + 3 more seconds of grace to land the hit = 5 seconds total
+		if {godlike-ULT-USE::%{_p}'s uuid%::EA} isn't set: # consumed by a landed hit — see 08-damage.sk's dmgUpdate() EA branch
+			stop loop
+		add 1 to {_tick}
+		if {_tick} = 20: # 1 second — level 2
+			set {ea-chargeLevel::%{_p}'s uuid%} to 2
+		else if {_tick} = 40: # 2 seconds — level 3, full charge, turns red
+			set {ea-chargeLevel::%{_p}'s uuid%} to 3
+			play sound "entity.wither.death" with volume 0.4 and pitch 2 at {_p}
+		set {_level} to {ea-chargeLevel::%{_p}'s uuid%}
 
-				# self-slow alongside the damage reduction above — Slowness 2 while still charging (level < 3) only; no slow during the 3-second grace period. Refreshed every tick for a short duration so it expires quickly on its own the moment the loop stops (hit landed or timed out) rather than lingering
-				if {_level} < 3:
-					add potion effect of slowness 2 without particles for 3 ticks to potion effects of player
+		# 20%% damage reduction for the whole charge + grace window. Shares {playerDefense} with Reinforced Dash (06-perks-general.sk), which uses the same variable for its own (stronger, 40%%) reduction — so this only sets ours when nothing stronger is already active, and Reinforced Dash's higher value naturally wins while its own dash is in progress; the moment Reinforced Dash's loop ends and deletes {playerDefense}, this notices on the very next tick and restores our 20%% for as long as the ult is still charging/in grace
+		if {playerDefense::%{_p}'s uuid%} isn't set:
+			set {playerDefense::%{_p}'s uuid%} to 20
+		else if {playerDefense::%{_p}'s uuid%} < 20:
+			set {playerDefense::%{_p}'s uuid%} to 20
 
-				if {ea-useAxeFx} is true: # texture-pack visual (shared with /eatest) — see eaUltFx below
-					eaUltFx(player, {_level})
-				else: # the original particle visual
-					# charging animation — the shape library's "arc" rotation never landed right, so this plots the semicircles by hand instead, the same way the arrow-rotation bug earlier in this project got fixed: compute the actual points with trigonometry rather than trust a black-box rotation. Each semicircle's flat (diameter) edge runs vertically through the anchor, parallel to the handle line, and the curve bulges outward in whichever horizontal direction the player is currently facing
-					set {_yaw} to yaw of player
-					set {_bladeAnchor} to location of player
-					add 4 to y-coord of {_bladeAnchor} # near the top of the 4.5-block handle line
-					set {_full} to false
-					if {_level} >= 3: # Skript can't assign a comparison straight to a variable ("set {_x} to (a >= b)" doesn't parse) — this is the if/else equivalent
-						set {_full} to true
-					eaDrawSemicircle({_bladeAnchor}, 0.75, {_yaw}, {_full}) # radii scaled down ~25% from the original 1/2/3
-					if {_level} >= 2:
-						eaDrawSemicircle({_bladeAnchor}, 1.5, {_yaw}, {_full})
-					if {_level} >= 3:
-						eaDrawSemicircle({_bladeAnchor}, 2.25, {_yaw}, true)
+		# self-slow alongside the damage reduction above — Slowness 2 while still charging (level < 3) only; no slow during the 3-second grace period. Refreshed every tick for a short duration so it expires quickly on its own the moment the loop stops (hit landed or timed out) rather than lingering
+		if {_level} < 3:
+			add potion effect of slowness 2 without particles for 3 ticks to potion effects of {_p}
 
-					set {_handle} to a line in direction vector(0, 1, 0) with length 4.5
-					set particle of {_handle} to 1 of dust_color_transition particle using dustTransition(black, dark gray, 1)
-					draw shape {_handle} at location of player
+		if {ea-useAxeFx} is true: # texture-pack visual (shared with /eatest) — see eaUltFx below
+			eaUltFx({_p}, {_level})
+		else: # the original particle visual
+			# charging animation — the shape library's "arc" rotation never landed right, so this plots the semicircles by hand instead, the same way the arrow-rotation bug earlier in this project got fixed: compute the actual points with trigonometry rather than trust a black-box rotation. Each semicircle's flat (diameter) edge runs vertically through the anchor, parallel to the handle line, and the curve bulges outward in whichever horizontal direction the {_p} is currently facing
+			set {_yaw} to yaw of {_p}
+			set {_bladeAnchor} to location of {_p}
+			add 4 to y-coord of {_bladeAnchor} # near the top of the 4.5-block handle line
+			set {_full} to false
+			if {_level} >= 3: # Skript can't assign a comparison straight to a variable ("set {_x} to (a >= b)" doesn't parse) — this is the if/else equivalent
+				set {_full} to true
+			eaDrawSemicircle({_bladeAnchor}, 0.75, {_yaw}, {_full}) # radii scaled down ~25% from the original 1/2/3
+			if {_level} >= 2:
+				eaDrawSemicircle({_bladeAnchor}, 1.5, {_yaw}, {_full})
+			if {_level} >= 3:
+				eaDrawSemicircle({_bladeAnchor}, 2.25, {_yaw}, true)
+
+			set {_handle} to a line in direction vector(0, 1, 0) with length 4.5
+			set particle of {_handle} to 1 of dust_color_transition particle using dustTransition(black, dark gray, 1)
+			draw shape {_handle} at location of {_p}
 
 
-				wait 1 tick
-			delete {_tick}
-			set {_fxHit} to true # the loop ended because a hit landed (flag consumed) rather than timing out
-			if {godlike-ULT-USE::%player's uuid%::EA} is set:
-				set {_fxHit} to false
-			if {ea-useAxeFx} is true:
-				eaUltFxEnd(player, {_fxHit})
-			if {playerDefense::%player's uuid%} = 20: # only clear OUR OWN reduction — if something stronger (e.g. Reinforced Dash) is currently active instead, leave it alone; it cleans up after itself
-				delete {playerDefense::%player's uuid%}
-			if {godlike-ULT-USE::%player's uuid%::EA} is set: # timed out with no hit landed — clean up without dealing damage
-				play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at player # same sound as activation, replayed to represent the axe lowering back down with nothing hit
-				delete {godlike-ULT-USE::%player's uuid%::EA}
-				delete {ea-chargeLevel::%player's uuid%}
-			set {godlike-ULT-CD::%player's uuid%::EA} to now
-			delete {godlike-ULT-CANCEL::%player's uuid%::EA}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::EA}
-			if {class::%player's uuid%} = "EA":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+		wait 1 tick
+	delete {_tick}
+	set {_fxHit} to true # the loop ended because a hit landed (flag consumed) rather than timing out
+	if {godlike-ULT-USE::%{_p}'s uuid%::EA} is set:
+		set {_fxHit} to false
+	if {ea-useAxeFx} is true:
+		eaUltFxEnd({_p}, {_fxHit})
+	if {playerDefense::%{_p}'s uuid%} = 20: # only clear OUR OWN reduction — if something stronger (e.g. Reinforced Dash) is currently active instead, leave it alone; it cleans up after itself
+		delete {playerDefense::%{_p}'s uuid%}
+	if {godlike-ULT-USE::%{_p}'s uuid%::EA} is set: # timed out with no hit landed — clean up without dealing damage
+		play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at {_p} # same sound as activation, replayed to represent the axe lowering back down with nothing hit
+		delete {godlike-ULT-USE::%{_p}'s uuid%::EA}
+		delete {ea-chargeLevel::%{_p}'s uuid%}
+	set {godlike-ULT-CD::%{_p}'s uuid%::EA} to now
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::EA}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::EA}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::EA}
+	if {class::%{_p}'s uuid%} = "EA":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+
+function eaTollHit(a: player, v: living entity) :: number: # Death's Toll's landed hit (08-damage.sk) — consumes the charge, ends the ultimate and returns the hit's damage. Shared by Executioner and a Spell Breaker running a stolen Death's Toll
+	set {_level} to {ea-chargeLevel::%{_a}'s uuid%}
+	if {_level} = 1:
+		set {_dmg} to 2.5
+	else if {_level} = 2:
+		set {_dmg} to 5
+	else:
+		set {_dmg} to 7.5
+	if {ea-ultLvl::%{_a}'s uuid%} >= 3: # Perk 2 (Execution) — +1 for every heart of max health the target has over the caster's own (absorption counts, 01-utils.sk)
+		hbScaleNote({_a}, {_v}, 1) # 25-balance-stats-advanced.sk — Healthy Boy Value
+		set {_over} to effMaxHealth({_v}) - effMaxHealth({_a})
+		if {_over} > 4: # counts at most 4 hearts over — +4 max
+			set {_over} to 4
+		if {_over} > 0:
+			add {_over} to {_dmg}
+	play sound "entity.player.attack.strong" with volume 1.8 and pitch 0.6 at {_v} # a heavy, devastating slash — slightly louder than before
+	play sound "entity.player.attack.sweep" with volume 1.6 and pitch 0.5 at {_v}
+	play sound "block.anvil.land" with volume 0.5 and pitch 1.4 at {_v} # a noticeable but quiet anvil layer underneath the slash
+	eaRedstoneEffect({_v}) # same redstone block-break particle + sound as the TAC's buffed hit
+	set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk
+	delete {godlike-ULT-USE::%{_a}'s uuid%::EA}
+	delete {ea-chargeLevel::%{_a}'s uuid%}
+	return {_dmg}
 
 function eaRedstoneEffect(v: living entity): # redstone block-break particle + sound shared by the TAC's buffed hit and the ULT's finishing hit (both in 08-damage.sk's dmgUpdate())
 	set {_eaHitLoc} to location of {_v}

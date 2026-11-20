@@ -316,6 +316,7 @@ function clearCurrClass(p: player): # called by 05-class-menu.sk's classSelect()
 	delete {reaper-attack::%{_uuid}%}
 	delete {zeus-attack::%{_uuid}%}
 	delete {playerDefense::%{_uuid}%}
+	delete {sbTacNext::%{_uuid}%} # spellbreaker.sk — the tactical starts over on Phase Step
 	set level of {_p} to 0
 	set level progress of {_p} to 0
 

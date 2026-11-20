@@ -66,92 +66,98 @@ on drop of mace with priority low: # ULTIMATE
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::MH::ULT-COST}) is true:
-			set {godlike-ULT-USE::%player's uuid%::MH} to now
-			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
-			# leap
-			create a fake explosion at player
-			set velocity of player to vector(0, 0, 0)
-			push player upward at speed 2.5
-			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
-			wait 10 ticks
-			set {mighty-DASH::%player's uuid%} to true
+			ultMH(player, {_ultCooldown}, classLevel(player, "MH"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
-			set {_shapes::circle} to a circle with radius 1
-			set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, white, 1)
+function ultMH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {godlike-ULT-USE::%{_p}'s uuid%::MH} to now
+	play sound "entity_bat_takeoff" with volume 1 and pitch 1 at {_p}
+	# leap
+	create a fake explosion at {_p}
+	set velocity of {_p} to vector(0, 0, 0)
+	push {_p} upward at speed 2.5
+	perkDashReduction({_p}) # 06-perks-general.sk — Reinforced Dash
+	wait 10 ticks
+	set {mighty-DASH::%{_p}'s uuid%} to true
 
-			while player isn't on ground: # longer air time = more slam damage + push
-				if {godlike-ULT-CANCEL::%player's uuid%::MH} is set: # dying mid-leap freezes the player with flight enabled, so they'd never naturally register as "on ground" to end this loop otherwise
-					stop loop
-				set {_loc} to player's location
-				add 1 to y-coord of {_loc}
-				draw shapes {_shapes::*} at {_loc}
-				add 1 to {_airTime}
-				wait 1 tick
-			# slam
-			delete {mighty-DASH::%player's uuid%}
-			if {godlike-ULT-CANCEL::%player's uuid%::MH} isn't set:
-				mightyExplosion(player, 3.5) # ultimate radius 5.5 -> 3.5 max
-				loop all living entities in radius 3.5 around player:
-					if loop-entity is not player:
-						if metadata value "levelTag" of loop-entity isn't set: # FIX: excludes the level-tag armor stand itself (04-leveling.sk) from being hit directly as its own loop-entity — but it rides whichever PLAYER it's tagged to as a passenger, so a victim player caught in this loop still needed the teleport-to-self below replaced (see the comment on that line) or their own armor stand would get knocked off them the same way the caster's used to
-							updateAttacker(player, loop-entity)
-							directAttack(loop-entity)
-							set {_dis} to (distance between player and loop-entity) * (5.5 / 3.5) # the radius shrank from 5.5 to 3.5, so distances are scaled back up by 5.5/3.5 before the damage curve below — a target at the same fraction of the radius takes the same damage as before (the 2.5-3.5 distance bands below are the ORIGINAL 5.5-radius values)
-							set {_d} to abs({_dis} - 6)
-							if {_d} < 2.5:
-								set {_d} to 2.5
-							else if {_d} > 3.5:
-								set {_d} to 3.5
-							set {_d} to ({_airTime}*0.05) + {_d}
-							if {_d} > 5:
-								set {_d} to 5
-							set {_v} to vector between player and loop-entity
-							wait 1 tick
-							set {balance-abilitySource::%player's uuid%} to "ULT" # 19-balance-stats.sk
-							damage loop-entity by {_d}
-							delete {balance-abilitySource::%player's uuid%}
-							set velocity of loop-entity to vector(0, 0, 0) # was "teleport loop-entity to loop-entity" — self-teleporting a PLAYER victim here would dismount their own level-tag armor stand exactly like it used to for the caster, since the levelTag exclusion above only protects the armor stand entity itself, not whichever player it happens to be riding
-							push loop-entity {_v} at speed {_d}
-			# PERK 2 — Fire Pit
-			if classLevel(player, "MH") >= 3:
-				set {_shapes::circle} to a circle of radius 3.2 # Fire Pit ring scaled with the ultimate (5 -> 3.2, same 5.5 -> 3.5 ratio)
-				set {_shapes::line-1} to a line in direction vector(0, 0, 1) with length 3.2
-				set {_shapes::line-2} to a line in direction vector(0, 0, -1) with length 3.2
-				set {_shapes::line-3} to a line in direction vector(1, 0, 0) with length 3.2
-				set {_shapes::line-4} to a line in direction vector(-1, 0, 0) with length 3.2
-				set {_ultDmgRadius} to 3.35 # 5.25 x (3.5 / 5.5), stays inside the 3.5 ult radius
+	set {_shapes::circle} to a circle with radius 1
+	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, white, 1)
 
-				set {_loc} to player's location
-				set {_y-max} to y-coord of {_loc}+2
-				set {_y-min} to y-coord of {_loc}-2
+	while {_p} isn't on ground: # longer air time = more slam damage + push
+		if {godlike-ULT-CANCEL::%{_p}'s uuid%::MH} is set: # dying mid-leap freezes the player with flight enabled, so they'd never naturally register as "on ground" to end this loop otherwise
+			stop loop
+		set {_loc} to {_p}'s location
+		add 1 to y-coord of {_loc}
+		draw shapes {_shapes::*} at {_loc}
+		add 1 to {_airTime}
+		wait 1 tick
+	# slam
+	delete {mighty-DASH::%{_p}'s uuid%}
+	if {godlike-ULT-CANCEL::%{_p}'s uuid%::MH} isn't set:
+		mightyExplosion({_p}, 3.5) # ultimate radius 5.5 -> 3.5 max
+		loop all living entities in radius 3.5 around {_p}:
+			if loop-entity is not {_p}:
+				if metadata value "levelTag" of loop-entity isn't set: # FIX: excludes the level-tag armor stand itself (04-leveling.sk) from being hit directly as its own loop-entity — but it rides whichever PLAYER it's tagged to as a passenger, so a victim player caught in this loop still needed the teleport-to-self below replaced (see the comment on that line) or their own armor stand would get knocked off them the same way the caster's used to
+					updateAttacker({_p}, loop-entity)
+					directAttack(loop-entity)
+					set {_dis} to (distance between {_p} and loop-entity) * (5.5 / 3.5) # the radius shrank from 5.5 to 3.5, so distances are scaled back up by 5.5/3.5 before the damage curve below — a target at the same fraction of the radius takes the same damage as before (the 2.5-3.5 distance bands below are the ORIGINAL 5.5-radius values)
+					set {_d} to abs({_dis} - 6)
+					if {_d} < 2.5:
+						set {_d} to 2.5
+					else if {_d} > 3.5:
+						set {_d} to 3.5
+					set {_d} to ({_airTime}*0.05) + {_d}
+					if {_d} > 5:
+						set {_d} to 5
+					set {_v} to vector between {_p} and loop-entity
+					wait 1 tick
+					set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
+					damage loop-entity by {_d}
+					delete {balance-abilitySource::%{_p}'s uuid%}
+					set velocity of loop-entity to vector(0, 0, 0) # was "teleport loop-entity to loop-entity" — self-teleporting a PLAYER victim here would dismount their own level-tag armor stand exactly like it used to for the caster, since the levelTag exclusion above only protects the armor stand entity itself, not whichever player it happens to be riding
+					push loop-entity {_v} at speed {_d}
+	# PERK 2 — Fire Pit
+	if {_lvl} >= 3:
+		set {_shapes::circle} to a circle of radius 3.2 # Fire Pit ring scaled with the ultimate (5 -> 3.2, same 5.5 -> 3.5 ratio)
+		set {_shapes::line-1} to a line in direction vector(0, 0, 1) with length 3.2
+		set {_shapes::line-2} to a line in direction vector(0, 0, -1) with length 3.2
+		set {_shapes::line-3} to a line in direction vector(1, 0, 0) with length 3.2
+		set {_shapes::line-4} to a line in direction vector(-1, 0, 0) with length 3.2
+		set {_ultDmgRadius} to 3.35 # 5.25 x (3.5 / 5.5), stays inside the 3.5 ult radius
 
-				set {_n} to 3
-				loop 13 times:
-					set {_rotation} to rotation around vector(0, 1, 0) by 20 degrees
-					rotate shapes {_shapes::*} by {_rotation}
-					draw shapes {_shapes::*} at {_loc}
+		set {_loc} to {_p}'s location
+		set {_y-max} to y-coord of {_loc}+2
+		set {_y-min} to y-coord of {_loc}-2
 
-					add 1 to {_n}
-					if {_n} = 4:
-						delete {_n}
-						loop all living entities in radius {_ultDmgRadius} around {_loc}:
-							if loop-entity is not player:
-								if metadata value "levelTag" of loop-entity isn't set: # FIX: same level-tag exclusion as the two loops above
-									if y-coord of loop-entity is between {_y-max} and {_y-min}:
-										updateAttacker(player, loop-entity)
-										if loop-entity is a player:
-											setFireSource(loop-entity, "ULT", 2) # 19-balance-stats.sk — bounded to the exact 2-second burn below, read by dmgUpdate() when the fire-tick damage lands
-										set fire to loop-entity for 2 seconds
-					wait 5 tick
+		set {_n} to 3
+		loop 13 times:
+			set {_rotation} to rotation around vector(0, 1, 0) by 20 degrees
+			rotate shapes {_shapes::*} by {_rotation}
+			draw shapes {_shapes::*} at {_loc}
 
-			set {godlike-ULT-CD::%player's uuid%::MH} to now
-			delete {godlike-ULT-CANCEL::%player's uuid%::MH}
-			delete {godlike-ULT-USE::%player's uuid%::MH}
-			# ULT CD
-			wait {_ultCooldown}
-			delete {godlike-ULT-CD::%player's uuid%::MH}
-			if {class::%player's uuid%} = "MH":
-				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to player
+			add 1 to {_n}
+			if {_n} = 4:
+				delete {_n}
+				loop all living entities in radius {_ultDmgRadius} around {_loc}:
+					if loop-entity is not {_p}:
+						if metadata value "levelTag" of loop-entity isn't set: # FIX: same level-tag exclusion as the two loops above
+							if y-coord of loop-entity is between {_y-max} and {_y-min}:
+								updateAttacker({_p}, loop-entity)
+								if loop-entity is a player:
+									setFireSource(loop-entity, "ULT", 2) # 19-balance-stats.sk — bounded to the exact 2-second burn below, read by dmgUpdate() when the fire-tick damage lands
+								set fire to loop-entity for 2 seconds
+			wait 5 tick
+
+	set {godlike-ULT-CD::%{_p}'s uuid%::MH} to now
+	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::MH}
+	delete {godlike-ULT-USE::%{_p}'s uuid%::MH}
+	# ULT CD
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_p}'s uuid%::MH}
+		stop
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_p}'s uuid%::MH}
+	if {class::%{_p}'s uuid%} = "MH":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on death of player: # cancels the slam if Mighty dies mid-air during their ultimate
 	if {godlike-ULT-USE::%victim's uuid%::MH} is set:
