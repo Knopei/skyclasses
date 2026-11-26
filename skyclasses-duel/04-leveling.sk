@@ -311,9 +311,9 @@ function updateLevelSidebar(p: player):
 	set line 8 of {_p}'s fastboard to ""
 
 # ---- CATEGORY BUFFS (level 2+) ----
-# Skirmisher (GD, NS, RS, CB, TS): execute — a melee or ability hit that leaves the enemy at 0.5 hearts or less kills them (damage over
+# Skirmisher (GD, NS, RS, CB, TS, SB): assassinate ("execute" in the code) — a melee or ability hit that leaves the enemy at 0.5 hearts or less kills them (damage over
 #   time never triggers it). Applied in 08-damage.sk's dmgUpdate().
-# Striker (MH, RB, VBA, ZT, EA): faster stamina regeneration while the opponent is low (03-resources.sk).
+# Striker (MH, RB, VBA, ZT, EA): Lingering Wounds — hits cut the target's healing and hold back Juggernaut regen (20-combat.sk).
 # Juggernaut (BS, FH, PGS, DS): regeneration out of combat (20-combat.sk).
 
 function categoryLevel2(p: entity, cat: text) :: boolean: # true when this player's current class is in that category and level 2+

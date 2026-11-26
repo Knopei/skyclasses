@@ -60,9 +60,9 @@ function forgeMolotov(p: player, loc: location):
 				set {_e} to loop-entity
 				if {_e} is {_p}:
 					if {_step} is 15: # the last fire tick heals more
-						heal {_p} by 0.5
+						healHP({_p}, 0.5) # 20-combat.sk — Lingering Wounds can shrink it
 					else:
-						heal {_p} by 0.25 # 0.25 hearts on the first two fire ticks
+						healHP({_p}, 0.25) # 0.25 hearts on the first two fire ticks
 				else if metadata value "forgeOwner" of {_e} is {_p}:
 					forgeEnhance({_e}) # your own golem: powered up, never burned
 				else if {_e} is not an armor stand:

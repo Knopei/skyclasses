@@ -44,7 +44,7 @@ on right click with netherite sword: # TACTICAL
 								demonicBeam(player, {_target}, {_v}, 1.25)
 								directAttack({_target})
 								damage {_target} by 0.5
-								heal player by 0.5 heart
+								healHP(player, 0.5) # 20-combat.sk — Lingering Wounds can shrink it
 			delete {balance-abilitySource::%player's uuid%}
 			if {_target} isn't set:
 				play sound "entity.blaze.hurt" at volume 3 and pitch 0.5 to player
@@ -95,9 +95,9 @@ function ultDS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 							demonicBeam({_p}, loop-entity, {_v}, 1.25)
 							damage loop-entity by 0.5 hearts
 							add 1 to {_hits}
-			if {_hits} > 0: # 0.5 hearts for the first enemy hit by this pulse, +0.25 hearts for each additional one
-				set {_amt} to 0.5 + (({_hits} - 1) * 0.25)
-				heal {_p} by {_amt}
+			if {_hits} > 0: # 0.5 hearts for the first enemy hit by this pulse, +0.5 hearts for each additional one
+				set {_amt} to 0.5 + (({_hits} - 1) * 0.5)
+				healHP({_p}, {_amt}) # 20-combat.sk — Lingering Wounds can shrink it
 			delete {_hits}
 			delete {_v}
 			delete {_max}
@@ -126,15 +126,15 @@ on damage of living entity: # PASSIVE — lifesteal on melee hit, boosted during
 			if attack cooldown of attacker >= 0.75:
 				if {godlike-ULT-USE::%attacker's uuid%::DS} is set:
 					if classLevel(attacker, "DS") >= 3: # Perk 2 (Vampire)
-						heal attacker by 0.75 hearts
+						healHP(attacker, 0.75)
 					else:
-						heal attacker by 0.25 hearts
+						healHP(attacker, 0.25)
 				else:
-					heal attacker by 0.25 hearts
+					healHP(attacker, 0.25)
 		else if name of attacker's held item is "%{wc}%Spell Breaker": # spellbreaker.sk — a stolen Blood Harvest gives the shovel the ultimate's lifesteal (not the passive's)
 			if {godlike-ULT-USE::%attacker's uuid%::DS} is set:
 				if attack cooldown of attacker >= 0.75:
 					if sbStolenLevel(attacker) >= 3: # Mastered Theft — the Vampire version
-						heal attacker by 0.75 hearts
+						healHP(attacker, 0.75)
 					else:
-						heal attacker by 0.25 hearts
+						healHP(attacker, 0.25)

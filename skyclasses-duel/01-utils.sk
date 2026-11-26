@@ -217,6 +217,25 @@ command /gmc [<offline player>]:
 			set gamemode of player to creative
 			send "&7You set your gamemode to &aCREATIVE"
 
+command /lwtest [<player>]: # staff: wound a player (yourself by default) as if a level 2 Striker hit them — Lingering Wounds, 20-combat.sk
+	permission: op
+	trigger:
+		set {_t} to player
+		if arg 1 is set:
+			set {_t} to arg 1
+		lwApply(player, {_t})
+		send "&7Wounded &f%{_t}% &7for 3.5 s (regen held back for 8.5 s)."
+
+command /lwdebug: # staff: toggles a chat line on every player hit you deal, showing whether Lingering Wounds should apply
+	permission: op
+	trigger:
+		if {lwDebug} is set:
+			delete {lwDebug}
+			send "&7Lingering Wounds debug &cOFF"
+		else:
+			set {lwDebug} to true
+			send "&7Lingering Wounds debug &aON &8(hit a player as a Striker)"
+
 command /gma [<offline player>]:
 	permission: op
 	trigger:

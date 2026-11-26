@@ -1528,7 +1528,7 @@ function mbSpawnHigh(type: text, loc: location) :: living entity:
 	if {_type} is "harbinger":
 		spawn 1 warden at {_loc}
 		set {_mob} to last spawned warden
-		mbSetup({_mob}, "harbinger", 50, 3, "Harbinger", 1) # slowness 3
+		mbSetup({_mob}, "harbinger", 45, 3, "Harbinger", 1) # slowness 3
 		{_mob}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(1.0) # 100%%
 		mbWardenCalm({_mob})
 	else if {_type} is "magmaroth":
@@ -1543,15 +1543,15 @@ function mbSpawnHigh(type: text, loc: location) :: living entity:
 		set {_g} to "%{_mob}'s uuid%"
 		delete {mbMagma::%{_g}%::*}
 		add {_mob} to {mbMagma::%{_g}%::bodies::*}
-	else: # doomhoof — a ravager with a pillager riding it, sharing one 40 health pool
+	else: # doomhoof — a ravager with a pillager riding it, sharing one 45 health pool
 		spawn 1 ravager at {_loc}
 		set {_mob} to last spawned ravager
-		mbSetup({_mob}, "doomhoof", 50, 1, "Doomhoof", 1) # slowness 1
+		mbSetup({_mob}, "doomhoof", 45, 1, "Doomhoof", 1) # slowness 1
 		{_mob}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(1.0)
 		spawn 1 pillager at {_loc}
 		set {_rider} to last spawned pillager
 		set {_rider}'s tool to crossbow of multishot 1
-		mbSetup({_rider}, "doomhoof-rider", 50, 1, "Doomhoof", 1)
+		mbSetup({_rider}, "doomhoof-rider", 45, 1, "Doomhoof", 1)
 		{_rider}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(1.0)
 		make {_rider} ride {_mob}
 		set metadata value "mbPair" of {_mob} to {_rider}
@@ -1750,7 +1750,7 @@ on death of a magma cube:
 				set metadata value "mbBar" of {_part} to metadata value "mbBar" of victim
 				if metadata value "testBoss" of victim is set:
 					set metadata value "testBoss" of {_part} to true
-				mbSetup({_part}, "magmaroth", 8, 1, "Magmaroth", 1)
+				mbSetup({_part}, "magmaroth", 6, 1, "Magmaroth", 1)
 				{_part}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(0.6) # 60%%
 				add {_part} to {mbMagma::%{_g}%::bodies::*}
 				if {mbMagma::%{_g}%::aggro} is set: # the fight carries straight on
@@ -1776,7 +1776,7 @@ on death of a warden:
 		mbBossDefeated(victim)
 
 # ============================================
-# HARBINGER (Warden) — 40 health, slowness 2, 100%% knockback resistance, vanilla melee (0.5-1)
+# HARBINGER (Warden) — 45 health, slowness 2, 100%% knockback resistance, vanilla melee (0.5-1)
 # ============================================
 
 # Ground Spikes: a big ring (radius 4) around it plus 4 smaller rings (radius 2) out on the diagonals (NW, NE, SW, SE) go gray -> red
@@ -2148,7 +2148,7 @@ function mbMagmaBreathBody(b: living entity, t: player):
 		mbUnfreeze({_b})
 
 # ============================================
-# DOOMHOOF (Ravager + Pillager rider, one shared 40 health pool) — slowness 1, 100%% knockback resistance.
+# DOOMHOOF (Ravager + Pillager rider, one shared 45 health pool) — slowness 1, 100%% knockback resistance.
 # Ravager melee 0.5-1; the rider's Multishot crossbow bolts 0.5-1 each (the arrow hook near the top).
 # ============================================
 

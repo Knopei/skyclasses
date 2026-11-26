@@ -55,8 +55,8 @@ on load:
 		set {class-color::%loop-value%} to "&6"
 
 	# ---- CLASS ARCHETYPE CATEGORIES ----
-	# Level 2 category buffs (04-leveling.sk's categoryLevel2()): Juggernaut — regeneration out of combat (20-combat.sk); Striker — faster
-	# stamina regen while the opponent is low (03-resources.sk); Skirmisher — execute at 0.5 hearts (08-damage.sk).
+	# Level 2 category buffs (04-leveling.sk's categoryLevel2()): Juggernaut — regeneration out of combat (20-combat.sk); Striker — Lingering
+	# Wounds (20-combat.sk); Skirmisher — assassinate ("execute" in the code) at 0.5 hearts (08-damage.sk).
 	# Juggernaut (durability/outlast), Striker (steady damage/pressure), and
 	# Skirmisher (mobility/positioning). Each category grants a passive LEVEL 0
 	# buff — active from the moment a class is selected, on top of anything the
@@ -109,7 +109,7 @@ on load:
 	set {category-color::STRIKER} to "&c"
 	set {category-desc::STRIKER::*} to "&8&oClasses that rely on steady damage" and "&8&oto pressure enemies and secure" and "&8&okills."
 	set {category-buffdesc::STRIKER} to "&8&oBase Melee Damage = 2.5"
-	set {category-buffdesc-l2::STRIKER::*} to "&8&oFaster stamina regeneration while your" and "&8&oopponent is low: below 50%%/35%%/20%%" and "&8&omax health, +20%%/+60%%/+100%%."
+	set {category-buffdesc-l2::STRIKER::*} to "&8&oLingering Wounds: your hits wound" and "&8&oenemies for 3.5 s (they heal 40%% less)" and "&8&oand hold back Juggernaut regeneration" and "&8&ofor 8.5 s."
 	set {category-icon::STRIKER} to netherite helmet
 
 	set {category-name::SKIRMISHER} to "Skirmisher"
@@ -117,7 +117,7 @@ on load:
 	set {category-desc::SKIRMISHER::*} to "&8&oFast and mobile classes that use" and "&8&omovement and positioning to gain" and "&8&oan advantage."
 	set {category-buffdesc::SKIRMISHER} to "&8&oPermanent speed 2 and take"
 	set {category-buffdesc2::SKIRMISHER} to "&8&ozero fall stun." # optional second lore line (only Skirmisher needs one)
-	set {category-buffdesc-l2::SKIRMISHER::*} to "&8&oExecute enemies your melee or ability" and "&8&ohits leave at 0.5 hearts or less."
+	set {category-buffdesc-l2::SKIRMISHER::*} to "&8&oAssassinate enemies your melee or ability" and "&8&ohits leave at 0.5 hearts or less."
 	set {category-icon::SKIRMISHER} to netherite boots
 
 	# ---- ABILITY COSTS & COOLDOWNS ----
@@ -206,7 +206,7 @@ on load:
 	set {weapons::FG::ULT-CD} to 90 seconds
 
 	set {weapons::SB::AS} to -2
-	set {weapons::SB::TAC-COST} to 30 # spellbreaker.sk — Phase Step / Breaker Chains (alternating)
+	set {weapons::SB::TAC-COST} to 35 # spellbreaker.sk — Phase Step / Breaker Chains (alternating)
 	set {weapons::SB::ULT-COST} to 60 # the steal; casting the stolen ultimate is free
 	set {weapons::SB::ULT-CD} to 80 seconds # starts once the stolen ultimate is cast (or its 30 s run out)
 
@@ -274,7 +274,7 @@ on load:
 	# weapon lore below and 05-class-menu.sk's info view read from.
 	wait 1 tick
 	set {class-display::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&e&lPASSIVE" and "&3Pitch Fork" and "&8&oExtended your trident forward dealing" and "&8&odamage in front of you, every 4th hit." and "" and "&e&lTACTICAL" and "&bEmpowered Throw &7[RIGHT] &9🧪%{weapons::ZT::TAC-COST}%" and "&8&oThrow your trident and strike lightning" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&bThunderstorm &7[DROP] &9🧪%{weapons::ZT::ULT-COST}% &f⌚%formatCooldown({weapons::ZT::ULT-CD})%" and "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance." and ""
-	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oYour level 2 Juggernaut regeneration" and "&8&oout of combat heals at the" and "&8&oRegeneration II rate instead of I." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
+	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oWhile below 4 hearts, gain" and "&8&oRegeneration I." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
 	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow 3 hearts, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis deals 2.5 damage," and "&8&o+0.5 for every second invisible (max 4.5)." and ""
 	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&o+0.25 damage below 50%% health," and "&8&o+0.5 below 25%%." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oFor a short time, every melee hit" and "&8&odeals 4 damage (crits add nothing)." and ""
 	set {class-display::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&e&lPASSIVE" and "&4Life Steal" and "&8&oHeal when damaging enemies." and "" and "&e&lTACTICAL" and "&cBlood Beam &7[RIGHT] &9🧪%{weapons::DS::TAC-COST}%" and "&8&oTarget a enemy to damage and heal from." and "" and "&e&lULTIMATE" and "&4Blood Harvest &7[DROP] &9🧪%{weapons::DS::ULT-COST}% &f⌚%formatCooldown({weapons::DS::ULT-CD})%" and "&8&oAutomatically shoot Blood Beams at all" and "&8&onearby enemies." and ""

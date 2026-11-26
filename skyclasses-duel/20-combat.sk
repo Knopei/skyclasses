@@ -99,7 +99,9 @@ function updateCombatBar(p: player):
 			if {playerDefense::%{_p}'s uuid%} is set: # Reinforced Dash, Executioner's ult resistance (the shared damage-reduction variable read by 08-damage.sk)
 				if {playerDefense::%{_p}'s uuid%} > 0:
 					set {_protected} to true
-			if {_protected} is true:
+			if lwWounded({_p}) is true: # Striker's Lingering Wounds (below) — red while wounded
+				{_bar}.setColor(JBarColor.RED)
+			else if {_protected} is true:
 				{_bar}.setColor(JBarColor.YELLOW)
 			else:
 				{_bar}.setColor(JBarColor.WHITE)
@@ -203,8 +205,8 @@ on quit:
 	delete {nameHidden::%player's uuid%}
 
 # ---- NO NATURAL REGENERATION IN MATCHES ----
-# Vanilla food regeneration (and peaceful-difficulty regen) is cancelled for players in a match. Golden apples, potions, Paladin's
-# Believer and Doomhoof's Vigor are potion regeneration (a different heal reason) and still work, as does every scripted heal.
+# Vanilla food regeneration (and peaceful-difficulty regen) is cancelled for players in a match. Golden apples, potions and
+# Doomhoof's Vigor are potion regeneration (a different heal reason) and still work, as does every scripted heal.
 on heal:
 	if event-entity is a player:
 		if {inMatch::%event-entity's uuid%} is set:
@@ -212,15 +214,64 @@ on heal:
 			if {_r} is "SATIATED" or "REGEN":
 				cancel event
 
-# ---- JUGGERNAUT LEVEL 2 CATEGORY BUFF: REGENERATION OUT OF COMBAT ----
-function jgRegenInterval(p: player) :: number: # seconds between half-heart heals: Regeneration I rate, or II for Paladin (its passive, Believer)
-	if {class::%{_p}'s uuid%} is "PGS":
-		return 1.25
-	return 2.5
+# ---- STRIKER LEVEL 2 CATEGORY BUFF: LINGERING WOUNDS ----
+# A hit on a player from a level 2+ Striker (08-damage.sk's dmgUpdate(); damage over time doesn't count) wounds them:
+#   - for 3.5 s, every heal they get is 40%% smaller: potions, golden apples, consumables and every scripted heal (all of Demon's
+#     healing included). Vanilla heals are cut in the heal event below; scripted ones go through healHP().
+#   - for 8.5 s, Juggernaut out-of-combat regeneration can't start (normally it starts the moment they leave combat, 5 s after a hit).
+#   Shown with dark red particles on the wounded player and the opponent's combat bar for them turning red. Absorption (golden apple / Paladin / Frankenstein shields) isn't healing
+#   and is never touched.
 
+function lwWounded(p: entity) :: boolean: # wounded right now?
+	if {_p} is a player:
+		if {lwWound::%{_p}'s uuid%} is set:
+			if (unix timestamp of now) < {lwWound::%{_p}'s uuid%}:
+				return true
+	return false
+
+function lwApply(a: player, v: player): # 08-damage.sk — a level 2+ Striker hit a player
+	set {_u} to {_v}'s uuid
+	set {_fresh} to true
+	if lwWounded({_v}) is true:
+		set {_fresh} to false
+	set {lwWound::%{_u}%} to (unix timestamp of now) + 3.5
+	set {lwRegenBlock::%{_u}%} to (unix timestamp of now) + 8.5
+	if {_fresh} is true: # a new wound (not just a refresh)
+		draw 6 of dust using dustOption(rgb(120, 0, 0), 1) at ((location of {_v}) offset by vector(0, 1.2, 0)) with offset vector(0.3, 0.4, 0.3)
+		if {combatBarShown::%{_u}%} is set:
+			updateCombatBar({_v}) # the bar turns red right away
+
+function healHP(e: living entity, amt: number): # every scripted heal of a player goes through here, so Lingering Wounds can shrink it (amt in hearts)
+	set {_h} to {_amt}
+	if lwWounded({_e}) is true:
+		set {_h} to {_h} * 0.6
+	if {_e} is a player:
+		set {lwSkip::%{_e}'s uuid%} to true # in case Skript's heal fires the heal event too — this one's already been cut
+	heal {_e} by {_h}
+	if {_e} is a player:
+		delete {lwSkip::%{_e}'s uuid%}
+
+on heal: # vanilla heals (potion regeneration, instant health...) while wounded
+	if event-entity is a player:
+		if {lwSkip::%event-entity's uuid%} isn't set:
+			if lwWounded(event-entity) is true:
+				set heal amount to (heal amount) * 0.6
+
+every 5 ticks: # the wound's particles
+	loop all players:
+		if lwWounded(loop-player) is true:
+			if "%active potion effects of loop-player%" doesn't contain "invisibility": # don't give away an invisible player
+				draw 2 of dust using dustOption(rgb(120, 0, 0), 0.9) at ((location of loop-player) offset by vector(0, 1, 0)) with offset vector(0.3, 0.5, 0.3)
+
+on quit:
+	delete {lwWound::%player's uuid%}
+	delete {lwRegenBlock::%player's uuid%}
+
+# ---- JUGGERNAUT LEVEL 2 CATEGORY BUFF: REGENERATION OUT OF COMBAT ----
 # A Juggernaut at level 2+ on its current class regenerates while out of combat (no {combat::<uuid>} timer, see above): scripted
 # healing at the Regeneration I rate (half a heart every 2.5 s), with the Seerhopper's heal particles (12-major-boss.sk) — a heart
-# above the head on each heal and a green sparkle while it's healing. The first heal comes 2.5 s after they drop out of combat.
+# above the head on each heal and a green sparkle while it's healing. The first heal comes the moment they drop out of combat —
+# unless a Striker's Lingering Wounds is still holding it back (8.5 s after that Striker's last hit, see above).
 every 5 ticks:
 	loop all players:
 		set {_p} to loop-player
@@ -235,12 +286,15 @@ every 5 ticks:
 							if classLevel({_p}, {_c}) >= 2: # 04-leveling.sk
 								if health of {_p} < max health of {_p}:
 									set {_ok} to true
+									if {lwRegenBlock::%{_u}%} is set: # Lingering Wounds (above)
+										if (unix timestamp of now) < {lwRegenBlock::%{_u}%}:
+											set {_ok} to false
 		if {_ok} is true:
-			if {jgRegenNext::%{_u}%} isn't set:
-				set {jgRegenNext::%{_u}%} to (unix timestamp of now) + jgRegenInterval({_p})
-			else if (unix timestamp of now) >= {jgRegenNext::%{_u}%}:
-				set {jgRegenNext::%{_u}%} to (unix timestamp of now) + jgRegenInterval({_p})
-				heal {_p} by 0.5
+			if {jgRegenNext::%{_u}%} isn't set: # first heal straight away
+				set {jgRegenNext::%{_u}%} to 0
+			if (unix timestamp of now) >= {jgRegenNext::%{_u}%}:
+				set {jgRegenNext::%{_u}%} to (unix timestamp of now) + 2.5
+				healHP({_p}, 0.5)
 				draw 1 of heart at ((location of {_p}) offset by vector(0, 2.2, 0)) with offset vector(0.2, 0.1, 0.2)
 			draw 2 of happy_villager at ((location of {_p}) offset by vector(0, 1, 0)) with offset vector(0.35, 0.5, 0.35) # healing sparkle
 		else if {jgRegenNext::%{_u}%} is set:

@@ -154,7 +154,7 @@ function giveKillReward(p: player): # called from 09-death-match.sk when {_p} ge
 function enchantedConsumablesCheck(p: player): # 06-perks-general.sk — Enchanted Consumables: every one of the 7 consumables below calls this right after recordConsumableUse(), so the bonus applies uniformly whether or not that item already heals on its own
 	if {general-perk::%{_p}'s uuid%::selected} is "enchantedconsumables":
 		set {_before} to health of {_p}
-		heal {_p} by 0.75 hearts
+		healHP({_p}, 0.75) # 20-combat.sk — Lingering Wounds can shrink it
 		ecBonusHealed({_p}, (health of {_p}) - {_before}) # 25-balance-stats-advanced.sk — Enchanted Consumables Value: what the bonus actually healed
 
 on consume:
@@ -163,7 +163,7 @@ on consume:
 		remove 1 golden apple from player
 		recordConsumableUse(player, "GA") # 19-balance-stats.sk
 		enchantedConsumablesCheck(player)
-		heal player by 1 heart
+		healHP(player, 1) # 20-combat.sk — Lingering Wounds can shrink it
 		add potion effect of regeneration 2 for 5 seconds to potion effects of player
 	else if name of event-item is "&cHealth Potion":
 		cancel event
@@ -179,11 +179,11 @@ on consume:
 		else:
 			set {_heal} to 2.5
 		enchantedConsumablesCheck(player)
-		heal player by {_heal} hearts
+		healHP(player, {_heal}) # 20-combat.sk — Lingering Wounds can shrink it
 	else if name of event-item is "&cChorus Fruit":
 		recordConsumableUse(player, "CF") # 19-balance-stats.sk
 		enchantedConsumablesCheck(player)
-		heal player by 0.5 heart
+		healHP(player, 0.5) # 20-combat.sk — Lingering Wounds can shrink it
 		player.setArrowsInBody(0)
 		add potion effect of invisibility 1 without particles for 2 seconds to potion effects of player
 		add potion effect of regeneration 2 without particles for 5 seconds to potion effects of player

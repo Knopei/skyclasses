@@ -62,9 +62,9 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 			else if {_dmg} > 3: # ordinary swing — capped at its crit damage (0.75 x the 4 attack multiplier), so nothing else inflates it
 				set {_dmg} to 3
 			if {_a} is a player:
-				if classLevel({_a}, "FH") >= 2: # Perk 1 (Restorative Smash) — a hammer smash (a melee hit landed while falling, the same condition vanilla uses for a mace smash) heals 1 heart
+				if classLevel({_a}, "FH") >= 2: # Perk 1 (Restorative Smash) — a hammer smash (a melee hit landed while falling, the same condition vanilla uses for a mace smash) heals 1.5 hearts
 					if fall distance of {_a} > 1.5:
-						heal {_a} by 1
+						healHP({_a}, 1.5) # 20-combat.sk — Lingering Wounds can shrink it
 	else if {class::%{_a}'s uuid%} is "EA": # Executioner — executioner.sk
 		if {_cause} = "attack":
 			if {godlike-ULT-USE::%{_a}'s uuid%::EA} is set: # Death's Toll — this melee hit consumes the charge and overrides the damage, then ends the ultimate (the charge loop in executioner.sk polls this flag every tick and stops once it's gone)
@@ -166,7 +166,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 		if {_v}.isBlocking():
 			bsCHECK({_v}, {_dmg}, {_cause}, {_a}) # basher.sk — also reflects half of the blocked damage back at the attacker
 
-	# Skirmisher level 2 category buff — Execute: a melee or ability hit from a level 2+ Skirmisher that leaves a player at 0.5 hearts
+	# Skirmisher level 2 category buff — Assassinate (called "execute" in the code): a melee or ability hit from a level 2+ Skirmisher that leaves a player at 0.5 hearts
 	# or less kills them instead. Damage over time (fire, wither, poison) and fall / void never trigger it. Absorption counts as health.
 	if {_v} is a player:
 		if {_a} is not {_v}:
@@ -195,6 +195,30 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 									play sound "entity.player.attack.crit" with volume 3 and pitch 0.6 to {_a} and {_v} # the execute crunch — played straight to both players, so neither can miss it
 									play sound "block.chain.break" with volume 3 and pitch 0.5 to {_a} and {_v}
 									play sound "entity.zombie.break_wooden_door" with volume 0.6 and pitch 1.4 to {_a} and {_v}
+									skAssassinFx({_a}, {_v}) # the red X (below)
+
+	if {lwDebug} is set: # /lwdebug (01-utils.sk) — why a hit did or didn't wound
+		if {_a} is a player:
+			if {_v} is a player:
+				send "&8[LW] &7%{_a}% -> %{_v}% &8| &7cause &f%{_cause}% &8| &7dmg &f%{_dmg}% &8| &7class &f%{class::%{_a}'s uuid%}% &8| &7Striker Lv2+ &f%categoryLevel2({_a}, ""STRIKER"")%" to {_a}
+	# Striker level 2 category buff — Lingering Wounds (20-combat.sk): a hit from a level 2+ Striker wounds the player it hits. Same hit
+	# rules as the Skirmisher assassinate above — damage over time and the environment never count, ability damage only with a fresh attacker.
+	if {_v} is a player:
+		if {_a} is a player:
+			if {_a} is not {_v}:
+				if {_dmg} > 0:
+					if {_cause} is not "fire" or "fire_tick" or "fire tick" or "wither" or "poison" or "fall" or "void" or "lava" or "hot_floor" or "hot floor" or "freeze" or "suffocation" or "drowning" or "starvation" or "contact":
+						if categoryLevel2({_a}, "STRIKER") is true: # 04-leveling.sk
+							set {_lwOk} to true
+							if {_cause} is not "attack" or "projectile":
+								set {_lwAt} to metadata value "attackerAt" of {_v}
+								if {_lwAt} is set:
+									if ((unix timestamp of now) - {_lwAt}) > 0.1:
+										set {_lwOk} to false
+								else:
+									set {_lwOk} to false
+							if {_lwOk} is true:
+								lwApply({_a}, {_v}) # 20-combat.sk
 
 	if {_mfIgnite} is true: # Magmaroth's Fury: a hit that leaves the enemy at 1.5 hearts or less sets them on fire for 3 seconds
 		if {_v} is alive:
@@ -384,3 +408,30 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 		invulnerabilityFix(victim) # 01-utils.sk
 	else if {_cause} is not "attack" or "lightning" or "suffocation":
 		set victim's invulnerability time to 0 ticks
+
+# Skirmisher Assassinate's visual: a 1.25 x 1.25 red X standing where the victim was, facing the assassin, for 1.5 seconds. The spot is
+# worked out before the first wait (this is called from dmgUpdate(), which can't wait), so it stays put after the victim dies.
+function skAssassinFx(a: living entity, v: living entity):
+	set {_w} to world of {_v}
+	set {_cx} to x-coord of {_v}
+	set {_cy} to (y-coord of {_v}) + 1
+	set {_cz} to z-coord of {_v}
+	set {_dx} to {_cx} - (x-coord of {_a})
+	set {_dz} to {_cz} - (z-coord of {_a})
+	set {_len} to sqrt(({_dx} * {_dx}) + ({_dz} * {_dz}))
+	if {_len} < 0.01: # standing on the same spot — any facing will do
+		set {_dx} to 1
+		set {_dz} to 0
+		set {_len} to 1
+	set {_rx} to (-1 * {_dz}) / {_len} # sideways, across the line from the assassin to the victim
+	set {_rz} to {_dx} / {_len}
+	set {_i} to 0
+	while {_i} <= 14: # 15 points per stroke, from one corner (-0.625) to the other (+0.625)
+		set {_t} to ({_i} / 14 * 1.25) - 0.625
+		set {_pts::%{_i}%a} to location({_cx} + ({_rx} * {_t}), {_cy} + {_t}, {_cz} + ({_rz} * {_t}), {_w})
+		set {_pts::%{_i}%b} to location({_cx} + ({_rx} * {_t}), {_cy} - {_t}, {_cz} + ({_rz} * {_t}), {_w})
+		add 1 to {_i}
+	loop 15 times: # redrawn every 2 ticks for 1.5 seconds
+		loop {_pts::*}:
+			draw 1 of dust using dustOption(rgb(200, 0, 0), 0.9) at loop-value-2
+		wait 2 ticks

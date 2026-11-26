@@ -243,7 +243,7 @@ on death of a zombie villager or cave spider:
 						if {_left} = 0:
 							set {_healPct} to 20
 					if {_healPct} > 0:
-						heal {_killer} by ((max health of {_killer}) * {_healPct} / 100)
+						healHP({_killer}, ((max health of {_killer}) * {_healPct} / 100)) # 20-combat.sk — Lingering Wounds can shrink it
 						send "&a+%{_healPct}%%% health &7(camp cleared)" to {_killer}
 				if {testMatch} isn't set: # 10-match-manager.sk — a test duel (/testduel) doesn't touch lifetime stats
 					add 1 to {jungleslain::%{_killer}'s uuid%}

@@ -69,7 +69,7 @@ on load:
 	set {classlevel-desc::FH::1::*} to "&8&oCreate a powerful electric shield" and "&8&othat reflects projectiles."
 	set {classlevel-category::FH::2} to "Passive Upgrade"
 	set {classlevel-name::FH::2} to "&6Restorative Smash"
-	set {classlevel-desc::FH::2::*} to "&8&oLanding a hammer smash heals" and "&8&oyou for 1 heart."
+	set {classlevel-desc::FH::2::*} to "&8&oLanding a hammer smash heals" and "&8&oyou for 1.5 hearts."
 	set {classlevel-category::FH::3} to "Ultimate Upgrade"
 	set {classlevel-name::FH::3} to "&6Undying"
 	set {classlevel-desc::FH::3::*} to "&8&oIncreases the ultimate's absorption" and "&8&oshield strength."

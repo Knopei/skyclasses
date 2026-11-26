@@ -60,7 +60,7 @@ on drop of iron sword with priority low: # ULTIMATE
 
 function ultPGS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
 	set {godlike-ULT-USE::%{_p}'s uuid%::PGS} to now
-	heal {_p} by 0.5 # half a heart the moment the radiance is placed
+	healHP({_p}, 0.5) # 20-combat.sk (Lingering Wounds) — half a heart the moment the radiance is placed
 	set {_pal} to {_p}
 	if {_lvl} >= 3: # Perk 2 (Supreme Radiance)
 		set {_shapes::outer-circle} to a circle of radius 7.5
@@ -113,5 +113,29 @@ function ultPGS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE b
 	if {class::%{_p}'s uuid%} = "PGS":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
-# Passive (Believer): the Juggernaut level 2 out-of-combat regeneration heals at the Regeneration II rate (half a heart every 1.25 s)
-# instead of Regeneration I — handled in 20-combat.sk. (The old "regeneration I below 40%% health" passive was removed.)
+# Passive (Believer): while below 4 hearts, Paladin regenerates at the Regeneration I rate — half a heart every 2.5 s, in or out of
+# combat. Scripted (healHP(), 20-combat.sk) so a Striker's Lingering Wounds shrinks each heal to 0.3 hearts. The first heal comes
+# 2.5 s after dropping below 4 hearts. Stacks with the Juggernaut level 2 out-of-combat regeneration.
+# (Replaced "the Juggernaut out-of-combat regen heals at the Regeneration II rate".)
+every 5 ticks:
+	loop all players:
+		set {_p} to loop-player
+		set {_u} to {_p}'s uuid
+		set {_ok} to false
+		if {inMatch::%{_u}%} is set:
+			if {respawning::%{_u}%} isn't set:
+				if {class::%{_u}%} is "PGS":
+					if health of {_p} > 0:
+						if health of {_p} < 4:
+							set {_ok} to true
+		if {_ok} is true:
+			if {pgBelieverNext::%{_u}%} isn't set:
+				set {pgBelieverNext::%{_u}%} to (unix timestamp of now) + 2.5
+			else if (unix timestamp of now) >= {pgBelieverNext::%{_u}%}:
+				set {pgBelieverNext::%{_u}%} to (unix timestamp of now) + 2.5
+				healHP({_p}, 0.5) # 20-combat.sk
+				draw 1 of heart at ((location of {_p}) offset by vector(0, 2.2, 0)) with offset vector(0.2, 0.1, 0.2)
+			if "%active potion effects of {_p}%" doesn't contain "invisibility":
+				draw 1 of dust using dustOption(rgb(255, 215, 90), 0.8) at ((location of {_p}) offset by vector(0, 1, 0)) with offset vector(0.3, 0.5, 0.3) # a light holy shimmer while it's active
+		else if {pgBelieverNext::%{_u}%} is set:
+			delete {pgBelieverNext::%{_u}%}
