@@ -27,6 +27,7 @@ options:
 	EA: unbreakable netherite axe of unbreaking 1 named "&6Executioner Axe"
 	FG: unbreakable copper sword of unbreaking 1 named "&6Scorch Blade"
 	SB: unbreakable netherite shovel of unbreaking 1 named "&6Spell Breaker"
+	FM: unbreakable fishing rod of unbreaking 1 named "&6Fisherman's Rod"
 
 on load:
 	# ---- WEAPON COLOR (used in name-matching strings across all class files) ----
@@ -49,9 +50,10 @@ on load:
 	set {class-name::EA} to "Executioner"
 	set {class-name::FG} to "Scorch"
 	set {class-name::SB} to "Spell Breaker"
+	set {class-name::FM} to "Fisherman"
 
 	# ---- CLASS COLORS (all gold for now, kept separate in case of future per-class theming) ----
-	loop "VBA", "DS", "FH", "GD", "BS", "MH", "NS", "PGS", "RB", "RS", "ZT", "CB", "TS", "EA", "FG", "SB":
+	loop "VBA", "DS", "FH", "GD", "BS", "MH", "NS", "PGS", "RB", "RS", "ZT", "CB", "TS", "EA", "FG", "SB", "FM":
 		set {class-color::%loop-value%} to "&6"
 
 	# ---- CLASS ARCHETYPE CATEGORIES ----
@@ -76,6 +78,7 @@ on load:
 	set {class-category::PGS} to "JUGGERNAUT"
 	set {class-category::FG} to "JUGGERNAUT"
 	set {class-category::DS} to "JUGGERNAUT"
+	set {class-category::FM} to "JUGGERNAUT"
 	set {class-category::MH} to "STRIKER"
 	set {class-category::RB} to "STRIKER"
 	set {class-category::VBA} to "STRIKER"
@@ -89,7 +92,7 @@ on load:
 	set {class-category::EA} to "STRIKER"
 
 	set {category-classes::STRIKER::*} to "MH", "RB", "VBA", "ZT", and "EA"
-	set {category-classes::JUGGERNAUT::*} to "BS", "FH", "PGS", "DS", and "FG"
+	set {category-classes::JUGGERNAUT::*} to "BS", "FH", "PGS", "DS", "FG", and "FM"
 	set {category-classes::SKIRMISHER::*} to "GD", "NS", "RS", "CB", "TS", and "SB"
 
 	# Plain (uncolored) name, a dedicated color code, an icon (armor piece, so
@@ -205,6 +208,11 @@ on load:
 	set {weapons::FG::ULT-COST} to 60
 	set {weapons::FG::ULT-CD} to 90 seconds
 
+	set {weapons::FM::AS} to -2
+	set {weapons::FM::TAC-COST} to 35 # fisherman.sk — the cast, and a reel that pulls a hooked target (an empty reel is free)
+	set {weapons::FM::ULT-COST} to 60
+	set {weapons::FM::ULT-CD} to 90 seconds
+
 	set {weapons::SB::AS} to -2
 	set {weapons::SB::TAC-COST} to 35 # spellbreaker.sk — Phase Step / Breaker Chains (alternating)
 	set {weapons::SB::ULT-COST} to 60 # the steal; casting the stolen ultimate is free
@@ -226,6 +234,7 @@ on load:
 	set {weapons::NS::R-AD} to 0.35 # 0.7 damage per shuriken/arrow (raw ~2 damage x 0.35) — same multiplier applies whether Ninja is in shuriken or ultimate katana form, since the TAC arrow-shooting trigger in ninja.sk fires for both weapon names; capped at 0.7 in 08-damage.sk so a downward throw can't exceed it
 	set {weapons::PGS::AD} to 4
 	set {weapons::FG::AD} to 4 # Juggernaut, same as Paladin
+	set {weapons::FM::AD} to 4 # Juggernaut
 	set {weapons::RD::AD} to 5
 	set {weapons::RB::R-AD} to 0.4 # scales up to 0.6 at >= 7.5 blocks — see 08-damage.sk's dmgUpdate()
 	set {weapons::RS::AD} to 4 # Skirmisher category: x4
@@ -256,6 +265,7 @@ on load:
 	set {class::weapon::TS} to {@TS}
 	set {class::weapon::EA} to {@EA}
 	set {class::weapon::FG} to {@FG}
+	set {class::weapon::FM} to {@FM}
 	set {class::weapon::SB} to {@SB}
 
 	wait 5 ticks
@@ -276,7 +286,7 @@ on load:
 	set {class-display::ZT} to trident named "&eClass: %{class-color::ZT}%&l%{class-name::ZT}%" with lore "" and "&e&lPASSIVE" and "&3Pitch Fork" and "&8&oExtended your trident forward dealing" and "&8&odamage in front of you, every 4th hit." and "" and "&e&lTACTICAL" and "&bEmpowered Throw &7[RIGHT] &9🧪%{weapons::ZT::TAC-COST}%" and "&8&oThrow your trident and strike lightning" and "&8&owhere it lands." and "" and "&e&lULTIMATE" and "&bThunderstorm &7[DROP] &9🧪%{weapons::ZT::ULT-COST}% &f⌚%formatCooldown({weapons::ZT::ULT-CD})%" and "&8&oSummon a deadly thunderstorm at your" and "&8&olocation and gain lightning resistance." and ""
 	set {class-display::PGS} to iron sword named "&eClass: %{class-color::PGS}%&l%{class-name::PGS}%" with lore "" and "&e&lPASSIVE" and "&dBeliever" and "&8&oWhile below 4 hearts, gain" and "&8&oRegeneration I." and "" and "&e&lTACTICAL" and "&eHoly Shield &7[RIGHT] &9🧪%{weapons::PGS::TAC-COST}%" and "&8&oCreate a shield around you that blocks damage." and "" and "&e&lULTIMATE" and "&6Holy Radiance &7[DROP] &9🧪%{weapons::PGS::ULT-COST}% &f⌚%formatCooldown({weapons::PGS::ULT-CD})%" and "&8&oCreate a holy radius at your location that " and "&8&obuffs you and debuffs enemies." and ""
 	set {class-display::GD} to golden sword named "&eClass: %{class-color::GD}%&l%{class-name::GD}%" with lore "" and "&e&lPASSIVE" and "&bSpectral Lunge" and "&8&oBelow 3 hearts, your tactical" and "&8&oturns you invisible while active." and "" and "&e&lTACTICAL" and "&cLunge &7[RIGHT] &9🧪%{weapons::GD::TAC-COST}%" and "&8&oDirectional dash that damages enemies" and "&8&oin the way." and "" and "&e&lULTIMATE" and "&4Ghost &7[DROP] &9🧪%{weapons::GD::ULT-COST}% &f⌚%formatCooldown({weapons::GD::ULT-CD})%" and "&8&oGain immense speed and invisiblity + your" and "&8&onext attack while invis deals 2.5 damage," and "&8&o+0.5 for every second invisible (max 4.5)." and ""
-	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&o+0.25 damage below 50%% health," and "&8&o+0.5 below 25%%." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy and" and "&8&ogrants you speed if hit." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oFor a short time, every melee hit" and "&8&odeals 4 damage (crits add nothing)." and ""
+	set {class-display::VBA} to iron axe named "&eClass: %{class-color::VBA}%&l%{class-name::VBA}%" with lore "" and "&e&lPASSIVE" and "&cLittle Rage" and "&8&o+0.25 damage below 50%% health," and "&8&o+0.5 below 25%%." and "" and "&e&lTACTICAL" and "&6Bullseye &7[RIGHT] &9🧪%{weapons::VBA::TAC-COST}%" and "&8&oThrow an arrow that slows the enemy" and "&8&oit hits." and "" and "&e&lULTIMATE" and "&4Big Rage &7[DROP] &9🧪%{weapons::VBA::ULT-COST}% &f⌚%formatCooldown({weapons::VBA::ULT-CD})%" and "&8&oFor a short time, every melee hit" and "&8&odeals 4 damage (crits add nothing)." and ""
 	set {class-display::DS} to netherite sword named "&eClass: %{class-color::DS}%&l%{class-name::DS}%" with lore "" and "&e&lPASSIVE" and "&4Life Steal" and "&8&oHeal when damaging enemies." and "" and "&e&lTACTICAL" and "&cBlood Beam &7[RIGHT] &9🧪%{weapons::DS::TAC-COST}%" and "&8&oTarget a enemy to damage and heal from." and "" and "&e&lULTIMATE" and "&4Blood Harvest &7[DROP] &9🧪%{weapons::DS::ULT-COST}% &f⌚%formatCooldown({weapons::DS::ULT-CD})%" and "&8&oAutomatically shoot Blood Beams at all" and "&8&onearby enemies." and ""
 	set {class-display::MH} to mace named "&eClass: %{class-color::MH}%&l%{class-name::MH}%" with lore "" and "&e&lPASSIVE" and "&cHammer Down" and "&8&oYour weapon allows you to do smash" and "&8&oattacks." and "" and "&e&lTACTICAL" and "&3Explode &7[RIGHT] &9🧪%{weapons::MH::TAC-COST}%" and "&8&oCreate an explosion at your location damaging" and "&8&oand knocking up any enemies nearby." and "" and "&e&lULTIMATE" and "&bMighty Leap &7[DROP] &9🧪%{weapons::MH::ULT-COST}% &f⌚%formatCooldown({weapons::MH::ULT-CD})%" and "&8&oLeap high into the air and create a big explosion" and "&8&oupon landing that damages and pushes enemies away" and "&8&o+ &7[DROP] &8&oWhile airborne to directional dash." and ""
 	set {class-display::RS} to netherite hoe named "&eClass: %{class-color::RS}%&l%{class-name::RS}%" with lore "" and "&e&lPASSIVE" and "&cReaping Slash" and "&8&oSlash around you applying wither on every" and "&8&o3rd hit." and "" and "&e&lTACTICAL" and "&eGrapple &7[RIGHT] &9🧪%{weapons::RS::S-TAC-COST}%-%{weapons::RS::L-TAC-COST}%" and "&8&oThrow a grapple that pulls you toward solid" and "&8&oobjects or pulls enemies toward you." and "" and "&e&lULTIMATE" and "&4Soul Collector &7[DROP] &9🧪%{weapons::RS::ULT-COST}% &f⌚%formatCooldown({weapons::RS::ULT-CD})%" and "&8&oSwing your scythe around you, and apply" and "&8&owithering to hit enemies." and ""
@@ -289,6 +299,7 @@ on load:
 	set {class-display::TS} to iron hoe named "&eClass: %{class-color::TS}%&l%{class-name::TS}%" with lore "" and "&e&lPASSIVE" and "&bAirborne" and "&8&oBriefly gain speed after launching" and "&8&oyourself, landing an Air Burst, or" and "&8&ousing stamina." and "" and "&e&lTACTICAL" and "&fAir Burst &7[RIGHT] &9🧪%{weapons::TS::TAC-COST}%" and "&8&oShoot a wind burst." and "" and "&e&lULTIMATE" and "&4Tornado &7[DROP] &9🧪%{weapons::TS::ULT-COST}% &f⌚%formatCooldown({weapons::TS::ULT-CD})%" and "&8&oSummon a directional tornado that pushes" and "&8&oand damages enemies." and ""
 	set {class-display::EA} to netherite axe named "&eClass: %{class-color::EA}%&l%{class-name::EA}%" with lore "" and "&e&lPASSIVE" and "&4Executioner's Mark" and "&8&oDamaging an enemy to 3 hearts or" and "&8&obelow permanently slows them until" and "&8&othey heal or die." and "" and "&e&lTACTICAL" and "&cCleaving Rush &7[RIGHT] &9🧪%{weapons::EA::TAC-COST}%" and "&8&oDash forward and empower your next" and "&8&oaxe swing with bonus damage." and "" and "&e&lULTIMATE" and "&4Death's Toll &7[DROP] &9🧪%{weapons::EA::ULT-COST}% &f⌚%formatCooldown({weapons::EA::ULT-CD})%" and "&8&oCharge your axe for a devastating" and "&8&ofinishing blow - the longer you" and "&8&ocharge, the harder it hits." and ""
 	set {class-display::FG} to copper sword named "&eClass: %{class-color::FG}%&l%{class-name::FG}%" with lore "" and "&e&lPASSIVE" and "&6Molotov" and "&8&oYour grenades become molotovs: no" and "&8&oexplosion, but a 3-block fire area that" and "&8&oticks 3 times over 1.5 s: each tick burns" and "&8&oenemies inside it and heals you if you" and "&8&ostand in it (0.25, 0.25, then 0.5 hearts)." and "" and "&e&lTACTICAL" and "&cFlamethrower &7[RIGHT] &9🧪%{weapons::FG::TAC-COST}%" and "&8&oBreathe 3 bursts of fire in a cone that" and "&8&oset enemies on fire, and set off" and "&8&oany grenade they touch." and "" and "&e&lULTIMATE" and "&4Fire & Steel &7[DROP] &9🧪%{weapons::FG::ULT-COST}% &f⌚%formatCooldown({weapons::FG::ULT-CD})%" and "&8&oSummon a slow iron golem that knocks" and "&8&oenemies up, slows them near it, attacks" and "&8&oyour opponent and takes half the damage" and "&8&oyou take near it (doubled). Set it on fire" and "&8&oto make it faster and its hits burn." and ""
+	set {class-display::FM} to fishing rod named "&eClass: %{class-color::FM}%&l%{class-name::FM}%" with lore "" and "&e&lPASSIVE" and "&bCatch of the Day" and "&8&oYour golden apples become raw fish:" and "&8&oeaten instantly, they heal 2 hearts" and "&8&oover 5 seconds." and "" and "&e&lTACTICAL" and "&bCast & Reel &7[RIGHT] &9🧪%{weapons::FM::TAC-COST}%" and "&8&oCast your line: a hit deals 1 damage and" and "&8&opushes the target back. Reel a hooked" and "&8&otarget to pull it in with Slowness II" and "&8&o(costs mana again; an empty reel is free)." and "&8&oWhile hooked, it deals you 10%% less damage." and "" and "&e&lULTIMATE" and "&9Whirlpool &7[DROP] &9🧪%{weapons::FM::ULT-COST}% &f⌚%formatCooldown({weapons::FM::ULT-CD})%" and "&8&oThrow a trident (2 damage) that opens a" and "&8&owhirlpool where it lands, dragging enemies" and "&8&oin and hurting those at its center." and ""
 	set {class-display::SB} to netherite shovel named "&eClass: %{class-color::SB}%&l%{class-name::SB}%" with lore "" and "&e&lPASSIVE" and "&5Arcane Siphon" and "&8&oAt or below 40%% health, your hits steal" and "&8&omana from your opponent (5 per melee" and "&8&ohit, 10 per chain hit)." and "" and "&e&lTACTICAL" and "&dPhase Step &7/ &dBreaker Chains &7[RIGHT] &9🧪%{weapons::SB::TAC-COST}%" and "&8&oAlternates: a short dash, then two" and "&8&ochains that hit the first enemy in front" and "&8&oof you and pull you to it (or to a wall)." and "&8&oFull XP bar = chains next." and "" and "&e&lULTIMATE" and "&5Spell Theft &7[DROP] &9🧪%{weapons::SB::ULT-COST}% &f⌚%formatCooldown({weapons::SB::ULT-CD})%" and "&8&oSteal the ultimate of an opponent within" and "&8&o6 blocks. &7[DROP] &8&oagain within 30 seconds" and "&8&oto cast it for free." and ""
 
 	# ---- WEAPON LORE (full class-display lore, tagged with the class ID as the first line) ----

@@ -99,6 +99,14 @@ function updateCombatBar(p: player):
 			if {playerDefense::%{_p}'s uuid%} is set: # Reinforced Dash, Executioner's ult resistance (the shared damage-reduction variable read by 08-damage.sk)
 				if {playerDefense::%{_p}'s uuid%} > 0:
 					set {_protected} to true
+			if {class::%{_p}'s uuid%} is "FM": # fisherman.sk — their hook is in the opponent (who then deals them 10%% less damage)
+				if fmHooked({_p}) is {_opp}:
+					set {_protected} to true
+			if {forgeGolem::%{_p}'s uuid%} is set: # scorch.sk — standing within their golem's radius (half of every hit goes to the golem)
+				if {forgeGolem::%{_p}'s uuid%} is alive:
+					if world of {forgeGolem::%{_p}'s uuid%} is world of {_p}:
+						if distance between {_p} and {forgeGolem::%{_p}'s uuid%} <= {forge::golem-radius}:
+							set {_protected} to true
 			if lwWounded({_p}) is true: # Striker's Lingering Wounds (below) — red while wounded
 				{_bar}.setColor(JBarColor.RED)
 			else if {_protected} is true:

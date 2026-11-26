@@ -1433,6 +1433,8 @@ function mbPillagerArrowRain(mob: living entity):
 		mbUnfreeze({_mob})
 		if {_c} is set:
 			loop 72 times: # 72 arrows over ~1.6 s, spread evenly over the circle (2.25x the old 32 for 2.25x the area — same density)
+				if {_mob} isn't alive: # the Pillager died / despawned mid-rain — no more arrows
+					stop loop
 				set {_ang} to random number between 0 and 360
 				set {_rad} to 4.5 * sqrt(random number between 0 and 1)
 				set {_ox} to {_rad} * cos({_ang})
@@ -1450,9 +1452,13 @@ function mbPillagerArrowRain(mob: living entity):
 					play sound "ENTITY_ARROW_SHOOT" at volume 1.5 and pitch 0.8 at ({_c} offset by vector(0, 6, 0))
 					mbDrawRing({_c}, 4.5, 1)
 					wait 2 ticks
-			wait 40 ticks
-			loop {_arrows::*}: # clean up the ones stuck in the ground
+			loop 40 times: # 2 s for the arrows to land — cut short if the Pillager dies / despawns
+				if {_mob} isn't alive:
+					stop loop
+				wait 1 tick
+			loop {_arrows::*}: # clean up the ones stuck in the ground (or still falling, if the Pillager is gone)
 				if loop-value is valid:
+					set metadata value "hit" of loop-value to true # stops its spark trail (01-utils.sk)
 					loop-value.remove()
 	mbUnfreeze({_mob})
 	delete metadata value "mbBusy" of {_mob}

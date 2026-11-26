@@ -162,6 +162,11 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 			set {_reduction} to (100 - {playerDefense::%{_v}'s uuid%}) * 0.01
 			set {_dmg} to {_dmg}*{_reduction}
 
+	if {class::%{_v}'s uuid%} is "FM": # fisherman.sk — the target your hook is in deals you 10%% less damage
+		if {_a} is set:
+			if fmHooked({_v}) is {_a}:
+				set {_dmg} to {_dmg}*0.9
+
 	if {isShielding::%{_v}'s uuid%} is set:
 		if {_v}.isBlocking():
 			bsCHECK({_v}, {_dmg}, {_cause}, {_a}) # basher.sk — also reflects half of the blocked damage back at the attacker
@@ -200,7 +205,8 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 	if {lwDebug} is set: # /lwdebug (01-utils.sk) — why a hit did or didn't wound
 		if {_a} is a player:
 			if {_v} is a player:
-				send "&8[LW] &7%{_a}% -> %{_v}% &8| &7cause &f%{_cause}% &8| &7dmg &f%{_dmg}% &8| &7class &f%{class::%{_a}'s uuid%}% &8| &7Striker Lv2+ &f%categoryLevel2({_a}, ""STRIKER"")%" to {_a}
+				set {_lwDbg} to categoryLevel2({_a}, "STRIKER")
+				send "&8[LW] &7%{_a}% -> %{_v}% &8| &7cause &f%{_cause}% &8| &7dmg &f%{_dmg}% &8| &7class &f%{class::%{_a}'s uuid%}% &8| &7Striker Lv2+ &f%{_lwDbg}%" to {_a}
 	# Striker level 2 category buff — Lingering Wounds (20-combat.sk): a hit from a level 2+ Striker wounds the player it hits. Same hit
 	# rules as the Skirmisher assassinate above — damage over time and the environment never count, ability damage only with a fresh attacker.
 	if {_v} is a player:
@@ -329,6 +335,8 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 				set {_w} to metadata value "type" of event-projectile
 				if event-projectile is a arrow or trident:
 					set {_new} to {_dmg} # default: raw damage passes through unscaled (e.g. Zeus's ZT trident, which has no R-AD multiplier) — without this, {_new} stayed unset for it and the whole block below (including showDMG) never ran, so a direct trident hit sometimes never showed its damage number
+					if {_w} is "FMW": # Fisherman's Whirlpool trident (fisherman.sk): a flat 2 on a direct hit
+						set {_new} to 2
 					if {weapons::%{_w}%::R-AD} is set:
 						set {_new} to {_dmg}*{weapons::%{_w}%::R-AD}
 						if {_new} < 0.5:

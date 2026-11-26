@@ -1,0 +1,322 @@
+# ============================================
+# FISHERMAN (FM) — Fisherman's Rod (fishing rod)
+# Juggernaut (x4 melee, +1 max health, knockback resistance, level 2 out-of-combat regen). Tactical: always available. Ultimate:
+# unlocks at class level 1.
+#
+# Passive "Catch of the Day": golden apples become raw fish (07-consumables.sk's fmAppleItem()) — every apple you'd get (respawn,
+#   kill rewards, golden apple as the selected consumable) is a fish instead. A fish is eaten instantly on [RIGHT]: Regeneration II for 5 s
+#   (2 hearts) — a golden melon's heal without the cleanse (no instant heal). Counts as a golden apple for Enchanted
+#   Consumables and the balance stats; Lingering Wounds shrinks it like any heal.
+# Tactical "Cast & Reel" (35 mana):
+#   - Cast (always costs mana): the line flies 1.5x faster than vanilla. Hitting a living target deals 1 damage and pushes it back a
+#     little; the hook stays in it.
+#   - Reel: with a living target hooked it costs 35 mana again and yanks the target toward you with Slowness II for 2 s (bosses take
+#     the slow-free version: no pull, no slow). Without the mana (or within the 0.75 s tactical cooldown) the reel is refused and the
+#     hook stays in. Reeling in an empty line (nothing hooked) is free.
+#   - While your hook is in a living target, that target deals you 10% less damage (08-damage.sk).
+#   - The line snaps if the hooked target gets more than 20 blocks away.
+# Ultimate "Whirlpool" (60 mana, 90 s): throw a trident. It deals 2 damage to whatever it hits (08-damage.sk) and opens a whirlpool
+#   where it lands for 5 s: enemies within 6 blocks are dragged in a spiral toward the center (bosses aren't moved), and enemies within
+#   2 blocks of the center take 0.5 damage every second and have their stamina disabled for 3 seconds. A trident still in the air after 5 s disappears with no whirlpool.
+# Perk 1 (level 2) "Bountiful Catch": reeling in a hooked living target gives you +1 raw fish.
+# Perk 2 (level 3) "Riptide Renewal": standing within 2 blocks of your whirlpool's center heals you 0.5 hearts every second.
+# ============================================
+
+import:
+	org.bukkit.event.player.PlayerFishEvent
+	org.bukkit.event.entity.ProjectileHitEvent
+
+function fmHooked(p: player) :: entity: # the living entity this Fisherman's hook is in right now (none if it isn't in one)
+	set {_hook} to metadata value "fmHook" of {_p}
+	if {_hook} is set:
+		if {_hook}.isValid() is true:
+			set {_e} to {_hook}.getHookedEntity()
+			if {_e} is set:
+				if {_e} is a living entity:
+					return {_e}
+	return {_none}
+
+function fmBoss(e: entity) :: boolean: # bosses aren't pulled / slowed / spun by the Fisherman
+	if metadata value "isMajorBoss" of {_e} is set:
+		return true
+	if metadata value "mbClone" of {_e} is set:
+		return true
+	return false
+
+# ---- TACTICAL: Cast & Reel ----
+
+on PlayerFishEvent:
+	set {_p} to event.getPlayer()
+	if {class::%{_p}'s uuid%} isn't "FM":
+		stop
+	if name of {_p}'s held item is not "%{wc}%Fisherman's Rod":
+		stop
+	set {_state} to event.getState().name()
+	if {_state} is "FISHING": # the cast
+		if tacCHECK({_p}, {weapons::FM::TAC-COST}) is true: # 03-resources.sk
+			set {_hook} to event.getHook()
+			set metadata value "fmHook" of {_p} to {_hook}
+			set metadata value "attacker" of {_hook} to {_p}
+			{_hook}.setVelocity({_hook}.getVelocity().multiply(1.5)) # a faster cast than vanilla
+			play sound "entity.fishing_bobber.throw" with volume 1.5 and pitch 0.8 at {_p}
+		else:
+			event.setCancelled(true)
+	else if {_state} is "CAUGHT_ENTITY": # reeling in with something hooked
+		set {_t} to event.getCaught()
+		if {_t} is a living entity:
+			if {_t} is not an armor stand:
+				if tacCHECK({_p}, {weapons::FM::TAC-COST}) is true:
+					fmReel({_p}, {_t})
+				else:
+					event.setCancelled(true) # no mana — the hook stays in
+	# REEL_IN / IN_GROUND / FAILED_ATTEMPT / CAUGHT_FISH: an empty reel, free
+
+function fmReel(p: player, t: living entity): # a paid reel: the yank, Slowness II, the Perk 1 fish
+	play sound "entity.fishing_bobber.retrieve" with volume 2 and pitch 0.7 at {_p}
+	play sound "entity.fishing_bobber.splash" with volume 0.5 and pitch 1.2 at {_t}
+	if classLevel({_p}, "FM") >= 2: # Perk 1 (Bountiful Catch)
+		set {_fish} to fmAppleItem({_p}) # 07-consumables.sk
+		giveToSlot({_p}, 1 of {_fish}, "apple") # 23-game-settings.sk
+	if fmBoss({_t}) is true:
+		stop
+	add potion effect of slowness 2 for 2 seconds to potion effects of {_t}
+	updateAttacker({_p}, {_t}) # 01-utils.sk — so a kill off the reel is credited
+	set {_dx} to (x-coord of {_p}) - (x-coord of {_t})
+	set {_dz} to (z-coord of {_p}) - (z-coord of {_t})
+	set {_d} to sqrt(({_dx} * {_dx}) + ({_dz} * {_dz}))
+	if {_d} < 1.5:
+		stop
+	set {_speed} to {_d} * 0.12 # a stronger, steadier yank than vanilla's — further targets are pulled harder
+	if {_speed} < 0.5:
+		set {_speed} to 0.5
+	if {_speed} > 1.6:
+		set {_speed} to 1.6
+	set {_vx} to ({_dx} / {_d}) * {_speed}
+	set {_vz} to ({_dz} / {_d}) * {_speed}
+	wait 1 tick # after vanilla's own pull, so this one is what sticks
+	if {_t} is alive:
+		set velocity of {_t} to vector({_vx}, 0.35, {_vz})
+
+on ProjectileHitEvent: # the cast landing on a living target: 1 damage, a small push back
+	set {_hook} to event.getEntity()
+	set {_type} to {_hook}.getType().name()
+	if {_type} is not "FISHING_BOBBER":
+		stop
+	set {_v} to event.getHitEntity()
+	if {_v} isn't set:
+		stop
+	set {_p} to metadata value "attacker" of {_hook}
+	if {_p} isn't set:
+		stop
+	if {_v} is {_p}:
+		stop
+	if {_v} is not a living entity:
+		stop
+	if {_v} is an armor stand:
+		stop
+	if metadata value "fmHit" of {_hook} is set: # once per cast
+		stop
+	set metadata value "fmHit" of {_hook} to true
+	updateAttacker({_p}, {_v}) # 01-utils.sk
+	directAttack({_v})
+	set {balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk
+	damage {_v} by 1
+	delete {balance-abilitySource::%{_p}'s uuid%}
+	play sound "entity.fishing_bobber.splash" with volume 0.75 and pitch 1.4 at {_v}
+	if fmBoss({_v}) is false:
+		set {_dx} to (x-coord of {_v}) - (x-coord of {_p})
+		set {_dz} to (z-coord of {_v}) - (z-coord of {_p})
+		set {_d} to sqrt(({_dx} * {_dx}) + ({_dz} * {_dz}))
+		if {_d} > 0.01:
+			set {_vx} to ({_dx} / {_d}) * 0.35
+			set {_vz} to ({_dz} / {_d}) * 0.35
+			wait 1 tick
+			if {_v} is alive:
+				set velocity of {_v} to vector({_vx}, 0.2, {_vz})
+
+every 5 ticks: # the line snaps past 20 blocks
+	loop all players:
+		set {_hook} to metadata value "fmHook" of loop-player
+		if {_hook} is set:
+			if {_hook}.isValid() is false:
+				delete metadata value "fmHook" of loop-player
+			else:
+				set {_e} to {_hook}.getHookedEntity()
+				if {_e} is set:
+					if distance between loop-player and {_e} > 20:
+						{_hook}.remove()
+						delete metadata value "fmHook" of loop-player
+						play sound "entity.item.break" with volume 1 and pitch 1.4 at loop-player
+						play sound "entity.fishing_bobber.retrieve" with volume 1 and pitch 0.5 at {_e}
+
+# ---- PASSIVE: raw fish ----
+
+on right click:
+	if name of player's held item is name of {fish-item}: # 07-consumables.sk — the raw fish
+		cancel event # eaten instantly, not over the vanilla eating time
+		if {consume-cooldown::%player's uuid%} is set:
+			send "&cYou can't consume another item yet!" to player
+			stop
+		set {consume-cooldown::%player's uuid%} to true
+		remove 1 of {fish-item} from player
+		recordConsumableUse(player, "GA") # 19-balance-stats.sk — counts as a golden apple
+		enchantedConsumablesCheck(player) # 07-consumables.sk
+		add potion effect of regeneration 2 for 5 seconds to potion effects of player
+		play sound "entity.generic.eat" with volume 1 and pitch 1.2 at player
+		play sound "entity.fish.swim" with volume 0.6 and pitch 1.4 at player
+		wait 1 second
+		delete {consume-cooldown::%player's uuid%}
+
+# ---- ULTIMATE: Whirlpool ----
+
+on drop of fishing rod with priority low:
+	if name of event-item is "%{wc}%Fisherman's Rod":
+		cancel event
+		if classLevel(player, "FM") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::FM::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {godlike-ULT-USE::%player's uuid%::FM} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {godlike-ULT-CD::%player's uuid%::FM} is set:
+			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::FM}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+			else if ultCHECK(player, {weapons::FM::ULT-COST}) is true:
+				ultFM(player, {_ultCooldown}, classLevel(player, "FM"), false)
+		else if ultCHECK(player, {weapons::FM::ULT-COST}) is true:
+			ultFM(player, {_ultCooldown}, classLevel(player, "FM"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
+
+function ultFM(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {_u} to {_p}'s uuid
+	set {godlike-ULT-USE::%{_u}%::FM} to now
+	shoot a trident from {_p} at speed 2
+	set {_proj} to last shot projectile
+	set metadata value "attacker" of {_proj} to {_p}
+	set metadata value "type" of {_proj} to "FMW" # 08-damage.sk — a flat 2 damage on a direct hit
+	set metadata value "balanceSource" of {_proj} to "ULT" # 19-balance-stats.sk
+	set metadata value "fmLvl" of {_proj} to {_lvl}
+	play sound "item.trident.throw" with volume 3 and pitch 0.8 at {_p}
+	play sound "item.trident.riptide_2" with volume 1 and pitch 1.2 at {_p}
+	set {_t} to 0
+	while metadata value "fmLanded" of {_proj} isn't set:
+		if {_proj} is not valid:
+			stop loop
+		if {godlike-ULT-CANCEL::%{_u}%::FM} is set:
+			stop loop
+		if {_t} >= 100: # 5 s in the air — gone, no whirlpool
+			stop loop
+		draw 2 of dust using dustOption(rgb(60, 140, 220), 0.9) at {_proj} with offset vector(0.1, 0.1, 0.1)
+		add 1 to {_t}
+		wait 1 tick
+	if metadata value "fmLanded" of {_proj} is set:
+		if {godlike-ULT-CANCEL::%{_u}%::FM} isn't set:
+			set {_loc} to metadata value "fmLanded" of {_proj}
+			if {_proj} is valid:
+				kill {_proj}
+			fmWhirlpool({_p}, {_loc}, {_lvl})
+	else if {_proj} is valid:
+		kill {_proj}
+	set {godlike-ULT-CD::%{_u}%::FM} to now
+	delete {godlike-ULT-USE::%{_u}%::FM}
+	delete {godlike-ULT-CANCEL::%{_u}%::FM}
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {godlike-ULT-CD::%{_u}%::FM}
+		stop
+	# ULT CD
+	wait {_cd}
+	delete {godlike-ULT-CD::%{_u}%::FM}
+	if {class::%{_u}%} = "FM":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
+
+on projectile hit with priority low: # the Whirlpool trident landing — marks where (ultFM() above opens the whirlpool there)
+	if event-projectile is a trident:
+		if metadata value "type" of event-projectile is "FMW":
+			if metadata value "fmLanded" of event-projectile isn't set:
+				set metadata value "fmLanded" of event-projectile to location of event-projectile
+
+function fmWhirlpool(p: player, loc: location, lvl: number): # 5 s: spiral pull within 6 blocks, 0.5 damage / s within 2 blocks of the center (Perk 2: heals the caster there)
+	set {_u} to {_p}'s uuid
+	set {_w} to world of {_loc}
+	set {_cx} to x-coord of {_loc}
+	set {_cy} to (y-coord of {_loc}) + 0.2
+	set {_cz} to z-coord of {_loc}
+	set {_center} to location({_cx}, {_cy}, {_cz}, {_w})
+	play sound "block.bubble_column.whirlpool_inside" with volume 3 and pitch 0.8 at {_center}
+	play sound "entity.generic.splash" with volume 2 and pitch 0.7 at {_center}
+	set {_tick} to 0
+	set {_spin} to 0
+	while {_tick} < 100: # 5 seconds
+		if {godlike-ULT-CANCEL::%{_u}%::FM} is set:
+			stop loop
+		if {_p} isn't online:
+			stop loop
+		# visuals: three spiral arms turning inward, plus the outer edge every few ticks
+		if mod({_tick}, 2) = 0:
+			add 24 to {_spin}
+			loop 3 times:
+				set {_arm} to {_spin} + ((loop-number - 1) * 120)
+				set {_k} to 0
+				while {_k} < 7:
+					set {_r} to 0.6 + ({_k} * 0.8)
+					set {_a} to {_arm} + ({_k} * 25)
+					set {_pt} to location({_cx} + (cos({_a}) * {_r}), {_cy}, {_cz} + (sin({_a}) * {_r}), {_w})
+					if mod({_k}, 2) = 0:
+						draw 1 of dust using dustOption(rgb(40, 110, 200), 1) at {_pt}
+					else:
+						draw 1 of dust using dustOption(rgb(150, 210, 255), 0.8) at {_pt}
+					add 1 to {_k}
+		if mod({_tick}, 6) = 0:
+			set {_k} to 0
+			while {_k} < 16:
+				set {_a} to ({_k} * 22.5) + {_spin}
+				draw 1 of dust using dustOption(rgb(25, 70, 150), 0.7) at location({_cx} + (cos({_a}) * 6), {_cy}, {_cz} + (sin({_a}) * 6), {_w})
+				add 1 to {_k}
+		if mod({_tick}, 30) = 0:
+			play sound "block.bubble_column.whirlpool_ambient" with volume 2 and pitch 0.9 at {_center}
+		# the pull: inward + around, every 2 ticks
+		if mod({_tick}, 2) = 0:
+			loop all living entities in radius 6 around {_center}:
+				if loop-entity is not {_p}:
+					if loop-entity is not an armor stand:
+						if fmBoss(loop-entity) is false:
+							if metadata value "forgeOwner" of loop-entity is not {_p}:
+								set {_dx} to {_cx} - (x-coord of loop-entity)
+								set {_dz} to {_cz} - (z-coord of loop-entity)
+								set {_d} to sqrt(({_dx} * {_dx}) + ({_dz} * {_dz}))
+								if {_d} > 0.6:
+									set {_ix} to ({_dx} / {_d}) * 0.11 # toward the center
+									set {_iz} to ({_dz} / {_d}) * 0.11
+									set {_tx} to ({_dz} / {_d}) * -0.12 # around it
+									set {_tz} to ({_dx} / {_d}) * 0.12
+									set {_vel} to velocity of loop-entity
+									set {_nx} to (x of {_vel}) + {_ix} + {_tx}
+									set {_ny} to y of {_vel}
+									set {_nz} to (z of {_vel}) + {_iz} + {_tz}
+									set velocity of loop-entity to vector({_nx}, {_ny}, {_nz})
+		# the center: 0.5 damage every second (Perk 2: and 0.5 healing for the caster standing there)
+		if mod({_tick}, 20) = 10:
+			loop all living entities in radius 3 around {_center}:
+				if loop-entity is not {_p}:
+					if loop-entity is not an armor stand:
+						if metadata value "forgeOwner" of loop-entity is not {_p}:
+							set {_dx} to {_cx} - (x-coord of loop-entity)
+							set {_dz} to {_cz} - (z-coord of loop-entity)
+							if sqrt(({_dx} * {_dx}) + ({_dz} * {_dz})) <= 2:
+								updateAttacker({_p}, loop-entity) # 01-utils.sk
+								directAttack(loop-entity)
+								set {balance-abilitySource::%{_u}%} to "ULT" # 19-balance-stats.sk
+								damage loop-entity by 0.5
+								delete {balance-abilitySource::%{_u}%}
+								if loop-entity is a player: # caught in the center: stamina disabled for 3 seconds
+									staminaPause(loop-entity, 3) # 01-utils.sk
+			if {_lvl} >= 3: # Perk 2 (Riptide Renewal)
+				if world of {_p} is {_w}:
+					set {_dx} to {_cx} - (x-coord of {_p})
+					set {_dz} to {_cz} - (z-coord of {_p})
+					if sqrt(({_dx} * {_dx}) + ({_dz} * {_dz})) <= 2:
+						if abs((y-coord of {_p}) - {_cy}) <= 3:
+							healHP({_p}, 0.5) # 20-combat.sk — Lingering Wounds can shrink it
+							draw 1 of heart at ((location of {_p}) offset by vector(0, 2.2, 0)) with offset vector(0.2, 0.1, 0.2)
+		add 1 to {_tick}
+		wait 1 tick

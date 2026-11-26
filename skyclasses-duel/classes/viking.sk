@@ -30,7 +30,6 @@ on damage of living entity: # tactical arrow hit effect
 			if metadata value "type" of event-projectile is "VBA":
 				set {_attacker} to metadata value "attacker" of event-projectile
 				updateAttacker({_attacker}, victim)
-				add potion effect of speed 2 for 3 seconds to potion effects of {_attacker}
 				add potion effect of slowness 1 for 3 seconds to potion effects of victim
 				make 25 of block particle using redstone block at block 1.5 above location of victim
 				play sound "BLOCK_STONE_BREAK" at volume 5 at location of victim

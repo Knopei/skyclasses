@@ -169,7 +169,9 @@ function trackProjectileTrail(p: entity):
 
 every 1 tick:
 	loop {trailTrack::*}:
-		if metadata value "hit" of loop-value is set:
+		if loop-value is not valid: # removed without ever landing (e.g. a boss's arrows cleared when it dies or despawns) — without this it stayed in the list and kept drawing sparks where it vanished
+			remove loop-value from {trailTrack::*}
+		else if metadata value "hit" of loop-value is set:
 			remove loop-value from {trailTrack::*}
 		else if (y-coord of loop-value) < -75:
 			set metadata value "hit" of loop-value to true

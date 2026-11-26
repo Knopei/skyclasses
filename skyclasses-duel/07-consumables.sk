@@ -30,7 +30,8 @@ on load:
 		set {_i} to loop-index
 		set {health-item::%{_i}%} to {_v} with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 
-	set {manualStackItems::*} to name of {health-item::HP}, name of {health-item::MP}, name of {health-item::SP}, name of {health-item::GA}, "&6Grenade"
+	set {fish-item} to cod named "&bRaw Fish" with lore "" and "&c&lHEALTH ITEM" and "&8&oFisherman's golden apple" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable # fisherman.sk
+	set {manualStackItems::*} to name of {health-item::HP}, name of {health-item::MP}, name of {health-item::SP}, name of {health-item::GA}, "&6Grenade", name of {fish-item}
 
 	# ---- Selection GUI display items ----
 	set {hi-caption} to apple of unbreaking 1 named "&c&lSelect Your Consumable" with lore "" and "&8&oChoose the item you'll spawn with on" and "&8&orespawn, and receive an extra copy of" and "&8&owhen you kill your opponent." and "" with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
@@ -123,25 +124,35 @@ on inventory close: # while respawning, closing the consumable menu (for any rea
 
 # ---- DELIVERY (respawn + class-select + kill reward) ----
 
+function fmAppleItem(p: player) :: item: # a golden apple — or, for a Fisherman, a raw fish (fisherman.sk's passive)
+	if {class::%{_p}'s uuid%} is "FM":
+		return {fish-item}
+	return {health-item::GA}
+
 function classHeals(p: player): # called on respawn and on class-select
 	loop {health-item::*}:
 		set {_name} to name of loop-value
 		loop {_p}'s inventory:
 			if name of loop-value-2 is {_name}:
 				remove loop-value-2 from inventory of {_p}
-	giveToSlot({_p}, 1 of {health-item::GA}, "apple") # baseline for everyone (was 2) — into the player's chosen slots (23-game-settings.sk)
+	loop {_p}'s inventory: # a Fisherman's raw fish don't carry over to another class
+		if name of loop-value is name of {fish-item}:
+			remove loop-value from inventory of {_p}
+	set {_apple} to fmAppleItem({_p}) # golden apples, or raw fish for a Fisherman
+	giveToSlot({_p}, 1 of {_apple}, "apple") # baseline for everyone (was 2) — into the player's chosen slots (23-game-settings.sk)
 	if name of {health-item::%{_p}'s uuid%::item} is name of {health-item::GA}:
-		giveToSlot({_p}, 2 of {health-item::GA}, "apple") # golden apple as the selected consumable is worth +2 apples on top of the baseline (3 total) — all in the golden apple slot
+		giveToSlot({_p}, 2 of {_apple}, "apple") # golden apple as the selected consumable is worth +2 apples on top of the baseline (3 total) — all in the golden apple slot
 	else:
 		giveToSlot({_p}, 1 of {health-item::%{_p}'s uuid%::item}, "consumable") # the player's selected consumable, additional on top
 	stackItem({_p}, "all")
 
 function giveKillReward(p: player): # called from 09-death-match.sk when {_p} gets a kill
-	giveToSlot({_p}, 1 of {health-item::GA}, "apple") # baseline — always given on every kill regardless of inventory, separate from the "no duplicate consumables" rule below
+	set {_apple} to fmAppleItem({_p}) # golden apples, or raw fish for a Fisherman
+	giveToSlot({_p}, 1 of {_apple}, "apple") # baseline — always given on every kill regardless of inventory, separate from the "no duplicate consumables" rule below
 	set {_selected} to {health-item::%{_p}'s uuid%::item}
 	set {_selectedName} to name of {_selected}
 	if {_selectedName} is name of {health-item::GA}: # selected consumable is also golden apple — worth +2 apples on top of the baseline 1, unconditionally, so a kill nets 3 total
-		giveToSlot({_p}, 2 of {health-item::GA}, "apple")
+		giveToSlot({_p}, 2 of {_apple}, "apple")
 	else:
 		set {_hasSelected} to false
 		loop {_p}'s inventory:

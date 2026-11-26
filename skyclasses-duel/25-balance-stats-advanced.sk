@@ -367,7 +367,7 @@ function openBalanceHBPage(p: player, recent: boolean):
 	set slot (integers between 45 and 53) of metadata tag "balance hb" of {_p} to black stained glass pane named " "
 	set {_hbMin} to bmin("hb")
 	set slot 4 of metadata tag "balance hb" of {_p} to (apple named "&c&lHealthy Boy Value" with lore "" and "&7Win rate in fights with and without" and "&7Healthy Boy, how often it saves a fight," and "&7and how often players without it die" and "&7one heart short. &8Grayed = under %{_hbMin}% fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 classes: two rows of 7, then Scorch and Spell Breaker on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, 31, and 32 # 17 classes: two rows of 7, then Scorch, Spell Breaker and Fisherman on the third row
 	delete {hbViewSlot::%{_p}'s uuid%::*}
 	loop {menu::classlist::*}:
 		set {_c} to loop-value
@@ -394,7 +394,7 @@ function openBalanceHBMatchups(p: player, c: text, recent: boolean): # one class
 	set slot (integers between 36 and 44) of metadata tag "balance hbmu" of {_p} to black stained glass pane named " "
 	set {_lore::*} to hbLore({_c}, "ALL", {_recent})
 	set slot 4 of metadata tag "balance hbmu" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}% &7— all matchups" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 classes: two rows of 7, then Scorch and Spell Breaker on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, 31, and 32 # 17 classes: two rows of 7, then Scorch, Spell Breaker and Fisherman on the third row
 	set {_i} to 0
 	loop {menu::classlist::*}:
 		add 1 to {_i}
@@ -750,7 +750,7 @@ function openBalanceRDPage(p: player, recent: boolean):
 	set slot (integers between 45 and 53) of metadata tag "balance rd" of {_p} to black stained glass pane named " "
 	set {_min} to bmin("rd")
 	set slot 4 of metadata tag "balance rd" of {_p} to (iron chestplate named "&6&lReinforced Movement Value" with lore "" and "&7Damage it prevents per fight and per" and "&7life, saves, win rate with and without," and "&7and what the 2.5 s cooldown costs it" and "&7(the same windows tracked with no" and "&7cooldown). &8Grayed = under %{_min}% fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 classes: two rows of 7, then Scorch and Spell Breaker on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, 31, and 32 # 17 classes: two rows of 7, then Scorch, Spell Breaker and Fisherman on the third row
 	delete {rdViewSlot::%{_p}'s uuid%::*}
 	loop {menu::classlist::*}:
 		set {_c} to loop-value
@@ -776,7 +776,7 @@ function openBalanceRDMatchups(p: player, c: text, recent: boolean): # one class
 	set slot (integers between 36 and 44) of metadata tag "balance rdmu" of {_p} to black stained glass pane named " "
 	set {_lore::*} to rdLore({_c}, "ALL", {_recent})
 	set slot 4 of metadata tag "balance rdmu" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}% &7— all matchups" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 classes: two rows of 7, then Scorch and Spell Breaker on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, 31, and 32 # 17 classes: two rows of 7, then Scorch, Spell Breaker and Fisherman on the third row
 	set {_i} to 0
 	loop {menu::classlist::*}:
 		add 1 to {_i}
@@ -1017,7 +1017,7 @@ function openBalanceECPage(p: player, recent: boolean):
 	set slot (integers between 45 and 53) of metadata tag "balance ec" of {_p} to black stained glass pane named " "
 	set {_min} to bmin("ec")
 	set slot 4 of metadata tag "balance ec" of {_p} to (enchanted golden apple named "&6&lEnchanted Consumables Value" with lore "" and "&7Win rate in fights with and without" and "&7Enchanted Consumables, and how often" and "&7its bonus healing saves a fight." and "&8Grayed = under %{_min}% fights." and "" and "&e[CLICK] a class &7for its matchups") with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 classes: two rows of 7, then Scorch and Spell Breaker on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, 31, and 32 # 17 classes: two rows of 7, then Scorch, Spell Breaker and Fisherman on the third row
 	delete {ecViewSlot::%{_p}'s uuid%::*}
 	loop {menu::classlist::*}:
 		set {_c} to loop-value
@@ -1043,7 +1043,7 @@ function openBalanceECMatchups(p: player, c: text, recent: boolean):
 	set slot (integers between 36 and 44) of metadata tag "balance ecmu" of {_p} to black stained glass pane named " "
 	set {_lore::*} to ecLore({_c}, "ALL", {_recent})
 	set slot 4 of metadata tag "balance ecmu" of {_p} to ({class::weapon::%{_c}%} named "&e%{class-name::%{_c}%}% &7— all matchups" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, and 32 # 16 classes: two rows of 7, then Scorch and Spell Breaker on the third row
+	set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 30, 31, and 32 # 17 classes: two rows of 7, then Scorch, Spell Breaker and Fisherman on the third row
 	set {_i} to 0
 	loop {menu::classlist::*}:
 		add 1 to {_i}

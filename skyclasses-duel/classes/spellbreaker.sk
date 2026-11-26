@@ -4,7 +4,7 @@
 #
 # Passive "Arcane Siphon": while you are at or below 40% of your max health (60% with Perk 1), every hit on the opponent steals
 #   mana from them and gives it to you: 5 per melee hit, 10 per Breaker Chains hit. (Cyberpunk's old passive, moved here.)
-# Tactical (30 mana), alternating — the XP bar shows which one is next (empty = Phase Step, full = Breaker Chains):
+# Tactical (35 mana), alternating — the XP bar shows which one is next (empty = Phase Step, full = Breaker Chains):
 #   1. "Phase Step": a short dash forward (the same push as Executioner's Cleaving Rush), no damage.
 #   2. "Breaker Chains": two dark purple chains shoot from your hands (Reaper grapple height) and meet at the first thing in front
 #      of you, up to 7 blocks (2 less than Reaper's base grapple). One target at most. An enemy (player or mob) has its velocity
@@ -171,6 +171,7 @@ function sbPhaseStep(p: player):
 function sbChainScan(p: player): # the chains' path (14 steps of 0.5 = 7 blocks, 1.5 above, like Reaper's grapple) and what it hits first — results in {sbChain::<uuid>::*}
 	set {_u} to {_p}'s uuid
 	delete {sbChain::%{_u}%::*}
+	delete metadata value "sbChainEnt" of {_p}
 	set {sbChain::%{_u}%::n} to 14
 	set {_x} to 0
 	set {_l} to 0
@@ -207,7 +208,7 @@ function sbChainScanWorker(p: player): # same hit rules as reaper.sk's reaperGra
 									set {_hit} to true
 							if {_hit} is set:
 								set {sbChain::%{_u}%::n} to {_x}
-								set {sbChain::%{_u}%::ent} to loop-entity
+								set metadata value "sbChainEnt" of {_p} to loop-entity # (metadata, not a variable — an entity can't be saved in one)
 								stop
 			add 1 to {_height}
 			set {_loc} to location 1 blocks below {_loc}
@@ -221,7 +222,8 @@ function sbChains(p: player):
 	set {_u} to {_p}'s uuid
 	sbChainScan({_p})
 	set {_n} to {sbChain::%{_u}%::n}
-	set {_ent} to {sbChain::%{_u}%::ent}
+	set {_ent} to metadata value "sbChainEnt" of {_p}
+	delete metadata value "sbChainEnt" of {_p}
 	set {_wall} to {sbChain::%{_u}%::wall}
 	loop 14 times: # keep the path the scan used, so the drawn chains follow exactly where the hit was checked
 		set {_path::%loop-number%} to {sbChain::%{_u}%::pt::%loop-number%}
@@ -451,6 +453,8 @@ function sbCastStolen(p: player, code: text):
 		ultTS({_p}, {_noCd}, {_lvl}, true) # tempest.sk
 	else if {_code} is "EA":
 		ultEA({_p}, {_noCd}, {_lvl}, true) # executioner.sk
+	else if {_code} is "FM":
+		ultFM({_p}, {_noCd}, {_lvl}, true) # fisherman.sk
 	else if {_code} is "FG":
 		forgeGolemRun({_p}, {_noCd}, {_lvl}, true) # scorch.sk
 

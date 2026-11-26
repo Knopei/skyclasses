@@ -36,6 +36,8 @@ function invSlot(p: player, kind: text) :: number: # this player's hotbar index 
 function invKindOfName(name: text) :: text: # which kind an item belongs to, from its name (golden apple / grenade / any other consumable)
 	if {_name} is name of {health-item::GA}:
 		return "apple"
+	if {_name} is name of {fish-item}: # fisherman.sk — a Fisherman's golden apples
+		return "apple"
 	if {_name} is "&6Grenade":
 		return "grenade"
 	return "consumable"
