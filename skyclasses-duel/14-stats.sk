@@ -288,10 +288,10 @@ function playerRecentRecord(p: offline player, result: text, duration: number): 
 			set {pr::%{_u}%::%{_s}%::c::%{_c}%::mxks} to bd({matchtopks::%{_u}%::%{_c}%})
 	set {pr::%{_u}%::%{_s}%::ok} to true
 
-function recentStatsAgg(target: offline player): # totals the player's last-30 window into {sv-r::<uuid>::<field>} and {sv-r::<uuid>::c::<CLASS>::<field>}; {sv-r::<uuid>::n} = matches in the window
+function recentStatsAgg(target: offline player): # totals the player's last-30 window into {-sv-r::<uuid>::<field>} and {-sv-r::<uuid>::c::<CLASS>::<field>}; {-sv-r::<uuid>::n} = matches in the window
 	set {_u} to {_target}'s uuid
-	delete {sv-r::%{_u}%::*}
-	set {sv-r::%{_u}%::n} to 0
+	delete {-sv-r::%{_u}%::*}
+	set {-sv-r::%{_u}%::n} to 0
 	# explicit field lists — the totals are built by name rather than by looping the stored list and trusting loop-index, which didn't reproduce the nested "c::CLASS::field" paths
 	set {_sumf::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin", "blow", "bhigh", "stlow", "sthigh", "frogs", "bt-evoker", "bt-vindicator", "bt-pillager", "bt-harbinger", "bt-magmaroth" and "bt-doomhoof"
 	set {_csumf::*} to "g", "w", "l", "k", "d", "dmg", "pd", "dt", "jg", "bs", "bl" and "bh"
@@ -299,11 +299,11 @@ function recentStatsAgg(target: offline player): # totals the player's last-30 w
 	set {_si} to 1
 	while {_si} <= 30:
 		if {pr::%{_u}%::%{_si}%::ok} is set:
-			add 1 to {sv-r::%{_u}%::n}
+			add 1 to {-sv-r::%{_u}%::n}
 			set {_fi} to 1
 			while {_fi} <= size of {_sumf::*}:
 				set {_f} to {_sumf::%{_fi}%}
-				add bd({pr::%{_u}%::%{_si}%::%{_f}%}) to {sv-r::%{_u}%::%{_f}%}
+				add bd({pr::%{_u}%::%{_si}%::%{_f}%}) to {-sv-r::%{_u}%::%{_f}%}
 				add 1 to {_fi}
 			set {_ci} to 1
 			while {_ci} <= size of {_classes::*}:
@@ -311,7 +311,7 @@ function recentStatsAgg(target: offline player): # totals the player's last-30 w
 				set {_cfi} to 1
 				while {_cfi} <= size of {_csumf::*}:
 					set {_f} to {_csumf::%{_cfi}%}
-					add bd({pr::%{_u}%::%{_si}%::c::%{_c}%::%{_f}%}) to {sv-r::%{_u}%::c::%{_c}%::%{_f}%}
+					add bd({pr::%{_u}%::%{_si}%::c::%{_c}%::%{_f}%}) to {-sv-r::%{_u}%::c::%{_c}%::%{_f}%}
 					add 1 to {_cfi}
 				add 1 to {_ci}
 		add 1 to {_si}
@@ -327,7 +327,7 @@ function recentStatsAgg(target: offline player): # totals the player's last-30 w
 				if {pr::%{_u}%::%{_si}%::%{_f}%} > {_best}:
 					set {_best} to {pr::%{_u}%::%{_si}%::%{_f}%}
 			add 1 to {_si}
-		set {sv-r::%{_u}%::%{_f}%} to {_best}
+		set {-sv-r::%{_u}%::%{_f}%} to {_best}
 		add 1 to {_fi}
 	set {_classes::*} to {menu::classlist::*}
 	set {_ci} to 1
@@ -340,56 +340,56 @@ function recentStatsAgg(target: offline player): # totals the player's last-30 w
 				if {pr::%{_u}%::%{_si}%::c::%{_c}%::mxks} > {_best}:
 					set {_best} to {pr::%{_u}%::%{_si}%::c::%{_c}%::mxks}
 			add 1 to {_si}
-		set {sv-r::%{_u}%::c::%{_c}%::mxks} to {_best}
+		set {-sv-r::%{_u}%::c::%{_c}%::mxks} to {_best}
 		add 1 to {_ci}
 	# make sure every overall field exists, so the icons never print "<none>"
 	set {_all::*} to "games", "wins", "losses", "dur", "durwin", "durloss", "kills", "deaths", "mxks", "fb", "dmg", "pdmg", "dtaken", "jungle", "bosses", "steals", "xe", "xm", "xl", "pge", "pgm", "pgl", "lead", "leadloss", "behindwin", "mxdmg", "mxpdmg", "mxcs", "mxkd", "blow", "bhigh", "stlow", "sthigh", "frogs", "bt-evoker", "bt-vindicator", "bt-pillager", "bt-harbinger", "bt-magmaroth" and "bt-doomhoof"
 	set {_fi} to 1
 	while {_fi} <= size of {_all::*}:
 		set {_f} to {_all::%{_fi}%}
-		if {sv-r::%{_u}%::%{_f}%} isn't set:
-			set {sv-r::%{_u}%::%{_f}%} to 0
+		if {-sv-r::%{_u}%::%{_f}%} isn't set:
+			set {-sv-r::%{_u}%::%{_f}%} to 0
 		add 1 to {_fi}
 
-function lifetimeStatsView(target: offline player): # mirrors the lifetime counters into {sv-l::<uuid>::<field>} using the same field names as the recent view, so one icon builder serves both
+function lifetimeStatsView(target: offline player): # mirrors the lifetime counters into {-sv-l::<uuid>::<field>} using the same field names as the recent view, so one icon builder serves both
 	set {_u} to {_target}'s uuid
-	delete {sv-l::%{_u}%::*}
-	set {sv-l::%{_u}%::games} to bd({games::%{_u}%})
-	set {sv-l::%{_u}%::wins} to bd({wins::%{_u}%})
-	set {sv-l::%{_u}%::losses} to bd({losses::%{_u}%})
-	set {sv-l::%{_u}%::dur} to bd({duration-total::%{_u}%})
-	set {sv-l::%{_u}%::durwin} to bd({duration-win-total::%{_u}%})
-	set {sv-l::%{_u}%::durloss} to bd({duration-loss-total::%{_u}%})
-	set {sv-l::%{_u}%::kills} to bd({kill::%{_u}%})
-	set {sv-l::%{_u}%::deaths} to bd({death::%{_u}%})
-	set {sv-l::%{_u}%::mxks} to bd({ks::%{_u}%::top})
-	set {sv-l::%{_u}%::fb} to bd({firstbloods::%{_u}%})
-	set {sv-l::%{_u}%::dmg} to bd({damage::%{_u}%})
-	set {sv-l::%{_u}%::pdmg} to bd({playerdamage::%{_u}%})
-	set {sv-l::%{_u}%::dtaken} to bd({damagetaken::%{_u}%})
-	set {sv-l::%{_u}%::jungle} to bd({jungleslain::%{_u}%})
-	set {sv-l::%{_u}%::bosses} to bd({bossesslain::%{_u}%})
-	set {sv-l::%{_u}%::steals} to bd({bosssteals::%{_u}%})
-	set {sv-l::%{_u}%::blow} to bd({bossesslain-low::%{_u}%})
-	set {sv-l::%{_u}%::bhigh} to bd({bossesslain-high::%{_u}%})
-	set {sv-l::%{_u}%::stlow} to bd({bosssteals-low::%{_u}%})
-	set {sv-l::%{_u}%::sthigh} to bd({bosssteals-high::%{_u}%})
-	set {sv-l::%{_u}%::frogs} to bd({frogscaught::%{_u}%})
+	delete {-sv-l::%{_u}%::*}
+	set {-sv-l::%{_u}%::games} to bd({games::%{_u}%})
+	set {-sv-l::%{_u}%::wins} to bd({wins::%{_u}%})
+	set {-sv-l::%{_u}%::losses} to bd({losses::%{_u}%})
+	set {-sv-l::%{_u}%::dur} to bd({duration-total::%{_u}%})
+	set {-sv-l::%{_u}%::durwin} to bd({duration-win-total::%{_u}%})
+	set {-sv-l::%{_u}%::durloss} to bd({duration-loss-total::%{_u}%})
+	set {-sv-l::%{_u}%::kills} to bd({kill::%{_u}%})
+	set {-sv-l::%{_u}%::deaths} to bd({death::%{_u}%})
+	set {-sv-l::%{_u}%::mxks} to bd({ks::%{_u}%::top})
+	set {-sv-l::%{_u}%::fb} to bd({firstbloods::%{_u}%})
+	set {-sv-l::%{_u}%::dmg} to bd({damage::%{_u}%})
+	set {-sv-l::%{_u}%::pdmg} to bd({playerdamage::%{_u}%})
+	set {-sv-l::%{_u}%::dtaken} to bd({damagetaken::%{_u}%})
+	set {-sv-l::%{_u}%::jungle} to bd({jungleslain::%{_u}%})
+	set {-sv-l::%{_u}%::bosses} to bd({bossesslain::%{_u}%})
+	set {-sv-l::%{_u}%::steals} to bd({bosssteals::%{_u}%})
+	set {-sv-l::%{_u}%::blow} to bd({bossesslain-low::%{_u}%})
+	set {-sv-l::%{_u}%::bhigh} to bd({bossesslain-high::%{_u}%})
+	set {-sv-l::%{_u}%::stlow} to bd({bosssteals-low::%{_u}%})
+	set {-sv-l::%{_u}%::sthigh} to bd({bosssteals-high::%{_u}%})
+	set {-sv-l::%{_u}%::frogs} to bd({frogscaught::%{_u}%})
 	loop "evoker", "vindicator", "pillager", "harbinger", "magmaroth" and "doomhoof":
-		set {sv-l::%{_u}%::bt-%loop-value%} to bd({bossesslain-type::%{_u}%::%loop-value%})
-	set {sv-l::%{_u}%::xe} to bd({xpearly::%{_u}%})
-	set {sv-l::%{_u}%::xm} to bd({xpmid::%{_u}%})
-	set {sv-l::%{_u}%::xl} to bd({xplate::%{_u}%})
-	set {sv-l::%{_u}%::pge} to bd({phasegames-early::%{_u}%})
-	set {sv-l::%{_u}%::pgm} to bd({phasegames-mid::%{_u}%})
-	set {sv-l::%{_u}%::pgl} to bd({phasegames-late::%{_u}%})
-	set {sv-l::%{_u}%::lead} to bd({leadgames::%{_u}%})
-	set {sv-l::%{_u}%::leadloss} to bd({leadlossgames::%{_u}%})
-	set {sv-l::%{_u}%::behindwin} to bd({behindwingames::%{_u}%})
-	set {sv-l::%{_u}%::mxdmg} to bd({bestgame-damage::%{_u}%})
-	set {sv-l::%{_u}%::mxpdmg} to bd({bestgame-playerdamage::%{_u}%})
-	set {sv-l::%{_u}%::mxcs} to bd({bestgame-cs::%{_u}%})
-	set {sv-l::%{_u}%::mxkd} to bd({bestgame-kd::%{_u}%})
+		set {-sv-l::%{_u}%::bt-%loop-value%} to bd({bossesslain-type::%{_u}%::%loop-value%})
+	set {-sv-l::%{_u}%::xe} to bd({xpearly::%{_u}%})
+	set {-sv-l::%{_u}%::xm} to bd({xpmid::%{_u}%})
+	set {-sv-l::%{_u}%::xl} to bd({xplate::%{_u}%})
+	set {-sv-l::%{_u}%::pge} to bd({phasegames-early::%{_u}%})
+	set {-sv-l::%{_u}%::pgm} to bd({phasegames-mid::%{_u}%})
+	set {-sv-l::%{_u}%::pgl} to bd({phasegames-late::%{_u}%})
+	set {-sv-l::%{_u}%::lead} to bd({leadgames::%{_u}%})
+	set {-sv-l::%{_u}%::leadloss} to bd({leadlossgames::%{_u}%})
+	set {-sv-l::%{_u}%::behindwin} to bd({behindwingames::%{_u}%})
+	set {-sv-l::%{_u}%::mxdmg} to bd({bestgame-damage::%{_u}%})
+	set {-sv-l::%{_u}%::mxpdmg} to bd({bestgame-playerdamage::%{_u}%})
+	set {-sv-l::%{_u}%::mxcs} to bd({bestgame-cs::%{_u}%})
+	set {-sv-l::%{_u}%::mxkd} to bd({bestgame-kd::%{_u}%})
 
 function recentBestWorstWorker(target: offline player): # the Best/Worst Class icon for the recent view — same score formula as 13-mastery.sk (win rate x 700 + K/D x 150, K/D capped at 2), computed from the window; a class is eligible once it has the games and score of the configured ranking tier
 	set {_u} to {_target}'s uuid
@@ -400,17 +400,17 @@ function recentBestWorstWorker(target: offline player): # the Best/Worst Class i
 	set {_worstScore} to 999999
 	loop {menu::classlist::*}:
 		set {_c} to loop-value
-		set {_g} to bd({sv-r::%{_u}%::c::%{_c}%::g})
+		set {_g} to bd({-sv-r::%{_u}%::c::%{_c}%::g})
 		if {_g} >= {mastery-min-games::%{_tier}%}:
-			set {_k} to bd({sv-r::%{_u}%::c::%{_c}%::k})
-			set {_d} to bd({sv-r::%{_u}%::c::%{_c}%::d})
+			set {_k} to bd({-sv-r::%{_u}%::c::%{_c}%::k})
+			set {_d} to bd({-sv-r::%{_u}%::c::%{_c}%::d})
 			if {_d} = 0:
 				set {_kd} to {_k}
 			else:
 				set {_kd} to {_k} / {_d}
 			if {_kd} > 2:
 				set {_kd} to 2
-			set {_score} to (safeDivide(bd({sv-r::%{_u}%::c::%{_c}%::w}), {_g}) * 700) + ({_kd} * 150)
+			set {_score} to (safeDivide(bd({-sv-r::%{_u}%::c::%{_c}%::w}), {_g}) * 700) + ({_kd} * 150)
 			if {_score} >= {mastery-threshold::%{_tier}%}:
 				if {_score} > {_bestScore}:
 					set {_bestScore} to {_score}
@@ -422,63 +422,63 @@ function recentBestWorstWorker(target: offline player): # the Best/Worst Class i
 function statsIcon(slot: number, target: offline player, mode: text) :: item: # builds one icon of the stats menu; mode "l" = lifetime, "r" = last 30 games
 	set {_u} to {_target}'s uuid
 	set {_m} to {_mode}
-	set {_n} to bd({sv-r::%{_u}%::n})
+	set {_n} to bd({-sv-r::%{_u}%::n})
 	if {_m} is "r":
 		set {_foot::*} to "" and "&e> Last 30 Games &7(%{_n}% played)" and "&7[CLICK] Show lifetime" and ""
 	else:
 		set {_foot::*} to "" and "&b> Lifetime" and "&7[CLICK] Show last 30 games" and ""
 	set {_icon} to barrier named "&cUnknown"
 	if {_slot} is 10:
-		set {_games} to {sv-%{_m}%::%{_u}%::games}
-		set {_winrate} to safeDivide({sv-%{_m}%::%{_u}%::wins}, {_games}) * 100
-		set {_lore::*} to "" and "&7Games Played: &e%{_games}%" and "&7Wins: &a%{sv-%{_m}%::%{_u}%::wins}%" and "&7Losses: &c%{sv-%{_m}%::%{_u}%::losses}%" and "&7Win Rate: &e%{_winrate}%%%"
+		set {_games} to {-sv-%{_m}%::%{_u}%::games}
+		set {_winrate} to safeDivide({-sv-%{_m}%::%{_u}%::wins}, {_games}) * 100
+		set {_lore::*} to "" and "&7Games Played: &e%{_games}%" and "&7Wins: &a%{-sv-%{_m}%::%{_u}%::wins}%" and "&7Losses: &c%{-sv-%{_m}%::%{_u}%::losses}%" and "&7Win Rate: &e%{_winrate}%%%"
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (nether star named "&e&lMatch Record" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	else if {_slot} is 12:
-		set {_kd} to safeDivide({sv-%{_m}%::%{_u}%::kills}, {sv-%{_m}%::%{_u}%::deaths})
-		set {_lore::*} to "" and "&7Kills: &e%formatNumber({sv-%{_m}%::%{_u}%::kills})%" and "&7Deaths: &e%formatNumber({sv-%{_m}%::%{_u}%::deaths})%" and "&7K/D Ratio: &e%{_kd}%" and "&7Best Killstreak: &e%{sv-%{_m}%::%{_u}%::mxks}%" and "&7First Bloods: &e%{sv-%{_m}%::%{_u}%::fb}%"
+		set {_kd} to safeDivide({-sv-%{_m}%::%{_u}%::kills}, {-sv-%{_m}%::%{_u}%::deaths})
+		set {_lore::*} to "" and "&7Kills: &e%formatNumber({-sv-%{_m}%::%{_u}%::kills})%" and "&7Deaths: &e%formatNumber({-sv-%{_m}%::%{_u}%::deaths})%" and "&7K/D Ratio: &e%{_kd}%" and "&7Best Killstreak: &e%{-sv-%{_m}%::%{_u}%::mxks}%" and "&7First Bloods: &e%{-sv-%{_m}%::%{_u}%::fb}%"
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (iron sword named "&c&lCombat" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 		add nbt compound of "{""minecraft:tooltip_display"":{hidden_components:[""minecraft:attribute_modifiers"",""minecraft:enchantments"",""minecraft:stored_enchantments"",""minecraft:unbreakable"",""minecraft:can_break"",""minecraft:can_place_on"",""minecraft:dyed_color"",""minecraft:trim"",""minecraft:potion_contents"",""minecraft:jukebox_playable"",""minecraft:banner_patterns"",""minecraft:firework_explosion"",""minecraft:fireworks"",""minecraft:map_id"",""minecraft:bundle_contents"",""minecraft:lodestone_tracker"",""minecraft:instrument"",""minecraft:suspicious_stew_effects"",""minecraft:writable_book_content"",""minecraft:written_book_content"",""minecraft:charged_projectiles"",""minecraft:container""]}}" to nbt of {_icon} # sword's inherent attack damage/speed survive the item flag alone
 	else if {_slot} is 14:
-		set {_lore::*} to "" and "&7Overall Damage Dealt: &e%formatNumber({sv-%{_m}%::%{_u}%::dmg})%" and "&7Player Damage Dealt: &e%formatNumber({sv-%{_m}%::%{_u}%::pdmg})%" and "&7Damage Taken: &e%formatNumber({sv-%{_m}%::%{_u}%::dtaken})%"
+		set {_lore::*} to "" and "&7Overall Damage Dealt: &e%formatNumber({-sv-%{_m}%::%{_u}%::dmg})%" and "&7Player Damage Dealt: &e%formatNumber({-sv-%{_m}%::%{_u}%::pdmg})%" and "&7Damage Taken: &e%formatNumber({-sv-%{_m}%::%{_u}%::dtaken})%"
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (blaze powder named "&6&lDamage" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	else if {_slot} is 16:
-		set {_games} to {sv-%{_m}%::%{_u}%::games}
-		set {_avgCS} to safeDivide({sv-%{_m}%::%{_u}%::jungle}, {_games})
-		set {_avgBosses} to safeDivide({sv-%{_m}%::%{_u}%::bosses}, {_games})
-		set {_avgLow} to safeDivide({sv-%{_m}%::%{_u}%::blow}, {_games})
-		set {_avgHigh} to safeDivide({sv-%{_m}%::%{_u}%::bhigh}, {_games})
-		set {_lore::*} to "" and "&7Jungle Mobs Slain: &e%{sv-%{_m}%::%{_u}%::jungle}%" and "&7Seerhoppers Slain: &6%{sv-%{_m}%::%{_u}%::frogs}%" and "&7Avg Jungle CS/Game: &e%{_avgCS}%" and ""
-		add "&7Bosses Slain: &e%{sv-%{_m}%::%{_u}%::bosses}%" and "&7Avg Bosses/Game: &e%{_avgBosses}%" and "&7Avg Low-Level Bosses/Game: &e%{_avgLow}%" and "&7Avg High-Level Bosses/Game: &e%{_avgHigh}%" to {_lore::*}
-		add "&7Boss Steals: &e%{sv-%{_m}%::%{_u}%::steals}% &8(Low-Level &e%{sv-%{_m}%::%{_u}%::stlow}%&8, High-Level &e%{sv-%{_m}%::%{_u}%::sthigh}%&8)" and "" to {_lore::*}
-		add "&8Low-Level: &7Evoker &e%{sv-%{_m}%::%{_u}%::bt-evoker}% &7Vindicator &e%{sv-%{_m}%::%{_u}%::bt-vindicator}% &7Pillager &e%{sv-%{_m}%::%{_u}%::bt-pillager}%" to {_lore::*}
-		add "&8High-Level: &7Harbinger &e%{sv-%{_m}%::%{_u}%::bt-harbinger}% &7Magmaroth &e%{sv-%{_m}%::%{_u}%::bt-magmaroth}% &7Doomhoof &e%{sv-%{_m}%::%{_u}%::bt-doomhoof}%" to {_lore::*}
+		set {_games} to {-sv-%{_m}%::%{_u}%::games}
+		set {_avgCS} to safeDivide({-sv-%{_m}%::%{_u}%::jungle}, {_games})
+		set {_avgBosses} to safeDivide({-sv-%{_m}%::%{_u}%::bosses}, {_games})
+		set {_avgLow} to safeDivide({-sv-%{_m}%::%{_u}%::blow}, {_games})
+		set {_avgHigh} to safeDivide({-sv-%{_m}%::%{_u}%::bhigh}, {_games})
+		set {_lore::*} to "" and "&7Jungle Mobs Slain: &e%{-sv-%{_m}%::%{_u}%::jungle}%" and "&7Seerhoppers Slain: &6%{-sv-%{_m}%::%{_u}%::frogs}%" and "&7Avg Jungle CS/Game: &e%{_avgCS}%" and ""
+		add "&7Bosses Slain: &e%{-sv-%{_m}%::%{_u}%::bosses}%" and "&7Avg Bosses/Game: &e%{_avgBosses}%" and "&7Avg Low-Level Bosses/Game: &e%{_avgLow}%" and "&7Avg High-Level Bosses/Game: &e%{_avgHigh}%" to {_lore::*}
+		add "&7Boss Steals: &e%{-sv-%{_m}%::%{_u}%::steals}% &8(Low-Level &e%{-sv-%{_m}%::%{_u}%::stlow}%&8, High-Level &e%{-sv-%{_m}%::%{_u}%::sthigh}%&8)" and "" to {_lore::*}
+		add "&8Low-Level: &7Evoker &e%{-sv-%{_m}%::%{_u}%::bt-evoker}% &7Vindicator &e%{-sv-%{_m}%::%{_u}%::bt-vindicator}% &7Pillager &e%{-sv-%{_m}%::%{_u}%::bt-pillager}%" to {_lore::*}
+		add "&8High-Level: &7Harbinger &e%{-sv-%{_m}%::%{_u}%::bt-harbinger}% &7Magmaroth &e%{-sv-%{_m}%::%{_u}%::bt-magmaroth}% &7Doomhoof &e%{-sv-%{_m}%::%{_u}%::bt-doomhoof}%" to {_lore::*}
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (zombie head named "&2&lJungle & Bosses" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	else if {_slot} is 28:
-		set {_avgXpEarly} to safeDivide({sv-%{_m}%::%{_u}%::xe}, {sv-%{_m}%::%{_u}%::pge})
-		set {_avgXpMid} to safeDivide({sv-%{_m}%::%{_u}%::xm}, {sv-%{_m}%::%{_u}%::pgm})
-		set {_avgXpLate} to safeDivide({sv-%{_m}%::%{_u}%::xl}, {sv-%{_m}%::%{_u}%::pgl})
+		set {_avgXpEarly} to safeDivide({-sv-%{_m}%::%{_u}%::xe}, {-sv-%{_m}%::%{_u}%::pge})
+		set {_avgXpMid} to safeDivide({-sv-%{_m}%::%{_u}%::xm}, {-sv-%{_m}%::%{_u}%::pgm})
+		set {_avgXpLate} to safeDivide({-sv-%{_m}%::%{_u}%::xl}, {-sv-%{_m}%::%{_u}%::pgl})
 		set {_lore::*} to "" and "&7Avg Early-Game XP: &e%{_avgXpEarly}%" and "&7Avg Mid-Game XP: &e%{_avgXpMid}%" and "&7Avg Late-Game XP: &e%{_avgXpLate}%"
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (experience bottle named "&d&lXP by Phase" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	else if {_slot} is 22:
-		set {_lore::*} to "" and "&7Highest Damage Game: &e%formatNumber({sv-%{_m}%::%{_u}%::mxdmg})%" and "&7Highest Player Damage Game: &e%formatNumber({sv-%{_m}%::%{_u}%::mxpdmg})%" and "&7Best CS Game: &e%{sv-%{_m}%::%{_u}%::mxcs}%" and "&7Best K/D Game: &e%{sv-%{_m}%::%{_u}%::mxkd}%"
+		set {_lore::*} to "" and "&7Highest Damage Game: &e%formatNumber({-sv-%{_m}%::%{_u}%::mxdmg})%" and "&7Highest Player Damage Game: &e%formatNumber({-sv-%{_m}%::%{_u}%::mxpdmg})%" and "&7Best CS Game: &e%{-sv-%{_m}%::%{_u}%::mxcs}%" and "&7Best K/D Game: &e%{-sv-%{_m}%::%{_u}%::mxkd}%"
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (player head named "&6&lPersonal Records" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 		set skull owner of {_icon} to {_target}
 	else if {_slot} is 30:
-		set {_leadconv} to safeDivide({sv-%{_m}%::%{_u}%::leadloss}, {sv-%{_m}%::%{_u}%::lead})
+		set {_leadconv} to safeDivide({-sv-%{_m}%::%{_u}%::leadloss}, {-sv-%{_m}%::%{_u}%::lead})
 		set {_leadconv} to (1 - {_leadconv}) * 100 # % of "significant lead" games that were actually won
-		set {_lore::*} to "" and "&7Games With Sig. Lead: &e%{sv-%{_m}%::%{_u}%::lead}%" and "&7Games Lost After Leading: &c%{sv-%{_m}%::%{_u}%::leadloss}%" and "&7Games Won While Behind: &a%{sv-%{_m}%::%{_u}%::behindwin}%" and "&7Lead Conversion Rate: &e%{_leadconv}%%%"
+		set {_lore::*} to "" and "&7Games With Sig. Lead: &e%{-sv-%{_m}%::%{_u}%::lead}%" and "&7Games Lost After Leading: &c%{-sv-%{_m}%::%{_u}%::leadloss}%" and "&7Games Won While Behind: &a%{-sv-%{_m}%::%{_u}%::behindwin}%" and "&7Lead Conversion Rate: &e%{_leadconv}%%%"
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (golden apple named "&b&lComeback Stats" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
 	else if {_slot} is 32:
-		set {_avgDur} to formatDuration(safeDivide({sv-%{_m}%::%{_u}%::dur}, {sv-%{_m}%::%{_u}%::games}))
-		set {_avgWinDur} to formatDuration(safeDivide({sv-%{_m}%::%{_u}%::durwin}, {sv-%{_m}%::%{_u}%::wins}))
-		set {_avgLossDur} to formatDuration(safeDivide({sv-%{_m}%::%{_u}%::durloss}, {sv-%{_m}%::%{_u}%::losses}))
+		set {_avgDur} to formatDuration(safeDivide({-sv-%{_m}%::%{_u}%::dur}, {-sv-%{_m}%::%{_u}%::games}))
+		set {_avgWinDur} to formatDuration(safeDivide({-sv-%{_m}%::%{_u}%::durwin}, {-sv-%{_m}%::%{_u}%::wins}))
+		set {_avgLossDur} to formatDuration(safeDivide({-sv-%{_m}%::%{_u}%::durloss}, {-sv-%{_m}%::%{_u}%::losses}))
 		set {_lore::*} to "" and "&7Avg Game Duration: &e%{_avgDur}%" and "&7Avg Winning Game: &a%{_avgWinDur}%" and "&7Avg Losing Game: &c%{_avgLossDur}%"
 		add {_foot::*} to {_lore::*}
 		set {_icon} to (clock named "&f&lDurations" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable

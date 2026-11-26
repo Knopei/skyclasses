@@ -49,17 +49,17 @@ on drop of iron sword with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::PGS::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::PGS} is set:
+		if {-godlike-ULT-USE::%player's uuid%::PGS} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::PGS} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::PGS}
+		else if {-godlike-ULT-CD::%player's uuid%::PGS} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::PGS}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::PGS::ULT-COST}) is true:
 			ultPGS(player, {_ultCooldown}, classLevel(player, "PGS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultPGS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::PGS} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::PGS} to now
 	healHP({_p}, 0.5) # 20-combat.sk (Lingering Wounds) — half a heart the moment the radiance is placed
 	set {_pal} to {_p}
 	if {_lvl} >= 3: # Perk 2 (Supreme Radiance)
@@ -84,7 +84,7 @@ function ultPGS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE b
 	set {_y-max} to y-coord of {_loc}+2
 	set {_y-min} to y-coord of {_loc}-2
 	loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::PGS} is set: # set by 09-death-match.sk when the Paladin dies — the radiance ends with it
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::PGS} is set: # set by 09-death-match.sk when the Paladin dies — the radiance ends with it
 			stop loop
 		add 1 to {_n}
 		draw shapes {_shapes::*} at {_loc}
@@ -101,15 +101,15 @@ function ultPGS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE b
 						damage loop-entity by 1
 						play sound "BLOCK_ANVIL_PLACE" with volume 0.5 and pitch 3 at {_loc}
 		wait 5 tick
-	set {godlike-ULT-CD::%{_p}'s uuid%::PGS} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::PGS}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::PGS}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::PGS} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::PGS}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::PGS}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::PGS}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::PGS}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::PGS}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::PGS}
 	if {class::%{_p}'s uuid%} = "PGS":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
@@ -129,13 +129,13 @@ every 5 ticks:
 						if health of {_p} < 4:
 							set {_ok} to true
 		if {_ok} is true:
-			if {pgBelieverNext::%{_u}%} isn't set:
-				set {pgBelieverNext::%{_u}%} to (unix timestamp of now) + 2.5
-			else if (unix timestamp of now) >= {pgBelieverNext::%{_u}%}:
-				set {pgBelieverNext::%{_u}%} to (unix timestamp of now) + 2.5
+			if {-pgBelieverNext::%{_u}%} isn't set:
+				set {-pgBelieverNext::%{_u}%} to (unix timestamp of now) + 2.5
+			else if (unix timestamp of now) >= {-pgBelieverNext::%{_u}%}:
+				set {-pgBelieverNext::%{_u}%} to (unix timestamp of now) + 2.5
 				healHP({_p}, 0.5) # 20-combat.sk
 				draw 1 of heart at ((location of {_p}) offset by vector(0, 2.2, 0)) with offset vector(0.2, 0.1, 0.2)
 			if "%active potion effects of {_p}%" doesn't contain "invisibility":
 				draw 1 of dust using dustOption(rgb(255, 215, 90), 0.8) at ((location of {_p}) offset by vector(0, 1, 0)) with offset vector(0.3, 0.5, 0.3) # a light holy shimmer while it's active
-		else if {pgBelieverNext::%{_u}%} is set:
-			delete {pgBelieverNext::%{_u}%}
+		else if {-pgBelieverNext::%{_u}%} is set:
+			delete {-pgBelieverNext::%{_u}%}

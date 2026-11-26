@@ -55,9 +55,9 @@ on right click with netherite axe: # TACTICAL — Cleaving Rush
 			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_player_attack_sweep" with volume 1 and pitch 0.8 at player
 			draw 15 of crit particle at player with extra 0.3
-			set {ea-tacBuff::%player's uuid%} to true
+			set {-ea-tacBuff::%player's uuid%} to true
 			loop 10 times: # 1 second (10 x 2 ticks) — the buff's own expiry window. A landed melee hit consumes it instantly in 08-damage.sk's dmgUpdate(), which this loop notices via the flag being gone and stops on
-				if {ea-tacBuff::%player's uuid%} isn't set:
+				if {-ea-tacBuff::%player's uuid%} isn't set:
 					stop loop
 				set {_markerLow} to location of player
 				add 0.5 to y-coord of {_markerLow}
@@ -69,7 +69,7 @@ on right click with netherite axe: # TACTICAL — Cleaving Rush
 				add 1 to y-coord of {_axeLoc} # roughly hand height
 				draw 8 of dust_color_transition particle using dustTransition(red, dark red, 0.6) at {_axeLoc} with offset vector(0.15, 0.15, 0.15) with extra 0.04 # red dust on the axe to show the buff is active — more particles with a small spread/offset so it reads clearly instead of a single faint pinprick
 				wait 2 tick
-			delete {ea-tacBuff::%player's uuid%} # no-op if a hit already consumed it inside the loop above
+			delete {-ea-tacBuff::%player's uuid%} # no-op if a hit already consumed it inside the loop above
 
 on drop of netherite axe with priority low: # ULTIMATE — Death's Toll
 	if name of event-item is "%{wc}%Executioner Axe":
@@ -78,36 +78,36 @@ on drop of netherite axe with priority low: # ULTIMATE — Death's Toll
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::EA::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::EA} is set:
+		if {-godlike-ULT-USE::%player's uuid%::EA} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::EA} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::EA}
+		else if {-godlike-ULT-CD::%player's uuid%::EA} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::EA}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::EA::ULT-COST}) is true:
 			ultEA(player, {_ultCooldown}, classLevel(player, "EA"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultEA(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::EA} to now
-	set {ea-ultLvl::%{_p}'s uuid%} to {_lvl} # read by eaTollHit() below (Perk 2 — Execution)
-	set {ea-chargeLevel::%{_p}'s uuid%} to 1 # level 1 is reached instantly (0 seconds) — hitting right away locks in the minimum tier
+	set {-godlike-ULT-USE::%{_p}'s uuid%::EA} to now
+	set {-ea-ultLvl::%{_p}'s uuid%} to {_lvl} # read by eaTollHit() below (Perk 2 — Execution)
+	set {-ea-chargeLevel::%{_p}'s uuid%} to 1 # level 1 is reached instantly (0 seconds) — hitting right away locks in the minimum tier
 	play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at {_p}
 	loop 100 times: # 2 seconds to reach full charge (1s per level) + 3 more seconds of grace to land the hit = 5 seconds total
-		if {godlike-ULT-USE::%{_p}'s uuid%::EA} isn't set: # consumed by a landed hit — see 08-damage.sk's dmgUpdate() EA branch
+		if {-godlike-ULT-USE::%{_p}'s uuid%::EA} isn't set: # consumed by a landed hit — see 08-damage.sk's dmgUpdate() EA branch
 			stop loop
 		add 1 to {_tick}
 		if {_tick} = 20: # 1 second — level 2
-			set {ea-chargeLevel::%{_p}'s uuid%} to 2
+			set {-ea-chargeLevel::%{_p}'s uuid%} to 2
 		else if {_tick} = 40: # 2 seconds — level 3, full charge, turns red
-			set {ea-chargeLevel::%{_p}'s uuid%} to 3
+			set {-ea-chargeLevel::%{_p}'s uuid%} to 3
 			play sound "entity.wither.death" with volume 0.4 and pitch 2 at {_p}
-		set {_level} to {ea-chargeLevel::%{_p}'s uuid%}
+		set {_level} to {-ea-chargeLevel::%{_p}'s uuid%}
 
-		# 20%% damage reduction for the whole charge + grace window. Shares {playerDefense} with Reinforced Dash (06-perks-general.sk), which uses the same variable for its own (stronger, 40%%) reduction — so this only sets ours when nothing stronger is already active, and Reinforced Dash's higher value naturally wins while its own dash is in progress; the moment Reinforced Dash's loop ends and deletes {playerDefense}, this notices on the very next tick and restores our 20%% for as long as the ult is still charging/in grace
-		if {playerDefense::%{_p}'s uuid%} isn't set:
-			set {playerDefense::%{_p}'s uuid%} to 20
-		else if {playerDefense::%{_p}'s uuid%} < 20:
-			set {playerDefense::%{_p}'s uuid%} to 20
+		# 20%% damage reduction for the whole charge + grace window. Shares {-playerDefense} with Reinforced Dash (06-perks-general.sk), which uses the same variable for its own (stronger, 40%%) reduction — so this only sets ours when nothing stronger is already active, and Reinforced Dash's higher value naturally wins while its own dash is in progress; the moment Reinforced Dash's loop ends and deletes {-playerDefense}, this notices on the very next tick and restores our 20%% for as long as the ult is still charging/in grace
+		if {-playerDefense::%{_p}'s uuid%} isn't set:
+			set {-playerDefense::%{_p}'s uuid%} to 20
+		else if {-playerDefense::%{_p}'s uuid%} < 20:
+			set {-playerDefense::%{_p}'s uuid%} to 20
 
 		# self-slow alongside the damage reduction above — Slowness 2 while still charging (level < 3) only; no slow during the 3-second grace period. Refreshed every tick for a short duration so it expires quickly on its own the moment the loop stops (hit landed or timed out) rather than lingering
 		if {_level} < 3:
@@ -137,36 +137,36 @@ function ultEA(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 		wait 1 tick
 	delete {_tick}
 	set {_fxHit} to true # the loop ended because a hit landed (flag consumed) rather than timing out
-	if {godlike-ULT-USE::%{_p}'s uuid%::EA} is set:
+	if {-godlike-ULT-USE::%{_p}'s uuid%::EA} is set:
 		set {_fxHit} to false
 	if {ea-useAxeFx} is true:
 		eaUltFxEnd({_p}, {_fxHit})
-	if {playerDefense::%{_p}'s uuid%} = 20: # only clear OUR OWN reduction — if something stronger (e.g. Reinforced Dash) is currently active instead, leave it alone; it cleans up after itself
-		delete {playerDefense::%{_p}'s uuid%}
-	if {godlike-ULT-USE::%{_p}'s uuid%::EA} is set: # timed out with no hit landed — clean up without dealing damage
+	if {-playerDefense::%{_p}'s uuid%} = 20: # only clear OUR OWN reduction — if something stronger (e.g. Reinforced Dash) is currently active instead, leave it alone; it cleans up after itself
+		delete {-playerDefense::%{_p}'s uuid%}
+	if {-godlike-ULT-USE::%{_p}'s uuid%::EA} is set: # timed out with no hit landed — clean up without dealing damage
 		play sound "item.trident.riptide_1" with volume 1 and pitch 0.6 at {_p} # same sound as activation, replayed to represent the axe lowering back down with nothing hit
-		delete {godlike-ULT-USE::%{_p}'s uuid%::EA}
-		delete {ea-chargeLevel::%{_p}'s uuid%}
-	set {godlike-ULT-CD::%{_p}'s uuid%::EA} to now
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::EA}
+		delete {-godlike-ULT-USE::%{_p}'s uuid%::EA}
+		delete {-ea-chargeLevel::%{_p}'s uuid%}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::EA} to now
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::EA}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::EA}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::EA}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::EA}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::EA}
 	if {class::%{_p}'s uuid%} = "EA":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 function eaTollHit(a: player, v: living entity) :: number: # Death's Toll's landed hit (08-damage.sk) — consumes the charge, ends the ultimate and returns the hit's damage. Shared by Executioner and a Spell Breaker running a stolen Death's Toll
-	set {_level} to {ea-chargeLevel::%{_a}'s uuid%}
+	set {_level} to {-ea-chargeLevel::%{_a}'s uuid%}
 	if {_level} = 1:
 		set {_dmg} to 2.5
 	else if {_level} = 2:
 		set {_dmg} to 5
 	else:
 		set {_dmg} to 7.5
-	if {ea-ultLvl::%{_a}'s uuid%} >= 3: # Perk 2 (Execution) — +1 for every heart of max health the target has over the caster's own (absorption counts, 01-utils.sk)
+	if {-ea-ultLvl::%{_a}'s uuid%} >= 3: # Perk 2 (Execution) — +1 for every heart of max health the target has over the caster's own (absorption counts, 01-utils.sk)
 		hbScaleNote({_a}, {_v}, 1) # 25-balance-stats-advanced.sk — Healthy Boy Value
 		set {_over} to effMaxHealth({_v}) - effMaxHealth({_a})
 		if {_over} > 4: # counts at most 4 hearts over — +4 max
@@ -177,9 +177,9 @@ function eaTollHit(a: player, v: living entity) :: number: # Death's Toll's land
 	play sound "entity.player.attack.sweep" with volume 1.6 and pitch 0.5 at {_v}
 	play sound "block.anvil.land" with volume 0.5 and pitch 1.4 at {_v} # a noticeable but quiet anvil layer underneath the slash
 	eaRedstoneEffect({_v}) # same redstone block-break particle + sound as the TAC's buffed hit
-	set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk
-	delete {godlike-ULT-USE::%{_a}'s uuid%::EA}
-	delete {ea-chargeLevel::%{_a}'s uuid%}
+	set {-balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk
+	delete {-godlike-ULT-USE::%{_a}'s uuid%::EA}
+	delete {-ea-chargeLevel::%{_a}'s uuid%}
 	return {_dmg}
 
 function eaRedstoneEffect(v: living entity): # redstone block-break particle + sound shared by the TAC's buffed hit and the ULT's finishing hit (both in 08-damage.sk's dmgUpdate())
@@ -228,17 +228,17 @@ function eaMarkCheck(a: player, v: living entity):
 	set metadata value "eaThreshold" of {_v} to {_threshold} # always refreshed to the most recent attacker's perk level
 	if metadata value "eaWatching" of {_v} isn't set:
 		set metadata value "eaWatching" of {_v} to true
-		add {_v} to {eaWatch::*}
+		add {_v} to {-eaWatch::*}
 
 every 1 second:
-	loop {eaWatch::*}:
+	loop {-eaWatch::*}:
 		set {_v} to loop-value
 		if (health of {_v}) <= 0: # dead/removed — stop watching
-			remove loop-value from {eaWatch::*}
+			remove loop-value from {-eaWatch::*}
 			delete metadata value "eaWatching" of {_v}
 			delete metadata value "eaThreshold" of {_v}
 		else if (health of {_v}) > 3: # healed back above 3 full hearts — clears regardless of which threshold marked them (health of X is already in hearts in this environment, 1 heart = 1 heart, not 2)
-			remove loop-value from {eaWatch::*}
+			remove loop-value from {-eaWatch::*}
 			delete metadata value "eaWatching" of {_v}
 			delete metadata value "eaThreshold" of {_v}
 		else:
@@ -248,14 +248,14 @@ every 1 second:
 			if (health of {_v}) <= {_threshold}: # 1 heart = 1 heart here, not 2 — no *2
 				set {_immune} to false
 				if {_v} is a player:
-					if {cleanseImmune::%{_v}'s uuid%} is set: # Golden Melon cleanse (07-consumables.sk) is active — the mark stays registered but its slow is withheld for the cleanse's 2.5 seconds
+					if {-cleanseImmune::%{_v}'s uuid%} is set: # Golden Melon cleanse (07-consumables.sk) is active — the mark stays registered but its slow is withheld for the cleanse's 2.5 seconds
 						set {_immune} to true
 				if {_immune} is false:
 					add potion effect of slowness 2 without particles for 1 seconds to potion effects of {_v} # re-applied every second for as long as the entity stays watched, so the slow never lapses
 
 on death of living entity: # stops watching immediately rather than waiting for the next 1-second tick to poll a dead/removed entity
 	if metadata value "eaWatching" of victim is set:
-		remove victim from {eaWatch::*}
+		remove victim from {-eaWatch::*}
 		delete metadata value "eaWatching" of victim
 		delete metadata value "eaThreshold" of victim
 
@@ -398,7 +398,7 @@ command /eatest [<text>]:
 		if {ea-test::%player's uuid%} is set:
 			send "&cThe test is already running."
 			stop
-		if {godlike-ULT-USE::%player's uuid%::EA} is set:
+		if {-godlike-ULT-USE::%player's uuid%::EA} is set:
 			send "&cYour real ultimate is active — wait for it to finish."
 			stop
 		set {ea-test::%player's uuid%} to true

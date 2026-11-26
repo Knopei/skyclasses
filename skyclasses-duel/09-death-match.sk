@@ -43,12 +43,12 @@ on death of player: # ----------------------------------------------------------
 			delete metadata value "attacker" of {_oppOfVictim}
 	delete {hlBuff::%victim's uuid%::%{_vClass}%} # 12-major-boss.sk — a class that dies loses its high-level boss buff (maxHealth() below then drops Doomhoof's extra heart)
 
-	if {godlike-ULT-USE::%victim's uuid%::%{_vClass}%} is set: # their ultimate is currently active — flag it to stop immediately rather than continuing to run/deal damage after death. Checked inside each class's own ultimate loop (mighty.sk already had its own version of this; this generalizes it to every class).
-		set {godlike-ULT-CANCEL::%victim's uuid%::%{_vClass}%} to true
+	if {-godlike-ULT-USE::%victim's uuid%::%{_vClass}%} is set: # their ultimate is currently active — flag it to stop immediately rather than continuing to run/deal damage after death. Checked inside each class's own ultimate loop (mighty.sk already had its own version of this; this generalizes it to every class).
+		set {-godlike-ULT-CANCEL::%victim's uuid%::%{_vClass}%} to true
 	if {_vClass} is "SB": # spellbreaker.sk — a Spell Breaker's running stolen ultimate is filed under the stolen class's code, so stop that one
 		loop {menu::classlist::*}:
-			if {godlike-ULT-USE::%victim's uuid%::%loop-value%} is set:
-				set {godlike-ULT-CANCEL::%victim's uuid%::%loop-value%} to true
+			if {-godlike-ULT-USE::%victim's uuid%::%loop-value%} is set:
+				set {-godlike-ULT-CANCEL::%victim's uuid%::%loop-value%} to true
 
 	# Only the victim's actual registered match opponent can trigger kill-crediting
 	# below — guards against a bystander in the arena (e.g. an admin) accidentally
@@ -117,11 +117,11 @@ on death of player: # ----------------------------------------------------------
 	wait 1 tick
 	if {_attacker} is a player:
 		heal {_attacker}
-		set {_sCurr} to {stamina::%{_attacker}'s uuid%::curr}
+		set {_sCurr} to {-stamina::%{_attacker}'s uuid%::curr}
 		if {_sCurr} > 600:
-			set {stamina::%{_attacker}'s uuid%::curr} to 900
+			set {-stamina::%{_attacker}'s uuid%::curr} to 900
 		else:
-			add 300 to {stamina::%{_attacker}'s uuid%::curr}
+			add 300 to {-stamina::%{_attacker}'s uuid%::curr}
 		actionBar({_attacker}) # 03-resources.sk
 
 	if victim is a player:
@@ -253,11 +253,11 @@ function handleRespawnFlow(p: player, rejoin: boolean = false): # rejoin = back 
 
 	teleport {_p} to {playerSpawn::%{_uuid}%}
 	delete metadata value "attacker" of {_p} # a new life starts with no attacker: dying to the void or a jungle mob before the opponent has hit them gives the opponent no kill (anything an ability tagged while they were respawning is wiped here)
-	set {spawn-protection::%{_uuid}%} to true
+	set {-spawn-protection::%{_uuid}%} to true
 	set {pendingClassSelect::%{_uuid}%} to {_class} # picked up by the watcher below on a fresh, untainted execution — classSelect() (and updateMatchSidebar(), which it also triggers) internally call functions with "return", and calling them directly here risks the same class of bug this whole function already worked around once
 
 	wait 2 seconds
-	delete {spawn-protection::%{_uuid}%}
+	delete {-spawn-protection::%{_uuid}%}
 	if {respawning::%{_uuid}%} isn't set:
 		delete metadata value "attacker" of {_p} # same again once spawn protection ends — nothing can have hit them during it, but an opponent's swing or area ability could still have tagged them
 
@@ -272,9 +272,9 @@ every 5 ticks: # fires as its own fresh, non-delayed execution each time — saf
 				# Respawn mana refund: +50 mana, capped at max. Internal storage is
 				# scaled x10 (see 03-resources.sk), so +50 displayed mana = +500 here —
 				# same scaling the Mana Potion consumable already uses.
-				add 500 to {mana::%loop-player's uuid%::curr}
-				if {mana::%loop-player's uuid%::curr} > {mana::%loop-player's uuid%::max}:
-					set {mana::%loop-player's uuid%::curr} to {mana::%loop-player's uuid%::max}
+				add 500 to {-mana::%loop-player's uuid%::curr}
+				if {-mana::%loop-player's uuid%::curr} > {-mana::%loop-player's uuid%::max}:
+					set {-mana::%loop-player's uuid%::curr} to {-mana::%loop-player's uuid%::max}
 				actionBar(loop-player) # 03-resources.sk
 
 				updateMatchSidebar(loop-player) # 10-match-manager.sk
@@ -297,7 +297,7 @@ on player move: # freezes position while choosing a respawn class, but still all
 			cancel event
 
 on damage of player: # spawn protection — the protected player can't take damage for 2 seconds (they CAN deal damage during it)
-	if {spawn-protection::%victim's uuid%} is set: # invincible for the same 2-second window set in handleRespawnFlow()
+	if {-spawn-protection::%victim's uuid%} is set: # invincible for the same 2-second window set in handleRespawnFlow()
 		cancel event
 	if {respawning::%victim's uuid%} is set: # frozen/invisible while choosing a respawn class — see handleRespawnFlow() above
 		cancel event

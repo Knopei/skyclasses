@@ -28,7 +28,7 @@ on right click with mace: # TACTICAL
 	if name of player's held item is "%{wc}%Mighty Hammer":
 		if tacCHECK(player, {weapons::MH::TAC-COST}) is true:
 			mightyExplosion(player, 3)
-			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
+			set {-balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
 			loop all living entities in radius 3 around player: # tactical radius (was 3.5)
 				if loop-entity is not player:
 					if metadata value "levelTag" of loop-entity isn't set: # FIX: the level-tag armor stand riding the player (04-leveling.sk) sits at the player's own location, so it's always inside this radius — without this check it gets hit/pushed/teleported right along with real targets
@@ -44,32 +44,32 @@ on right click with mace: # TACTICAL
 							add {_hpDiff} to {_tacDmg}
 						if {_tacDmg} > 0:
 							damage loop-entity by {_tacDmg}
-			delete {balance-abilitySource::%player's uuid%}
+			delete {-balance-abilitySource::%player's uuid%}
 
 on drop of mace with priority low: # ULTIMATE
 	if name of event-item is "%{wc}%Mighty Hammer":
 		cancel event
-		if {mighty-DASH::%player's uuid%} is set: # mid-air follow-up dash, doesn't need level gating (part of an already-active ultimate)
+		if {-mighty-DASH::%player's uuid%} is set: # mid-air follow-up dash, doesn't need level gating (part of an already-active ultimate)
 			push player forward at speed 3
 			perkDashReduction(player) # 06-perks-general.sk — Reinforced Dash
 			play sound "entity_bat_takeoff" with volume 1 and pitch 1 at player
-			delete {mighty-DASH::%player's uuid%}
+			delete {-mighty-DASH::%player's uuid%}
 			stop
 		if classLevel(player, "MH") < 1:
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::MH::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::MH} is set:
+		if {-godlike-ULT-USE::%player's uuid%::MH} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::MH} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::MH}
+		else if {-godlike-ULT-CD::%player's uuid%::MH} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::MH}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::MH::ULT-COST}) is true:
 			ultMH(player, {_ultCooldown}, classLevel(player, "MH"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultMH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::MH} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::MH} to now
 	play sound "entity_bat_takeoff" with volume 1 and pitch 1 at {_p}
 	# leap
 	create a fake explosion at {_p}
@@ -77,13 +77,13 @@ function ultMH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	push {_p} upward at speed 2.5
 	perkDashReduction({_p}) # 06-perks-general.sk — Reinforced Dash
 	wait 10 ticks
-	set {mighty-DASH::%{_p}'s uuid%} to true
+	set {-mighty-DASH::%{_p}'s uuid%} to true
 
 	set {_shapes::circle} to a circle with radius 1
 	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(cyan, white, 1)
 
 	while {_p} isn't on ground: # longer air time = more slam damage + push
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::MH} is set: # dying mid-leap freezes the player with flight enabled, so they'd never naturally register as "on ground" to end this loop otherwise
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::MH} is set: # dying mid-leap freezes the player with flight enabled, so they'd never naturally register as "on ground" to end this loop otherwise
 			stop loop
 		set {_loc} to {_p}'s location
 		add 1 to y-coord of {_loc}
@@ -91,8 +91,8 @@ function ultMH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 		add 1 to {_airTime}
 		wait 1 tick
 	# slam
-	delete {mighty-DASH::%{_p}'s uuid%}
-	if {godlike-ULT-CANCEL::%{_p}'s uuid%::MH} isn't set:
+	delete {-mighty-DASH::%{_p}'s uuid%}
+	if {-godlike-ULT-CANCEL::%{_p}'s uuid%::MH} isn't set:
 		mightyExplosion({_p}, 3.5) # ultimate radius 5.5 -> 3.5 max
 		loop all living entities in radius 3.5 around {_p}:
 			if loop-entity is not {_p}:
@@ -110,9 +110,9 @@ function ultMH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 						set {_d} to 5
 					set {_v} to vector between {_p} and loop-entity
 					wait 1 tick
-					set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
+					set {-balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
 					damage loop-entity by {_d}
-					delete {balance-abilitySource::%{_p}'s uuid%}
+					delete {-balance-abilitySource::%{_p}'s uuid%}
 					set velocity of loop-entity to vector(0, 0, 0) # was "teleport loop-entity to loop-entity" — self-teleporting a PLAYER victim here would dismount their own level-tag armor stand exactly like it used to for the caster, since the levelTag exclusion above only protects the armor stand entity itself, not whichever player it happens to be riding
 					push loop-entity {_v} at speed {_d}
 	# PERK 2 — Fire Pit
@@ -147,19 +147,19 @@ function ultMH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 								set fire to loop-entity for 2 seconds
 			wait 5 tick
 
-	set {godlike-ULT-CD::%{_p}'s uuid%::MH} to now
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::MH}
-	delete {godlike-ULT-USE::%{_p}'s uuid%::MH}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::MH} to now
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::MH}
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::MH}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::MH}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::MH}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::MH}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::MH}
 	if {class::%{_p}'s uuid%} = "MH":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on death of player: # cancels the slam if Mighty dies mid-air during their ultimate
-	if {godlike-ULT-USE::%victim's uuid%::MH} is set:
-		set {godlike-ULT-CANCEL::%victim's uuid%::MH} to true
-		delete {mighty-DASH::%victim's uuid%}
+	if {-godlike-ULT-USE::%victim's uuid%::MH} is set:
+		set {-godlike-ULT-CANCEL::%victim's uuid%::MH} to true
+		delete {-mighty-DASH::%victim's uuid%}

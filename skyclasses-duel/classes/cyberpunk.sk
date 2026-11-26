@@ -25,15 +25,15 @@
 # ============================================
 
 function cbHasPhaseMana(p: player) :: boolean: # enough mana for Cyber Glitch, the same way ultCHECK() counts it (Spell Caster's cut included) — and not mana-locked
-	if {manaLock::%{_p}'s uuid%} is set:
-		if (unix timestamp of now) < {manaLock::%{_p}'s uuid%}:
+	if {-manaLock::%{_p}'s uuid%} is set:
+		if (unix timestamp of now) < {-manaLock::%{_p}'s uuid%}:
 			return false
 	set {_cost} to {weapons::CB::ULT-COST}
 	if {general-perk::%{_p}'s uuid%::selected} is "spellcaster":
 		remove {gp-ultManaReduction} from {_cost} # 06-perks-general.sk
 		if {_cost} < 0:
 			set {_cost} to 0
-	if {mana::%{_p}'s uuid%::curr} >= ({_cost} * 10):
+	if {-mana::%{_p}'s uuid%::curr} >= ({_cost} * 10):
 		return true
 	return false
 
@@ -216,7 +216,7 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 	if {_type} = "ult":
 		if {cb-ULT-count::%{_p}'s uuid%} > 0:
 			if cbHasPhaseMana({_p}) is false: # PASSIVE (Backup Power): no mana for it — 2 stamina instead, if they have it
-				if {stamina::%{_p}'s uuid%::curr} >= 600: # 2 stamina points (300 internal units each)
+				if {-stamina::%{_p}'s uuid%::curr} >= 600: # 2 stamina points (300 internal units each)
 					if staminaCHECK({_p}, 2) is true: # 03-resources.sk — spends the 2 stamina (and refuses while stamina is disabled)
 						set {_manaPass} to true
 						remove 1 from {cb-ULT-count::%{_p}'s uuid%}
@@ -257,16 +257,16 @@ function cbPhase(p: player, type: text): # shared by the ultimate (drop) — see
 		# silently blocking the move and fixes the tag floating at the old spot.
 		killLevelTag({_p}) # 04-leveling.sk
 		teleport {_p} to {_loc} # this should be a teleport, this is not used to set player velocity to 0
-		set {cbPhaseOK::%{_p}'s uuid%} to true # spellbreaker.sk — tells a stolen cast the phase happened (a "Target too far!" keeps the stolen ultimate)
+		set {-cbPhaseOK::%{_p}'s uuid%} to true # spellbreaker.sk — tells a stolen cast the phase happened (a "Target too far!" keeps the stolen ultimate)
 		updateNametag({_p}) # 04-leveling.sk — respawns the tag at the player's new (post-teleport) location
 		perkPhaseReduction({_p}) # 06-perks-general.sk — Reinforced Dash: half a second of damage reduction from the moment the phase is used
 		add potion effect of speed 3 without particles for 1 second to potion effects of {_p} # Speed III for 1 s after the phase (was Speed II for 2 s)
-		set {cbPhaseBoost::%{_p}'s uuid%} to (unix timestamp of now) + 1 # 03-resources.sk's speed ticker leaves it alone until then
+		set {-cbPhaseBoost::%{_p}'s uuid%} to (unix timestamp of now) + 1 # 03-resources.sk's speed ticker leaves it alone until then
 		cbUltParticle({_oldLoc}, {_loc})
 		wait 20 ticks # Speed III over — back to the permanent Skirmisher Speed II right away (no gap until the next ticker pass)
 		if {_p} is online:
 			if {class::%{_p}'s uuid%} is "CB" or "SB": # (SB: a Spell Breaker's stolen phase — also a Skirmisher)
-				if (unix timestamp of now) >= {cbPhaseBoost::%{_p}'s uuid%}:
+				if (unix timestamp of now) >= {-cbPhaseBoost::%{_p}'s uuid%}:
 					add potion effect of speed 2 without particles for 1 seconds to potion effects of {_p}
 
 on right click with diamond sword: # TAC
@@ -283,7 +283,7 @@ on damage of living entity: # Malicious Dart hit effect — the damage itself (w
 				updateAttacker({_attacker}, victim)
 				add potion effect of speed 2 without particles for 2 seconds to potion effects of {_attacker} # TAC rewards the shooter with a speed burst
 				if victim is a player:
-					set {manaLock::%victim's uuid%} to (unix timestamp of now) + 3 # 03-resources.sk — no mana for a tactical or ultimate for 3 seconds
+					set {-manaLock::%victim's uuid%} to (unix timestamp of now) + 3 # 03-resources.sk — no mana for a tactical or ultimate for 3 seconds
 					send action bar "&9Mana disabled for 3 seconds!" to victim
 					play sound "BLOCK_BEACON_DEACTIVATE" with volume 1 and pitch 1.5 to victim
 					draw 15 of dust_color_transition using dustTransition(cyan, blue, 0.75) at victim with offset vector(0.4, 1, 0.4) with extra 0
@@ -306,12 +306,12 @@ function cbULT(p: player, id: string): # background charge-recharge loop — see
 		if {cb-ULT-count::%{_uuid}%} >= 2:
 			wait 1 second # already at max charges — nothing to recharge, just idle-check rather than spinning a full cooldown timer for no reason
 		else:
-			set {godlike-ULT-CD::%{_uuid}%::CB} to now # kept in sync purely so 03-resources.sk's actionBar() ULT%% readout reflects the next charge's recharge progress
+			set {-godlike-ULT-CD::%{_uuid}%::CB} to now # kept in sync purely so 03-resources.sk's actionBar() ULT%% readout reflects the next charge's recharge progress
 			set {_ultCooldown} to cbCalcCooldownULT({_p})
 			wait {_ultCooldown}
 
 			if {class-ID::%{_uuid}%} = {_id}:
-				delete {godlike-ULT-CD::%{_uuid}%::CB}
+				delete {-godlike-ULT-CD::%{_uuid}%::CB}
 
 				if {cb-ULT-count::%{_uuid}%} < 2:
 					add 1 to {cb-ULT-count::%{_uuid}%}
@@ -351,8 +351,8 @@ on damage of player with priority low: # suffocation mitigate — phasing into a
 	if {class::%victim's uuid%} = "CB":
 		set {_cb} to true
 	else if {class::%victim's uuid%} = "SB": # spellbreaker.sk — right after a stolen phase
-		if {cbPhaseBoost::%victim's uuid%} is set:
-			if (unix timestamp of now) < ({cbPhaseBoost::%victim's uuid%} + 2):
+		if {-cbPhaseBoost::%victim's uuid%} is set:
+			if (unix timestamp of now) < ({-cbPhaseBoost::%victim's uuid%} + 2):
 				set {_cb} to true
 	if {_cb} is true:
 		set {_cause} to "%event-damagecause%"

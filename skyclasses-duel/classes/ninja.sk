@@ -28,7 +28,7 @@ on right click with nether star or diamond sword: # TACTICAL
 				set {_dy} to 0 - (sin(pitch of {_l}) * 1.75)
 				set {_dz} to {_xz} * cos(yaw of {_l}) * 1.75
 				set velocity of shot projectile to vector({_dx}, {_dy}, {_dz}) # vector()'s parser here only accepts plain values for x/y/z, not inline math — hence computing each component into its own variable first
-				if {godlike-ULT-USE::%player's uuid%::NS} is set:
+				if {-godlike-ULT-USE::%player's uuid%::NS} is set:
 					if classLevel(player, "NS") >= 3: # Perk 2 (Fiery Shurikens)
 						set metadata value "fire" of shot projectile to true
 						ignite shot projectile
@@ -42,7 +42,7 @@ on right click with nether star or diamond sword: # TACTICAL
 
 				wait 3 tick
 			wait 3 seconds # every shuriken of this throw has landed by now
-			delete {nsHit::%{_cast}%::*}
+			delete {-nsHit::%{_cast}%::*}
 
 on damage of living entity: # ignites the victim if hit by a fire-charged shuriken
 	if event-damagecause is a projectile:
@@ -61,20 +61,20 @@ on drop of nether star with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::NS::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::NS} is set:
+		if {-godlike-ULT-USE::%player's uuid%::NS} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::NS} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::NS}
+		else if {-godlike-ULT-CD::%player's uuid%::NS} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::NS}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::NS::ULT-COST}) is true:
 			ultNS(player, {_ultCooldown}, classLevel(player, "NS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultNS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::NS} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::NS} to now
 	play sound "entity_ender_dragon_growl" with volume 5 and pitch 1.5 at {_p}
 	wait 20 ticks # 1s telegraph after the sound, before the speed/jump buffs and katana swap actually apply — gives the opponent a moment to react
-	if {godlike-ULT-CANCEL::%{_p}'s uuid%::NS} isn't set: # died during the telegraph window (09-death-match.sk) — skip straight to cleanup below rather than granting buffs/swapping weapons on a dead player
+	if {-godlike-ULT-CANCEL::%{_p}'s uuid%::NS} isn't set: # died during the telegraph window (09-death-match.sk) — skip straight to cleanup below rather than granting buffs/swapping weapons on a dead player
 		add potion effect of speed 3 without particles for 8 seconds to potion effects of {_p}
 		add potion effect of jump boost 4 without particles for 8 seconds to potion effects of {_p}
 		wait 5 ticks
@@ -92,7 +92,7 @@ function ultNS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 					stop loop
 
 	loop 32 times: # 32 x 5 ticks = 8 seconds (was 40 = 10)
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::NS} is set:
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::NS} is set:
 			stop loop
 		set {_loc} to {_p}'s location
 		add 1 to y-coord of {_loc}
@@ -108,15 +108,15 @@ function ultNS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 			set {_i} to index of loop-value
 			set slot {_i} of {_p}'s inventory to {_back}
 
-	set {godlike-ULT-CD::%{_p}'s uuid%::NS} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::NS}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::NS}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::NS} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::NS}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::NS}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::NS}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::NS}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::NS}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::NS}
 	if {class::%{_p}'s uuid%} = "NS":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
@@ -128,7 +128,7 @@ on damage of living entity: # Ninja Katana form always ignites on hit
 		play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 0.5 at victim
 
 function nkStamina(p: player): # stamina-dash follow-up while the ultimate (katana form) is active
-	if {godlike-ULT-USE::%{_p}'s uuid%::NS} is set:
+	if {-godlike-ULT-USE::%{_p}'s uuid%::NS} is set:
 		play sound "ITEM_FIRECHARGE_USE" at volume 2 at pitch 1 at {_p}
 		set {_size} to 0.5
 

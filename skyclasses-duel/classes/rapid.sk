@@ -10,7 +10,7 @@
 # Perk 2 (level 3) "Overheat": arrows ignite near the end of the rapid-fire ultimate.
 #
 # Cleanup notes:
-# - The original file checked {godlike-ULT-USE::%player's uuid%::WH} (a leftover
+# - The original file checked {-godlike-ULT-USE::%player's uuid%::WH} (a leftover
 #   copy-paste from the removed Warden class) instead of ::RB — fixed here.
 # - Removed a stray debug "broadcast {_ultCooldown}" line.
 # ============================================
@@ -30,17 +30,17 @@ on drop of stone sword with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::RB::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::RB} is set:
+		if {-godlike-ULT-USE::%player's uuid%::RB} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::RB} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::RB}
+		else if {-godlike-ULT-CD::%player's uuid%::RB} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::RB}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::RB::ULT-COST}) is true:
 			ultRB(player, {_ultCooldown}, classLevel(player, "RB"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultRB(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::RB} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::RB} to now
 
 	set {_opponent} to {matchOpponent::%{_p}'s uuid%} # 09-death-match.sk / 10-match-manager.sk
 	play sound "entity_ender_dragon_growl" with volume 5 and pitch 2 to {_p} # "to" (not "at") so it reaches the opponent below regardless of in-game distance
@@ -67,7 +67,7 @@ function ultRB(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	set {_speed} to 0.5
 	set {_shotNum} to 0
 	loop 25 times: # fires every 4 ticks now instead of every 2 — halved the loop count to keep the same 5-second total duration
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::RB} is set:
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::RB} is set:
 			stop loop
 		add 1 to {_shotNum} # "loop-index" only works on list loops ("loop {list::*}:"), not a numeric "loop X times:" like this one — tracking the shot number by hand instead
 		if name of {_p}'s held item is "%{wc}%Rapid Bow":
@@ -111,15 +111,15 @@ function ultRB(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 				set slot {_i} of {_p}'s inventory to {_back}
 				stop loop
 
-	set {godlike-ULT-CD::%{_p}'s uuid%::RB} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::RB}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::RB}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::RB} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::RB}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::RB}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::RB}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::RB}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::RB}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::RB}
 	if {class::%{_p}'s uuid%} = "RB":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
@@ -165,21 +165,21 @@ function rbPSS(p: player): # PASSIVE "Longshot" arrow — fired by the "on left 
 on left click with priority high: # PASSIVE — when ready, a swing that lands as melee gets the empowered damage (08-damage.sk consumes the charge on that hit); a swing that doesn't land fires the arrow instead
 	if name of player's held item is "%{wc}%Rapid Dagger":
 		if attack cooldown of player >= 0.75:
-			if {rapid-attack::%player's uuid%} = 3:
+			if {-rapid-attack::%player's uuid%} = 3:
 				wait 2 ticks # the melee damage event (if the swing connected) is processed right after this click — give it time to consume the charge first
-				if {rapid-attack::%player's uuid%} = 3: # still charged => nothing was hit in melee
-					delete {rapid-attack::%player's uuid%}
+				if {-rapid-attack::%player's uuid%} = 3: # still charged => nothing was hit in melee
+					delete {-rapid-attack::%player's uuid%}
 					set level of player to 0
 					set level progress of player to 0
 					rbPSS(player)
 
 function rbCHECK(a: player): # called from 08-damage.sk's dmgUpdate() on every landed RB melee hit — increments the passive's hit counter
 	if name of {_a}'s held item is "%{wc}%Rapid Dagger":
-		if {rapid-attack::%{_a}'s uuid%} = 3:
-			delete {rapid-attack::%{_a}'s uuid%}
+		if {-rapid-attack::%{_a}'s uuid%} = 3:
+			delete {-rapid-attack::%{_a}'s uuid%}
 			set level of {_a} to 0
 			set level progress of {_a} to 0
 		else:
-			add 1 to {rapid-attack::%{_a}'s uuid%}
+			add 1 to {-rapid-attack::%{_a}'s uuid%}
 			set level of {_a} to 0
 			add 0.33 to level progress of {_a}

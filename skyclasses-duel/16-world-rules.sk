@@ -181,40 +181,40 @@ on BlockPhysicsEvent:
 	if {disableTrapdoor} isn't set: # command below
 		set {_block} to event.getSourceBlock()
 		set {_loc} to location of {_block}
-		if {stopPhysics::%{_loc}%} isn't set: # fixes inf loop
+		if {-stopPhysics::%{_loc}%} isn't set: # fixes inf loop
 			if "%{_block}%" contains "trapdoor":
 				if block data tag "open" of {_block} is true: # makes closed trapdoors stay closed
-					set {stopPhysics::%{_loc}%} to true
+					set {-stopPhysics::%{_loc}%} to true
 					set {_update} to {_block}
 					set block data tag "open" of {_update} to false
 					wait 1 tick
-					delete {stopPhysics::%{_loc}%}
+					delete {-stopPhysics::%{_loc}%}
 				else if block data tag "open" of {_block} is false: # makes open trapdoors stay open
-					set {stopPhysics::%{_loc}%} to true
+					set {-stopPhysics::%{_loc}%} to true
 					set {_update} to {_block}
 					set block data tag "open" of {_update} to true
 					wait 1 tick
-					delete {stopPhysics::%{_loc}%}
+					delete {-stopPhysics::%{_loc}%}
 			else if "%{_block}%" contains "fence gate":
 				if block data tag "open" of {_block} is true: # makes closed fence gate stay closed
-					set {stopPhysics::%{_loc}%} to true
+					set {-stopPhysics::%{_loc}%} to true
 					set {_update} to {_block}
 					set block data tag "open" of {_update} to false
 					wait 1 tick
-					delete {stopPhysics::%{_loc}%}
+					delete {-stopPhysics::%{_loc}%}
 				else if block data tag "open" of {_block} is false: # makes open fence gate stay open
-					set {stopPhysics::%{_loc}%} to true
+					set {-stopPhysics::%{_loc}%} to true
 					set {_update} to {_block}
 					set block data tag "open" of {_update} to true
 					wait 1 tick
-					delete {stopPhysics::%{_loc}%}
+					delete {-stopPhysics::%{_loc}%}
 			else if {_block} is a candle:
 				if block data tag "lit" of {_block} is false: # makes lit candles stay lit
-					set {stopPhysics::%{_loc}%} to true
+					set {-stopPhysics::%{_loc}%} to true
 					set {_update} to {_block}
 					set block data tag "lit" of {_update} to true
 					wait 1 tick
-					delete {stopPhysics::%{_loc}%}
+					delete {-stopPhysics::%{_loc}%}
 
 command /disabletrapdoor:
 	permission: op

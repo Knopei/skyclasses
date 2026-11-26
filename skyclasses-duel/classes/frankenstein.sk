@@ -27,7 +27,7 @@ on right click with mace: # TACTICAL
 
 			set {_loc} to location of player
 			play sound "entity.warden.attack_impact" with volume 3 and pitch 0.5 at {_loc}
-			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
+			set {-balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
 			loop all living entities in radius 2.5 around {_loc}:
 				if loop-entity is not player:
 					updateAttacker(player, loop-entity)
@@ -38,7 +38,7 @@ on right click with mace: # TACTICAL
 				set {_shapes::circle} to a circle with radius 2.5
 				set particle of {_shapes::circle} to 2 of dust_color_transition particle using dustTransition(light gray, blue, 1)
 				draw shape {_shapes::circle} at {_loc}
-			delete {balance-abilitySource::%player's uuid%}
+			delete {-balance-abilitySource::%player's uuid%}
 
 on drop of mace with priority low: # ULTIMATE
 	if name of event-item is "%{wc}%Frankenstein Hammer":
@@ -47,17 +47,17 @@ on drop of mace with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::FH::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::FH} is set:
+		if {-godlike-ULT-USE::%player's uuid%::FH} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::FH} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::FH}
+		else if {-godlike-ULT-CD::%player's uuid%::FH} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::FH}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::FH::ULT-COST}) is true:
 			ultFH(player, {_ultCooldown}, classLevel(player, "FH"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultFH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::FH} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::FH} to now
 	if {_lvl} >= 3: # Perk 2 (Undying)
 		add potion effect of absorption 2 without particles for 4 seconds to potion effects of {_p}
 	else:
@@ -67,7 +67,7 @@ function ultFH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, blue, 0.75)
 	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
 	while (absorption amount of {_p}) > 0:
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::FH} is set:
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::FH} is set:
 			stop loop
 		add potion effect of slowness 2 without particles for 5 ticks to potion effects of {_p} # the shield's drawback — lasts exactly as long as the absorption does
 		set {_loc} to {_p}'s location
@@ -76,21 +76,21 @@ function ultFH(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 		draw shapes {_shapes::*} at {_loc}
 		wait 2 tick
 
-	set {godlike-ULT-CD::%{_p}'s uuid%::FH} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::FH}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::FH}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::FH} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::FH}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::FH}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::FH}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::FH}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::FH}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::FH}
 	if {class::%{_p}'s uuid%} = "FH":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 function fhULT(a: living entity, p: player, dmg: number) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
 	fhULTWorker({_a}, {_p}, {_dmg})
-	return {fhULTResult}
+	return {-fhULTResult}
 
 function fhULTWorker(a: living entity, p: player, dmg: number): # {_p} is the Frankenstein player; called from the damage pipeline while their ultimate is active
 	set {_v} to vector from {_p} to {_a}
@@ -104,16 +104,16 @@ function fhULTWorker(a: living entity, p: player, dmg: number): # {_p} is the Fr
 	play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_a}
 	updateAttacker({_p}, {_a})
 	set {_dmg} to {_dmg} / 2
-	set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk — this reflected hit is Frankenstein's ultimate dealing damage back to the original attacker
+	set {-balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk — this reflected hit is Frankenstein's ultimate dealing damage back to the original attacker
 	damage {_a} by {_dmg}
-	delete {balance-abilitySource::%{_p}'s uuid%}
-	set {fhULTResult} to 0
+	delete {-balance-abilitySource::%{_p}'s uuid%}
+	set {-fhULTResult} to 0
 
 on damage of player: # visual cue while the ultimate's shield is absorbing hits
 	if (absorption amount of victim) > 0:
 		if {class::%victim's uuid%} = "FH" or "SB": # SB: a Spell Breaker's stolen It's Alive! (absorption outside it is Paladin-style, so it needs the ultimate running)
 			if {class::%victim's uuid%} = "SB":
-				if {godlike-ULT-USE::%victim's uuid%::FH} isn't set:
+				if {-godlike-ULT-USE::%victim's uuid%::FH} isn't set:
 					stop
 			set {_loc} to location of victim
 			set {_x} to random number between -1 and 1

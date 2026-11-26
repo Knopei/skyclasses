@@ -18,7 +18,7 @@
 #   with Healthy Boy, 1 heart lower (its max 1 heart lower too); without it, 1 heart higher (its max 1 heart higher).
 #   It takes the same damage as the real health, except for the damage bonuses that scale with the target's max health OVER the
 #   attacker's (Mighty tactical, Zeus lightning, Rapid empowered hits, Viking level 2, Executioner level 3): the extra heart changes those,
-#   so the shadow takes that much less (with Healthy Boy) or more (without). Stored as an offset from the real health ({hbDelta::uuid}),
+#   so the shadow takes that much less (with Healthy Boy) or more (without). Stored as an offset from the real health ({-hbDelta::uuid}),
 #   reset at every death.
 #
 # SAVE (players WITH Healthy Boy): during a fight their shadow health drops to 0 or below while they're still alive (without the heart
@@ -76,16 +76,16 @@ function hbBaseMelee(c: text) :: number: # a class's base melee damage = its mel
 
 function hbShadowSync(p: player): # makes sure the shadow offset exists, and keeps the shadow under its own max (heals that would overfill it)
 	set {_u} to {_p}'s uuid
-	if {hbDelta::%{_u}%} isn't set:
+	if {-hbDelta::%{_u}%} isn't set:
 		if hbHas({_p}) is true:
-			set {hbDelta::%{_u}%} to -1
+			set {-hbDelta::%{_u}%} to -1
 		else:
-			set {hbDelta::%{_u}%} to 1
+			set {-hbDelta::%{_u}%} to 1
 	set {_smax} to (max health of {_p}) + 1
 	if hbHas({_p}) is true:
 		set {_smax} to (max health of {_p}) - 1
-	if ((health of {_p}) + {hbDelta::%{_u}%}) > {_smax}:
-		set {hbDelta::%{_u}%} to {_smax} - (health of {_p})
+	if ((health of {_p}) + {-hbDelta::%{_u}%}) > {_smax}:
+		set {-hbDelta::%{_u}%} to {_smax} - (health of {_p})
 
 function hbScaleNote(a: entity, v: entity, rate: number): # called right before damage from a max-health-scaling bonus lands on a player — records how much the extra heart changes it
 	if {_v} is a player:
@@ -104,7 +104,7 @@ function hbScaleNote(a: entity, v: entity, rate: number): # called right before 
 				set {_alt} to 0
 			if {_alt} > 4:
 				set {_alt} to 4
-			set {hbAdj::%{_v}'s uuid%} to ({_with} - {_alt}) * {_rate} # added to the shadow offset when the hit lands
+			set {-hbAdj::%{_v}'s uuid%} to ({_with} - {_alt}) * {_rate} # added to the shadow offset when the hit lands
 
 function hbDotLeft(p: player) :: number: # hearts of burn / wither damage still to come on this player (poison is left out — it can't kill)
 	set {_d} to ({_p}.getFireTicks() / 20) * 0.5 # fire: half a heart per second
@@ -124,62 +124,62 @@ on damage of player with priority monitor:
 	set {_v} to victim
 	set {_u} to {_v}'s uuid
 	if event is cancelled:
-		delete {hbAdj::%{_u}%} # a cancelled hit never lands, so its note doesn't either
-		delete {hbExec::%{_u}%}
+		delete {-hbAdj::%{_u}%} # a cancelled hit never lands, so its note doesn't either
+		delete {-hbExec::%{_u}%}
 		stop
 	if {inMatch::%{_u}%} isn't set:
-		delete {hbAdj::%{_u}%}
-		delete {hbExec::%{_u}%}
+		delete {-hbAdj::%{_u}%}
+		delete {-hbExec::%{_u}%}
 		stop
 	if {respawning::%{_u}%} is set:
-		delete {hbAdj::%{_u}%}
-		delete {hbExec::%{_u}%}
+		delete {-hbAdj::%{_u}%}
+		delete {-hbExec::%{_u}%}
 		stop
 	hbShadowSync({_v})
-	if {hbAdj::%{_u}%} is set:
-		add {hbAdj::%{_u}%} to {hbDelta::%{_u}%}
-		delete {hbAdj::%{_u}%}
+	if {-hbAdj::%{_u}%} is set:
+		add {-hbAdj::%{_u}%} to {-hbDelta::%{_u}%}
+		delete {-hbAdj::%{_u}%}
 	set {_dmg} to damage
 	set {_abs} to ({_v}.getAbsorptionAmount()) / 2
 	set {_hpLoss} to {_dmg} - {_abs}
 	if {_hpLoss} < 0:
 		set {_hpLoss} to 0
 	set {_hp} to health of {_v}
-	# Skirmisher Execute (08-damage.sk): when the hit came from a level 2+ Skirmisher, {hbExec::uuid} holds its damage BEFORE any execute. The
+	# Skirmisher Execute (08-damage.sk): when the hit came from a level 2+ Skirmisher, {-hbExec::uuid} holds its damage BEFORE any execute. The
 	# shadow takes that damage and follows the same rule — at 0.5 hearts or less after the hit, the shadow is executed too.
 	set {_sLoss} to {_hpLoss}
 	set {_exec} to false
-	if {hbExec::%{_u}%} is set:
+	if {-hbExec::%{_u}%} is set:
 		set {_exec} to true
-		set {_sLoss} to {hbExec::%{_u}%} - {_abs}
+		set {_sLoss} to {-hbExec::%{_u}%} - {_abs}
 		if {_sLoss} < 0:
 			set {_sLoss} to 0
-		delete {hbExec::%{_u}%}
-	set {_shadowAfter} to ({_hp} + {hbDelta::%{_u}%}) - {_sLoss}
+		delete {-hbExec::%{_u}%}
+	set {_shadowAfter} to ({_hp} + {-hbDelta::%{_u}%}) - {_sLoss}
 	if {_exec} is true:
 		if {_shadowAfter} <= 0.5:
 			set {_shadowAfter} to 0
 	set {_opp} to {matchOpponent::%{_u}%}
 	set {_inFight} to false
-	if {hbFight} is set:
-		if {hbFightClass::%{_u}%} is set:
+	if {-hbFight} is set:
+		if {-hbFightClass::%{_u}%} is set:
 			set {_inFight} to true
 	if {_hpLoss} < {_hp}: # survives this hit
 		if {_inFight} is true:
-			if {hbFightHB::%{_u}%} is true:
+			if {-hbFightHB::%{_u}%} is true:
 				if {_shadowAfter} <= 0:
-					set {hbFightSave::%{_u}%} to true # without Healthy Boy they'd be dead right now
+					set {-hbFightSave::%{_u}%} to true # without Healthy Boy they'd be dead right now
 		stop
 	# ---- a lethal hit ----
 	if {_inFight} isn't true:
 		stop
-	if {hbFightHB::%{_u}%} is true:
+	if {-hbFightHB::%{_u}%} is true:
 		stop
 	set {_killer} to metadata value "attacker" of {_v}
 	if {_killer} isn't {_opp}:
 		stop
-	set {_vc} to {hbFightClass::%{_u}%}
-	set {_kc} to {hbFightClass::%{_killer}'s uuid%}
+	set {_vc} to {-hbFightClass::%{_u}%}
+	set {_kc} to {-hbFightClass::%{_killer}'s uuid%}
 	hbAdd("deaths-no", {_vc}, {_kc})
 	if ({_shadowAfter} - hbDotLeft({_v})) <= 0: # one more heart wouldn't have outlasted this hit plus the burn / wither still to come
 		stop
@@ -187,39 +187,39 @@ on damage of player with priority monitor:
 	if {_kHp} <= hbBaseMelee({_vc}): # the killer was one hit from death
 		hbAdd("nearmiss", {_vc}, {_kc})
 	else: # might still be a trade or a void fall — confirmed by the killer's own death soon after (hbOnDeath)
-		set {hbPending::%{_killer}'s uuid%::at} to unix timestamp of now
-		set {hbPending::%{_killer}'s uuid%::vc} to {_vc}
-		set {hbPending::%{_killer}'s uuid%::kc} to {_kc}
+		set {-hbPending::%{_killer}'s uuid%::at} to unix timestamp of now
+		set {-hbPending::%{_killer}'s uuid%::vc} to {_vc}
+		set {-hbPending::%{_killer}'s uuid%::kc} to {_kc}
 
 # ---- fights ----
 
 function hbFightHit(a: player, v: player): # 20-combat.sk's combatCheck() — every damaging hit between the two match players
-	if {hbFight} isn't set:
-		set {hbFight} to true
+	if {-hbFight} isn't set:
+		set {-hbFight} to true
 		loop {_a} and {_v}:
 			set {_u} to loop-value's uuid
-			set {hbFightClass::%{_u}%} to {class::%{_u}%}
-			set {hbFightHB::%{_u}%} to hbHas(loop-value)
-			delete {hbFightSave::%{_u}%}
+			set {-hbFightClass::%{_u}%} to {class::%{_u}%}
+			set {-hbFightHB::%{_u}%} to hbHas(loop-value)
+			delete {-hbFightSave::%{_u}%}
 			pfFightStart(loop-value) # Perk & Consumable Fight Lift (below)
 			ecFightStart(loop-value) # Enchanted Consumables Value (below)
 			rdFightStart(loop-value) # (below) — Reinforced Movement Value shares these fights
-			add loop-value to {hbFightPlayers::*}
-	set {hbFightLast} to unix timestamp of now
+			add loop-value to {-hbFightPlayers::*}
+	set {-hbFightLast} to unix timestamp of now
 
 function hbEndFight(loser: object): # loser = the player who died in it ("none" when both escaped); winner = whoever killed them
-	if {hbFight} isn't set:
+	if {-hbFight} isn't set:
 		stop
-	set {_ps::*} to {hbFightPlayers::*}
-	set {_winner} to {hbFightWinner}
+	set {_ps::*} to {-hbFightPlayers::*}
+	set {_winner} to {-hbFightWinner}
 	loop {_ps::*}:
 		set {_p} to loop-value
 		set {_u} to {_p}'s uuid
-		set {_c} to {hbFightClass::%{_u}%}
+		set {_c} to {-hbFightClass::%{_u}%}
 		set {_o} to ""
 		loop {_ps::*}:
 			if loop-value-2 isn't {_p}:
-				set {_o} to {hbFightClass::%loop-value-2's uuid%}
+				set {_o} to {-hbFightClass::%loop-value-2's uuid%}
 		if {_c} is set:
 			if {_o} is not "":
 				set {_won} to false
@@ -230,11 +230,11 @@ function hbEndFight(loser: object): # loser = the player who died in it ("none" 
 				if {_loser} is a player:
 					if {_loser} is {_p}:
 						set {_survived} to false
-				if {hbFightHB::%{_u}%} is true:
+				if {-hbFightHB::%{_u}%} is true:
 					hbAdd("fights-hb", {_c}, {_o})
 					if {_won} is true:
 						hbAdd("wins-hb", {_c}, {_o})
-					if {hbFightSave::%{_u}%} is set:
+					if {-hbFightSave::%{_u}%} is set:
 						if {_survived} is true: # won it or escaped it alive
 							hbAdd("saves", {_c}, {_o})
 				else:
@@ -244,21 +244,21 @@ function hbEndFight(loser: object): # loser = the player who died in it ("none" 
 				rdFightEnd({_p}, {_c}, {_o}, {_won}, {_survived}) # Reinforced Movement Value (below)
 				pfFightEnd({_p}, {_c}, {_o}, {_won}) # Perk & Consumable Fight Lift (below)
 				ecFightEnd({_p}, {_c}, {_o}, {_won}, {_survived}) # Enchanted Consumables Value (below)
-		delete {hbFightClass::%{_u}%}
-		delete {hbFightHB::%{_u}%}
-		delete {hbFightSave::%{_u}%}
-	delete {hbFight}
-	delete {hbFightLast}
-	delete {hbFightWinner}
-	delete {hbFightPlayers::*}
+		delete {-hbFightClass::%{_u}%}
+		delete {-hbFightHB::%{_u}%}
+		delete {-hbFightSave::%{_u}%}
+	delete {-hbFight}
+	delete {-hbFightLast}
+	delete {-hbFightWinner}
+	delete {-hbFightPlayers::*}
 
 function hbOnDeath(v: player, killer: object = "none", isVoid: boolean = false): # (defaults: Skript skips a function call whose argument is empty, and the killer is often unset) # 09-death-match.sk — every in-match death, BEFORE the attacker metadata is cleared
 	set {_u} to {_v}'s uuid
 	ecOnDeath({_v}) # (below) — Enchanted Consumables Value: a fresh shadow
 	rdFlushLife({_v}) # (below) — Reinforced Movement Value: this life's totals
 	# a near miss waiting on this player (they had just killed their opponent): a trade within 1 s, or a void fall within 3 s, confirms it
-	if {hbPending::%{_u}%::at} is set:
-		set {_age} to (unix timestamp of now) - {hbPending::%{_u}%::at}
+	if {-hbPending::%{_u}%::at} is set:
+		set {_age} to (unix timestamp of now) - {-hbPending::%{_u}%::at}
 		set {_ok} to false
 		if {_age} <= 1:
 			set {_ok} to true
@@ -266,38 +266,38 @@ function hbOnDeath(v: player, killer: object = "none", isVoid: boolean = false):
 			if {_isVoid} is true:
 				set {_ok} to true
 		if {_ok} is true:
-			hbAdd("nearmiss", {hbPending::%{_u}%::vc}, {hbPending::%{_u}%::kc})
-		delete {hbPending::%{_u}%::*}
-	delete {hbDelta::%{_u}%} # a new life gets a fresh shadow
-	if {hbFight} is set:
-		if {hbFightClass::%{_u}%} is set: # they were in the current fight — it ends here
+			hbAdd("nearmiss", {-hbPending::%{_u}%::vc}, {-hbPending::%{_u}%::kc})
+		delete {-hbPending::%{_u}%::*}
+	delete {-hbDelta::%{_u}%} # a new life gets a fresh shadow
+	if {-hbFight} is set:
+		if {-hbFightClass::%{_u}%} is set: # they were in the current fight — it ends here
 			if {_killer} is a player:
 				if {_killer} is {matchOpponent::%{_u}%}:
-					set {hbFightWinner} to {_killer}
+					set {-hbFightWinner} to {_killer}
 			hbEndFight({_v})
 
 every 5 ticks: # a fight ends when 5 seconds pass with no hits between the two players — both escaped
-	if {hbFight} is set:
-		if {hbFightLast} is set:
-			if ((unix timestamp of now) - {hbFightLast}) >= 5:
+	if {-hbFight} is set:
+		if {-hbFightLast} is set:
+			if ((unix timestamp of now) - {-hbFightLast}) >= 5:
 				hbEndFight("none")
 
 function hbResetMatch(): # 10-match-manager.sk — match start / end: no fight or shadow carries over
-	delete {hbFight}
-	delete {hbFightLast}
-	delete {hbFightWinner}
-	delete {hbFightPlayers::*}
-	delete {hbFightClass::*}
-	delete {hbFightHB::*}
-	delete {hbFightSave::*}
-	delete {hbDelta::*}
-	delete {hbAdj::*}
-	delete {hbExec::*}
-	delete {hbPending::*}
+	delete {-hbFight}
+	delete {-hbFightLast}
+	delete {-hbFightWinner}
+	delete {-hbFightPlayers::*}
+	delete {-hbFightClass::*}
+	delete {-hbFightHB::*}
+	delete {-hbFightSave::*}
+	delete {-hbDelta::*}
+	delete {-hbAdj::*}
+	delete {-hbExec::*}
+	delete {-hbPending::*}
 	rdResetMatch() # (below)
 	ecResetMatch() # (below)
-	delete {pfPerk::*}
-	delete {pfCons::*}
+	delete {-pfPerk::*}
+	delete {-pfCons::*}
 
 # ---- PAGE: Healthy Boy Value ----
 
@@ -488,18 +488,18 @@ function rdActivated(p: player): # 06-perks-general.sk — Reinforced Movement j
 	set {_u} to {_p}'s uuid
 	if {inMatch::%{_u}%} isn't set:
 		stop
-	add 1 to {rdL::%{_u}%::acts}
-	delete {rdActUseful::%{_u}%} # this activation hasn't blocked anything yet
+	add 1 to {-rdL::%{_u}%::acts}
+	delete {-rdActUseful::%{_u}%} # this activation hasn't blocked anything yet
 
 function rdShadowStart(p: player, phase: boolean): # 06-perks-general.sk — a movement the cooldown / no-stacking rule stopped from triggering
 	set {_u} to {_p}'s uuid
 	if {inMatch::%{_u}%} isn't set:
 		stop
-	add 1 to {rdL::%{_u}%::btrig}
-	set {rdShadowHold::%{_u}%} to now # (re)starts the grace window
-	if {rdShadow::%{_u}%} is set: # already following one — the new movement only restarts its grace
+	add 1 to {-rdL::%{_u}%::btrig}
+	set {-rdShadowHold::%{_u}%} to now # (re)starts the grace window
+	if {-rdShadow::%{_u}%} is set: # already following one — the new movement only restarts its grace
 		stop
-	set {rdShadow::%{_u}%} to true
+	set {-rdShadow::%{_u}%} to true
 	loop 150 times: # same rules as perkDashReduction() / perkPhaseReduction(), including the 15-second cap
 		wait 2 ticks
 		if {_p} isn't online:
@@ -508,16 +508,16 @@ function rdShadowStart(p: player, phase: boolean): # 06-perks-general.sk — a m
 			stop loop
 		if {respawning::%{_u}%} is set:
 			stop loop
-		if {rdShadowHold::%{_u}%} isn't set:
+		if {-rdShadowHold::%{_u}%} isn't set:
 			stop loop
 		if {_phase} is true:
-			if difference between now and {rdShadowHold::%{_u}%} >= 10 ticks:
+			if difference between now and {-rdShadowHold::%{_u}%} >= 10 ticks:
 				stop loop
 		else if {_p} is on ground:
-			if difference between now and {rdShadowHold::%{_u}%} >= 8 ticks:
+			if difference between now and {-rdShadowHold::%{_u}%} >= 8 ticks:
 				stop loop
-	delete {rdShadow::%{_u}%}
-	delete {rdShadowHold::%{_u}%}
+	delete {-rdShadow::%{_u}%}
+	delete {-rdShadowHold::%{_u}%}
 
 function rdNote(v: living entity, pre: number): # 08-damage.sk's dmgUpdate(), right before the damage reduction step ({_pre} = the hit before it)
 	if {_v} is not a player:
@@ -530,36 +530,36 @@ function rdNote(v: living entity, pre: number): # 08-damage.sk's dmgUpdate(), ri
 	if {_pre} <= 0:
 		stop
 	set {_base} to 0 # Executioner's ult resistance (20%%) while its ult is running — only Reinforced Movement's extra share counts
-	if {godlike-ULT-USE::%{_u}%::EA} is set:
+	if {-godlike-ULT-USE::%{_u}%::EA} is set:
 		set {_base} to 20
 	set {_share} to ({gp-dmgReduction} - {_base}) / 100
 	if {_share} <= 0:
 		stop
 	if {rd-active::%{_u}%} is set:
-		if {playerDefense::%{_u}%} = {gp-dmgReduction}: # it really is reducing this hit
-			set {rdPrevNote::%{_u}%} to {_pre} * {_share}
+		if {-playerDefense::%{_u}%} = {gp-dmgReduction}: # it really is reducing this hit
+			set {-rdPrevNote::%{_u}%} to {_pre} * {_share}
 		stop
-	if {rdShadow::%{_u}%} is set:
-		set {rdBlockNote::%{_u}%} to {_pre} * {_share}
+	if {-rdShadow::%{_u}%} is set:
+		set {-rdBlockNote::%{_u}%} to {_pre} * {_share}
 
 on damage of player with priority monitor: # the hit landed: apply this hit's notes to the life and the fight
 	set {_v} to victim
 	set {_u} to {_v}'s uuid
-	if {rdPrevNote::%{_u}%} isn't set:
-		if {rdBlockNote::%{_u}%} isn't set:
-			if {rdFightRD::%{_u}%} isn't true:
+	if {-rdPrevNote::%{_u}%} isn't set:
+		if {-rdBlockNote::%{_u}%} isn't set:
+			if {-rdFightRD::%{_u}%} isn't true:
 				stop
 	if event is cancelled:
-		delete {rdPrevNote::%{_u}%}
-		delete {rdBlockNote::%{_u}%}
+		delete {-rdPrevNote::%{_u}%}
+		delete {-rdBlockNote::%{_u}%}
 		stop
 	if {inMatch::%{_u}%} isn't set:
-		delete {rdPrevNote::%{_u}%}
-		delete {rdBlockNote::%{_u}%}
+		delete {-rdPrevNote::%{_u}%}
+		delete {-rdBlockNote::%{_u}%}
 		stop
 	if {respawning::%{_u}%} is set:
-		delete {rdPrevNote::%{_u}%}
-		delete {rdBlockNote::%{_u}%}
+		delete {-rdPrevNote::%{_u}%}
+		delete {-rdBlockNote::%{_u}%}
 		stop
 	set {_dmg} to damage
 	set {_abs} to ({_v}.getAbsorptionAmount()) / 2
@@ -568,63 +568,63 @@ on damage of player with priority monitor: # the hit landed: apply this hit's no
 		set {_hpLoss} to 0
 	set {_hp} to health of {_v}
 	set {_inFight} to false
-	if {hbFight} is set: # the current fight (Healthy Boy section above)
-		if {hbFightClass::%{_u}%} is set:
-			if {rdFightRD::%{_u}%} is true:
+	if {-hbFight} is set: # the current fight (Healthy Boy section above)
+		if {-hbFightClass::%{_u}%} is set:
+			if {-rdFightRD::%{_u}%} is true:
 				set {_inFight} to true
 	if {_inFight} is true:
-		add {_dmg} to {rdF::%{_u}%::taken}
-	if {rdPrevNote::%{_u}%} is set:
-		set {_prev} to {rdPrevNote::%{_u}%}
-		delete {rdPrevNote::%{_u}%}
-		add {_prev} to {rdL::%{_u}%::prev}
-		if {rdActUseful::%{_u}%} isn't set: # the first hit this activation blocked
-			set {rdActUseful::%{_u}%} to true
-			add 1 to {rdL::%{_u}%::useful}
+		add {_dmg} to {-rdF::%{_u}%::taken}
+	if {-rdPrevNote::%{_u}%} is set:
+		set {_prev} to {-rdPrevNote::%{_u}%}
+		delete {-rdPrevNote::%{_u}%}
+		add {_prev} to {-rdL::%{_u}%::prev}
+		if {-rdActUseful::%{_u}%} isn't set: # the first hit this activation blocked
+			set {-rdActUseful::%{_u}%} to true
+			add 1 to {-rdL::%{_u}%::useful}
 		if {_inFight} is true:
-			add {_prev} to {rdF::%{_u}%::prev}
+			add {_prev} to {-rdF::%{_u}%::prev}
 			if {_hpLoss} < {_hp}: # survives — would the full hit have killed them?
 				set {_without} to ({_dmg} + {_prev}) - {_abs}
 				if {_without} >= {_hp}:
-					set {rdF::%{_u}%::save} to true
-	if {rdBlockNote::%{_u}%} is set:
-		set {_blk} to {rdBlockNote::%{_u}%}
-		delete {rdBlockNote::%{_u}%}
-		add {_blk} to {rdL::%{_u}%::block}
+					set {-rdF::%{_u}%::save} to true
+	if {-rdBlockNote::%{_u}%} is set:
+		set {_blk} to {-rdBlockNote::%{_u}%}
+		delete {-rdBlockNote::%{_u}%}
+		add {_blk} to {-rdL::%{_u}%::block}
 		if {_inFight} is true:
-			add {_blk} to {rdF::%{_u}%::block}
+			add {_blk} to {-rdF::%{_u}%::block}
 			if {_hpLoss} >= {_hp}: # dies to it — would the reduced hit have left them alive?
 				set {_with} to ({_dmg} - {_blk}) - {_abs}
 				if {_with} < {_hp}:
-					set {rdF::%{_u}%::msave} to true
+					set {-rdF::%{_u}%::msave} to true
 
 # ---- fights (started / ended by hbFightHit() / hbEndFight() above) ----
 
 function rdFightStart(p: player):
 	set {_u} to {_p}'s uuid
-	delete {rdF::%{_u}%::*}
-	set {rdFightRD::%{_u}%} to rdHas({_p})
+	delete {-rdF::%{_u}%::*}
+	set {-rdFightRD::%{_u}%} to rdHas({_p})
 
 function rdFightEnd(p: player, c: text, o: text, won: boolean, survived: boolean):
 	set {_u} to {_p}'s uuid
-	if {rdFightRD::%{_u}%} is true:
+	if {-rdFightRD::%{_u}%} is true:
 		rdAdd("fights-rd", {_c}, {_o}, 1)
 		if {_won} is true:
 			rdAdd("wins-rd", {_c}, {_o}, 1)
-		rdAdd("prev", {_c}, {_o}, bd({rdF::%{_u}%::prev}))
-		rdAdd("taken", {_c}, {_o}, bd({rdF::%{_u}%::taken}))
-		rdAdd("block", {_c}, {_o}, bd({rdF::%{_u}%::block}))
-		if {rdF::%{_u}%::save} is set:
+		rdAdd("prev", {_c}, {_o}, bd({-rdF::%{_u}%::prev}))
+		rdAdd("taken", {_c}, {_o}, bd({-rdF::%{_u}%::taken}))
+		rdAdd("block", {_c}, {_o}, bd({-rdF::%{_u}%::block}))
+		if {-rdF::%{_u}%::save} is set:
 			if {_survived} is true: # won it or escaped it alive
 				rdAdd("saves", {_c}, {_o}, 1)
-		if {rdF::%{_u}%::msave} is set:
+		if {-rdF::%{_u}%::msave} is set:
 			rdAdd("msaves", {_c}, {_o}, 1)
 	else:
 		rdAdd("fights-no", {_c}, {_o}, 1)
 		if {_won} is true:
 			rdAdd("wins-no", {_c}, {_o}, 1)
-	delete {rdF::%{_u}%::*}
-	delete {rdFightRD::%{_u}%}
+	delete {-rdF::%{_u}%::*}
+	delete {-rdFightRD::%{_u}%}
 
 # ---- lives ----
 
@@ -635,25 +635,25 @@ function rdFlushLife(p: player): # a life ends: its death (hbOnDeath above) or t
 		if {respawning::%{_u}%} isn't set:
 			if rdHas({_p}) is true:
 				rdAddLife("lives", {_c}, 1)
-				rdAddLife("lprev", {_c}, bd({rdL::%{_u}%::prev}))
-				rdAddLife("lblock", {_c}, bd({rdL::%{_u}%::block}))
-				rdAddLife("acts", {_c}, bd({rdL::%{_u}%::acts}))
-				rdAddLife("useful", {_c}, bd({rdL::%{_u}%::useful}))
-				rdAddLife("btrig", {_c}, bd({rdL::%{_u}%::btrig}))
-	delete {rdL::%{_u}%::*}
-	delete {rdActUseful::%{_u}%}
-	delete {rdPrevNote::%{_u}%}
-	delete {rdBlockNote::%{_u}%}
+				rdAddLife("lprev", {_c}, bd({-rdL::%{_u}%::prev}))
+				rdAddLife("lblock", {_c}, bd({-rdL::%{_u}%::block}))
+				rdAddLife("acts", {_c}, bd({-rdL::%{_u}%::acts}))
+				rdAddLife("useful", {_c}, bd({-rdL::%{_u}%::useful}))
+				rdAddLife("btrig", {_c}, bd({-rdL::%{_u}%::btrig}))
+	delete {-rdL::%{_u}%::*}
+	delete {-rdActUseful::%{_u}%}
+	delete {-rdPrevNote::%{_u}%}
+	delete {-rdBlockNote::%{_u}%}
 
 function rdResetMatch(): # hbResetMatch() above — match start / end: nothing carries over
-	delete {rdL::*}
-	delete {rdF::*}
-	delete {rdFightRD::*}
-	delete {rdActUseful::*}
-	delete {rdPrevNote::*}
-	delete {rdBlockNote::*}
-	delete {rdShadow::*}
-	delete {rdShadowHold::*}
+	delete {-rdL::*}
+	delete {-rdF::*}
+	delete {-rdFightRD::*}
+	delete {-rdActUseful::*}
+	delete {-rdPrevNote::*}
+	delete {-rdBlockNote::*}
+	delete {-rdShadow::*}
+	delete {-rdShadowHold::*}
 
 # ---- PAGE: Reinforced Movement Value ----
 
@@ -811,7 +811,7 @@ on inventory click:
 #   no hits). A fight is "won" by the player who killed the other.
 #
 # SHADOW HEALTH: a player with Enchanted Consumables carries a second health value — what their health WOULD be without the perk: every
-#   bonus heal it actually gave (the part that fit under max health) makes the shadow that much lower ({ecDelta::uuid}, an offset from the
+#   bonus heal it actually gave (the part that fit under max health) makes the shadow that much lower ({-ecDelta::uuid}, an offset from the
 #   real health). It takes the same damage as the real health (and the same Skirmisher execute rule), and catches back up the moment the
 #   real health is full again (the heal that filled them up would have filled the shadow too — a close approximation). Reset every death.
 #
@@ -857,33 +857,33 @@ function ecBonusHealed(p: player, amt: number): # 07-consumables.sk's enchantedC
 	if {respawning::%{_u}%} is set:
 		stop
 	if {_amt} > 0:
-		if {ecDelta::%{_u}%} isn't set:
-			set {ecDelta::%{_u}%} to 0
-		remove {_amt} from {ecDelta::%{_u}%} # without the perk, they'd be this much lower
-	if {hbFight} is set: # Healthy Boy section above — eaten during the current fight
-		if {hbFightClass::%{_u}%} is set:
-			if {ecFightEC::%{_u}%} is true:
-				add 1 to {ecF::%{_u}%::eats}
-				add {_amt} to {ecF::%{_u}%::bonus}
+		if {-ecDelta::%{_u}%} isn't set:
+			set {-ecDelta::%{_u}%} to 0
+		remove {_amt} from {-ecDelta::%{_u}%} # without the perk, they'd be this much lower
+	if {-hbFight} is set: # Healthy Boy section above — eaten during the current fight
+		if {-hbFightClass::%{_u}%} is set:
+			if {-ecFightEC::%{_u}%} is true:
+				add 1 to {-ecF::%{_u}%::eats}
+				add {_amt} to {-ecF::%{_u}%::bonus}
 
 every 5 ticks: # the shadow catches up once the real health is full again
 	loop all players:
 		set {_u} to loop-player's uuid
-		if {ecDelta::%{_u}%} is set:
+		if {-ecDelta::%{_u}%} is set:
 			if health of loop-player >= max health of loop-player:
-				delete {ecDelta::%{_u}%}
+				delete {-ecDelta::%{_u}%}
 
 on damage of player with priority monitor:
 	set {_v} to victim
 	set {_u} to {_v}'s uuid
-	if {ecDelta::%{_u}%} isn't set:
-		delete {ecExec::%{_u}%}
+	if {-ecDelta::%{_u}%} isn't set:
+		delete {-ecExec::%{_u}%}
 		stop
 	if event is cancelled:
-		delete {ecExec::%{_u}%}
+		delete {-ecExec::%{_u}%}
 		stop
 	if {inMatch::%{_u}%} isn't set:
-		delete {ecExec::%{_u}%}
+		delete {-ecExec::%{_u}%}
 		stop
 	set {_dmg} to damage
 	set {_abs} to ({_v}.getAbsorptionAmount()) / 2
@@ -893,57 +893,57 @@ on damage of player with priority monitor:
 	set {_hp} to health of {_v}
 	set {_sLoss} to {_hpLoss}
 	set {_exec} to false
-	if {ecExec::%{_u}%} is set: # 08-damage.sk — Skirmisher Execute: the hit's damage before any execute; the shadow follows the same rule
+	if {-ecExec::%{_u}%} is set: # 08-damage.sk — Skirmisher Execute: the hit's damage before any execute; the shadow follows the same rule
 		set {_exec} to true
-		set {_sLoss} to {ecExec::%{_u}%} - {_abs}
+		set {_sLoss} to {-ecExec::%{_u}%} - {_abs}
 		if {_sLoss} < 0:
 			set {_sLoss} to 0
-		delete {ecExec::%{_u}%}
-	set {_shadowAfter} to ({_hp} + {ecDelta::%{_u}%}) - {_sLoss}
+		delete {-ecExec::%{_u}%}
+	set {_shadowAfter} to ({_hp} + {-ecDelta::%{_u}%}) - {_sLoss}
 	if {_exec} is true:
 		if {_shadowAfter} <= 0.5:
 			set {_shadowAfter} to 0
 	if {_hpLoss} < {_hp}: # survives this hit
 		if {_shadowAfter} <= 0:
-			if {hbFight} is set:
-				if {hbFightClass::%{_u}%} is set:
-					if {ecFightEC::%{_u}%} is true:
-						set {ecF::%{_u}%::save} to true # without the perk they'd be dead right now
+			if {-hbFight} is set:
+				if {-hbFightClass::%{_u}%} is set:
+					if {-ecFightEC::%{_u}%} is true:
+						set {-ecF::%{_u}%::save} to true # without the perk they'd be dead right now
 
 # ---- fights (started / ended by hbFightHit() / hbEndFight() above) ----
 
 function ecFightStart(p: player):
 	set {_u} to {_p}'s uuid
-	delete {ecF::%{_u}%::*}
-	set {ecFightEC::%{_u}%} to ecHas({_p})
+	delete {-ecF::%{_u}%::*}
+	set {-ecFightEC::%{_u}%} to ecHas({_p})
 
 function ecFightEnd(p: player, c: text, o: text, won: boolean, survived: boolean):
 	set {_u} to {_p}'s uuid
-	if {ecFightEC::%{_u}%} is true:
+	if {-ecFightEC::%{_u}%} is true:
 		ecAdd("fights-ec", {_c}, {_o}, 1)
 		if {_won} is true:
 			ecAdd("wins-ec", {_c}, {_o}, 1)
-		ecAdd("eats", {_c}, {_o}, bd({ecF::%{_u}%::eats}))
-		ecAdd("bonus", {_c}, {_o}, bd({ecF::%{_u}%::bonus}))
-		if {ecF::%{_u}%::save} is set:
+		ecAdd("eats", {_c}, {_o}, bd({-ecF::%{_u}%::eats}))
+		ecAdd("bonus", {_c}, {_o}, bd({-ecF::%{_u}%::bonus}))
+		if {-ecF::%{_u}%::save} is set:
 			if {_survived} is true: # won it or escaped it alive
 				ecAdd("saves", {_c}, {_o}, 1)
 	else:
 		ecAdd("fights-no", {_c}, {_o}, 1)
 		if {_won} is true:
 			ecAdd("wins-no", {_c}, {_o}, 1)
-	delete {ecF::%{_u}%::*}
-	delete {ecFightEC::%{_u}%}
+	delete {-ecF::%{_u}%::*}
+	delete {-ecFightEC::%{_u}%}
 
 function ecOnDeath(p: player): # hbOnDeath above — a new life gets a fresh shadow
-	delete {ecDelta::%{_p}'s uuid%}
-	delete {ecExec::%{_p}'s uuid%}
+	delete {-ecDelta::%{_p}'s uuid%}
+	delete {-ecExec::%{_p}'s uuid%}
 
 function ecResetMatch(): # hbResetMatch() above — match start / end: nothing carries over
-	delete {ecDelta::*}
-	delete {ecExec::*}
-	delete {ecF::*}
-	delete {ecFightEC::*}
+	delete {-ecDelta::*}
+	delete {-ecExec::*}
+	delete {-ecF::*}
+	delete {-ecFightEC::*}
 
 # ---- PAGE: Enchanted Consumables Value ----
 
@@ -1092,10 +1092,10 @@ function pfConsId(p: player) :: text: # the id of the consumable this player has
 
 function pfFightStart(p: player): # hbFightHit() above — the perk and consumable for this fight
 	set {_u} to {_p}'s uuid
-	set {pfPerk::%{_u}%} to {general-perk::%{_u}%::selected}
-	if {pfPerk::%{_u}%} isn't set:
-		set {pfPerk::%{_u}%} to "none"
-	set {pfCons::%{_u}%} to pfConsId({_p})
+	set {-pfPerk::%{_u}%} to {general-perk::%{_u}%::selected}
+	if {-pfPerk::%{_u}%} isn't set:
+		set {-pfPerk::%{_u}%} to "none"
+	set {-pfCons::%{_u}%} to pfConsId({_p})
 
 function pfAdd(kind: text, id: text, c: text, o: text, m: text):
 	add 1 to {balance-pf::%{_kind}%::%{_id}%::%{_c}%::%{_o}%::%{_m}%}
@@ -1106,18 +1106,18 @@ function pfAdd(kind: text, id: text, c: text, o: text, m: text):
 function pfFightEnd(p: player, c: text, o: text, won: boolean): # hbEndFight() above
 	set {_u} to {_p}'s uuid
 	if {testMatch} isn't set:
-		if {pfPerk::%{_u}%} is set:
-			loop {pfPerk::%{_u}%} and "ALL":
+		if {-pfPerk::%{_u}%} is set:
+			loop {-pfPerk::%{_u}%} and "ALL":
 				pfAdd("perk", loop-value, {_c}, {_o}, "fights")
 				if {_won} is true:
 					pfAdd("perk", loop-value, {_c}, {_o}, "wins")
-		if {pfCons::%{_u}%} is set:
-			loop {pfCons::%{_u}%} and "ALL":
+		if {-pfCons::%{_u}%} is set:
+			loop {-pfCons::%{_u}%} and "ALL":
 				pfAdd("cons", loop-value, {_c}, {_o}, "fights")
 				if {_won} is true:
 					pfAdd("cons", loop-value, {_c}, {_o}, "wins")
-	delete {pfPerk::%{_u}%}
-	delete {pfCons::%{_u}%}
+	delete {-pfPerk::%{_u}%}
+	delete {-pfCons::%{_u}%}
 
 function pfGet(kind: text, id: text, c: text, o: text, m: text, recent: boolean) :: number:
 	if {_recent} isn't true:

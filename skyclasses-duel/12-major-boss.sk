@@ -221,7 +221,7 @@ function mbSpawnBoss(type: text, loc: location, test: boolean) :: living entity:
 		if {_test} is true:
 			set metadata value "testBoss" of loop-value to true
 	if {_type} is "magmaroth":
-		set {mbMagma::%{_id}%::barMax} to 25 # the large form; becomes 24 when it splits
+		set {-mbMagma::%{_id}%::barMax} to 25 # the large form; becomes 24 when it splits
 	delete {mbBarShown::%{_bar}%}
 	delete boss bar with id {_bar}
 	return {_mob}
@@ -280,8 +280,8 @@ function mbRemoveBoss(id: text): # removes every body of a boss, plus any clones
 			loop-entity.remove()
 		else if metadata value "mbProp" of loop-entity is set:
 			loop-entity.remove()
-	set {mbMagma::%{_id}%::done} to true # ends Magmaroth's brain loop if it was this one
-	delete {mbMagma::%{_id}%::bodies::*}
+	set {-mbMagma::%{_id}%::done} to true # ends Magmaroth's brain loop if it was this one
+	delete {-mbMagma::%{_id}%::bodies::*}
 
 # ---- BOSSBAR (the boss's health bar) ----
 # Red, titled with the boss's name; shown to the player who lands the first hit and their opponent. Doomhoof's bar is its shared pool;
@@ -310,10 +310,10 @@ function mbBarUpdate(e: living entity):
 	set {_g} to metadata value "mbGroup" of {_e}
 	if {_g} is set: # Magmaroth: all of its cubes together
 		set {_hp} to 0
-		loop {mbMagma::%{_g}%::bodies::*}:
+		loop {-mbMagma::%{_g}%::bodies::*}:
 			if loop-value is alive:
 				add (health of loop-value) to {_hp}
-		set {_max} to {mbMagma::%{_g}%::barMax}
+		set {_max} to {-mbMagma::%{_g}%::barMax}
 	else:
 		set {_hp} to 0
 		if {_e} is alive:
@@ -565,35 +565,35 @@ function mbScheduleFrog(): # after a boss dies/despawns: a Frog in 30 s if the n
 			set {frogDueAt} to {_frogAt}
 
 function mbFrogTick(): # called every second by the schedule checker
-	if {arenaFrogMob} is set:
-		if {arenaFrogMob} is not alive:
-			delete {arenaFrogMob}
+	if {-arenaFrogMob} is set:
+		if {-arenaFrogMob} is not alive:
+			delete {-arenaFrogMob}
 	if {frogDueAt} is set:
 		if (unix timestamp of now) >= {frogDueAt}:
 			delete {frogDueAt}
-			if {arenaFrogMob} isn't set:
+			if {-arenaFrogMob} isn't set:
 				if {majorbossId} isn't set:
 					set {_spots::*} to 1, 2, 3 and 4
 					if {frogLastSpot} is set:
 						remove {frogLastSpot} from {_spots::*}
 					set {frogLastSpot} to a random element out of {_spots::*}
-					set {arenaFrogMob} to mbSpawnFrog({config::arena::frog-spawn::%{frogLastSpot}%}, false)
-	if {arenaFrogMob} is set:
+					set {-arenaFrogMob} to mbSpawnFrog({config::arena::frog-spawn::%{frogLastSpot}%}, false)
+	if {-arenaFrogMob} is set:
 		if {majorbossId} is set:
 			mbRemoveFrog(true)
 		else if (mbNextSpawnAt() - (unix timestamp of now)) <= 15: # it leaves 15 s before the next boss
 			mbRemoveFrog(true)
 
 function mbRemoveFrog(announce: boolean):
-	if {arenaFrogMob} is set:
-		if {arenaFrogMob} is alive:
-			draw 15 of cloud at location of {arenaFrogMob} with offset vector(0.3, 0.2, 0.3) with extra 0.02
-			{arenaFrogMob}.remove()
+	if {-arenaFrogMob} is set:
+		if {-arenaFrogMob} is alive:
+			draw 15 of cloud at location of {-arenaFrogMob} with offset vector(0.3, 0.2, 0.3) with extra 0.02
+			{-arenaFrogMob}.remove()
 			if {_announce} is true:
 				broadcast " "
 				broadcast "&6The Seerhopper hops away..."
 				broadcast " "
-		delete {arenaFrogMob}
+		delete {-arenaFrogMob}
 
 function mbFrogName(f: living entity):
 	if {_f} is alive:
@@ -605,7 +605,7 @@ function mbFrogCaught(f: living entity):
 		broadcast "&6&l[TEST] The Seerhopper was caught! &7(no rewards)"
 		broadcast " "
 		stop
-	delete {arenaFrogMob}
+	delete {-arenaFrogMob}
 	set {_killer} to metadata value "attacker" of {_f}
 	if {_killer} is a player:
 		if {inMatch::%{_killer}'s uuid%} is set:
@@ -1547,8 +1547,8 @@ function mbSpawnHigh(type: text, loc: location) :: living entity:
 		mbSetup({_mob}, "magmaroth", 25, 1, "Magmaroth", 1)
 		{_mob}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(0.6) # 60%%
 		set {_g} to "%{_mob}'s uuid%"
-		delete {mbMagma::%{_g}%::*}
-		add {_mob} to {mbMagma::%{_g}%::bodies::*}
+		delete {-mbMagma::%{_g}%::*}
+		add {_mob} to {-mbMagma::%{_g}%::bodies::*}
 	else: # doomhoof — a ravager with a pillager riding it, sharing one 45 health pool
 		spawn 1 ravager at {_loc}
 		set {_mob} to last spawned ravager
@@ -1676,10 +1676,10 @@ on damage of a warden, a magma cube or a ravager with priority high: # aggro (ev
 		if {_att} is a player:
 			set {_g} to metadata value "mbGroup" of victim
 			if {_g} is set: # Magmaroth: the whole family wakes up together
-				if {mbMagma::%{_g}%::aggro} isn't set:
-					set {mbMagma::%{_g}%::aggro} to true
-					set {mbMagma::%{_g}%::nextAt} to (unix timestamp of now) + (random number between 3 and 6)
-				loop {mbMagma::%{_g}%::bodies::*}:
+				if {-mbMagma::%{_g}%::aggro} isn't set:
+					set {-mbMagma::%{_g}%::aggro} to true
+					set {-mbMagma::%{_g}%::nextAt} to (unix timestamp of now) + (random number between 3 and 6)
+				loop {-mbMagma::%{_g}%::bodies::*}:
 					mbAggro(loop-value, {_att})
 			else:
 				mbAggro(victim, {_att})
@@ -1729,12 +1729,12 @@ on damage of player with priority lowest: # Magmaroth has no attack of its own �
 	if attacker is a magma cube:
 		if metadata value "mbGroup" of attacker is set:
 			if "%damage cause%" contains "attack":
-				set {_last} to {mbMagmaTouch::%victim's uuid%}
+				set {_last} to {-mbMagmaTouch::%victim's uuid%}
 				if {_last} is set:
 					if ((unix timestamp of now) - {_last}) < 0.5:
 						cancel event
 						stop
-				set {mbMagmaTouch::%victim's uuid%} to unix timestamp of now
+				set {-mbMagmaTouch::%victim's uuid%} to unix timestamp of now
 
 on death of a magma cube:
 	set {_g} to metadata value "mbGroup" of victim
@@ -1758,22 +1758,22 @@ on death of a magma cube:
 					set metadata value "testBoss" of {_part} to true
 				mbSetup({_part}, "magmaroth", 6, 1, "Magmaroth", 1)
 				{_part}.getAttribute(Attribute.KNOCKBACK_RESISTANCE).setBaseValue(0.6) # 60%%
-				add {_part} to {mbMagma::%{_g}%::bodies::*}
-				if {mbMagma::%{_g}%::aggro} is set: # the fight carries straight on
+				add {_part} to {-mbMagma::%{_g}%::bodies::*}
+				if {-mbMagma::%{_g}%::aggro} is set: # the fight carries straight on
 					set {_tt} to mbTarget({_part}, 40)
 					if {_tt} is set:
 						mbAggro({_part}, {_tt})
 				mbLeashLoop({_part}, {_spawn})
-			set {mbMagma::%{_g}%::barMax} to 24 # the bossbar refills: it now tracks the 3 medium cubes together (3 x 8)
+			set {-mbMagma::%{_g}%::barMax} to 24 # the bossbar refills: it now tracks the 3 medium cubes together (3 x 8)
 			wait 1 tick
 			mbBarUpdate({_part})
 			set {_pre} to ""
 			if metadata value "testBoss" of victim is set:
 				set {_pre} to "&4&l[TEST] "
 			broadcast "%{_pre}%&4&lMagmaroth splits apart!"
-		remove victim from {mbMagma::%{_g}%::bodies::*}
-		if {mbMagma::%{_g}%::bodies::*} isn't set:
-			set {mbMagma::%{_g}%::done} to true
+		remove victim from {-mbMagma::%{_g}%::bodies::*}
+		if {-mbMagma::%{_g}%::bodies::*} isn't set:
+			set {-mbMagma::%{_g}%::done} to true
 			mbBossDefeated(victim) # the last cube's killing blow claims the boss
 
 on death of a warden:
@@ -1957,46 +1957,46 @@ function mbHarbBeam(mob: living entity):
 # ============================================
 
 function mbMagmaBrain(g: text, spawnloc: location):
-	while {mbMagma::%{_g}%::done} isn't set:
+	while {-mbMagma::%{_g}%::done} isn't set:
 		wait 5 ticks
-		set {_bodies::*} to {mbMagma::%{_g}%::bodies::*}
+		set {_bodies::*} to {-mbMagma::%{_g}%::bodies::*}
 		loop {_bodies::*}:
 			if loop-value is not alive:
-				remove loop-value from {mbMagma::%{_g}%::bodies::*}
-		if {mbMagma::%{_g}%::bodies::*} isn't set:
+				remove loop-value from {-mbMagma::%{_g}%::bodies::*}
+		if {-mbMagma::%{_g}%::bodies::*} isn't set:
 			stop loop
-		if {mbMagma::%{_g}%::aggro} is set:
-			set {_lead} to first element of {mbMagma::%{_g}%::bodies::*}
+		if {-mbMagma::%{_g}%::aggro} is set:
+			set {_lead} to first element of {-mbMagma::%{_g}%::bodies::*}
 			set {_t} to mbTarget({_lead}, 40)
 			if {_t} isn't set: # nobody valid to fight — every cube drops its target
-				loop {mbMagma::%{_g}%::bodies::*}:
+				loop {-mbMagma::%{_g}%::bodies::*}:
 					loop-value.setTarget({_none})
 			if {_t} is set:
-				if {mbMagma::%{_g}%::busy} isn't set:
-					loop {mbMagma::%{_g}%::bodies::*}:
+				if {-mbMagma::%{_g}%::busy} isn't set:
+					loop {-mbMagma::%{_g}%::bodies::*}:
 						if metadata value "mbAggro" of loop-value is set:
 							loop-value.setTarget({_t})
-					if (unix timestamp of now) >= {mbMagma::%{_g}%::nextAt}:
+					if (unix timestamp of now) >= {-mbMagma::%{_g}%::nextAt}:
 						set {_near} to false
-						loop {mbMagma::%{_g}%::bodies::*}:
+						loop {-mbMagma::%{_g}%::bodies::*}:
 							if distance between loop-value and {_t} <= 12:
 								set {_near} to true
 						if {_near} is true:
-							set {mbMagma::%{_g}%::nextAt} to (unix timestamp of now) + (random number between 8 and 10)
+							set {-mbMagma::%{_g}%::nextAt} to (unix timestamp of now) + (random number between 8 and 10)
 							set {_r} to random integer between 1 and 2
 							if {_r} = 1:
 								mbMagmaJump({_g}, {_t}, {_spawnloc})
 							else:
 								mbMagmaBreath({_g}, {_t})
-	delete {mbMagma::%{_g}%::*}
+	delete {-mbMagma::%{_g}%::*}
 
 # Magma Jump: every cube leaps at the target — each one's landing ring (gray -> red, 0.8 s) follows the target 0.4 s behind, spread
 # around them when there are several cubes. Landing: knock-up + set on fire for 5 seconds (fire damage only), with fire in the ring.
 function mbMagmaJump(g: text, t: player, spawnloc: location):
-	set {mbMagma::%{_g}%::busy} to true
-	set {_n} to size of {mbMagma::%{_g}%::bodies::*}
+	set {-mbMagma::%{_g}%::busy} to true
+	set {_n} to size of {-mbMagma::%{_g}%::bodies::*}
 	set {_k} to 0
-	loop {mbMagma::%{_g}%::bodies::*}:
+	loop {-mbMagma::%{_g}%::bodies::*}:
 		add 1 to {_k}
 		set {_off} to vector(0, 0, 0)
 		if {_n} > 1:
@@ -2004,7 +2004,7 @@ function mbMagmaJump(g: text, t: player, spawnloc: location):
 			set {_off} to vector(1.8 * cos({_ang}), 0, 1.8 * sin({_ang}))
 		mbMagmaJumpBody(loop-value, {_t}, {_off}, {_spawnloc}) # runs on its own — all cubes jump together
 	wait 60 ticks
-	delete {mbMagma::%{_g}%::busy}
+	delete {-mbMagma::%{_g}%::busy}
 
 function mbMagmaJumpBody(b: living entity, t: player, off: vector, spawnloc: location):
 	if {_b} is alive:
@@ -2079,11 +2079,11 @@ function mbMagmaJumpBody(b: living entity, t: player, off: vector, spawnloc: loc
 # Fire Breath: every cube faces the target and a cone (60 degrees wide; 6 blocks for the large form, 4 for a medium one) is outlined
 # gray -> red for 0.8 s (orange as it fires), then it breathes fire for 1 s: anyone in the cone is set on fire for 5 seconds.
 function mbMagmaBreath(g: text, t: player):
-	set {mbMagma::%{_g}%::busy} to true
-	loop {mbMagma::%{_g}%::bodies::*}:
+	set {-mbMagma::%{_g}%::busy} to true
+	loop {-mbMagma::%{_g}%::bodies::*}:
 		mbMagmaBreathBody(loop-value, {_t})
 	wait 55 ticks
-	delete {mbMagma::%{_g}%::busy}
+	delete {-mbMagma::%{_g}%::busy}
 
 function mbConeOutline(o: location, dx: number, dz: number, range: number, r: number, g: number, b: number): # the Fire Breath cone: both edges (+-30 degrees) and the arc at full range
 	loop 9 times:

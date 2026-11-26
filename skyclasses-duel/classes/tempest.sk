@@ -17,19 +17,19 @@
 # Perk 2 (level 3) "Category 5": Tornado travels farther.
 # ============================================
 
-function tsAirborne(p: player): # passive (Airborne) — Speed 3 for 1.25 seconds, or 1.5 seconds with Perk 1 (Lingering Winds). Also flags {tsAirborne::*} for that same duration (currently unused elsewhere, kept for any future perk/effect that wants to check "is Airborne currently active"), and draws the same white/light-gray dust particle as Tornado's ult trail at the player's feet — sparse and inconsistent (a 35% chance each tick, 1 particle at a time) rather than a steady stream, so it reads as a light trailing effect instead of a constant marker
+function tsAirborne(p: player): # passive (Airborne) — Speed 3 for 1.25 seconds, or 1.5 seconds with Perk 1 (Lingering Winds). Also flags {-tsAirborne::*} for that same duration (currently unused elsewhere, kept for any future perk/effect that wants to check "is Airborne currently active"), and draws the same white/light-gray dust particle as Tornado's ult trail at the player's feet — sparse and inconsistent (a 35% chance each tick, 1 particle at a time) rather than a steady stream, so it reads as a light trailing effect instead of a constant marker
 	set {_duration} to 1.25 seconds # (was 1.5)
 	set {_ticks} to 25
 	if classLevel({_p}, "TS") >= 2: # Perk 1 (Lingering Winds)
 		set {_duration} to 1.5 seconds # Lingering Winds (was 2)
 		set {_ticks} to 30
 	add potion effect of speed 3 without particles for {_duration} to potion effects of {_p}
-	set {tsAirborne::%{_p}'s uuid%} to true
+	set {-tsAirborne::%{_p}'s uuid%} to true
 	loop {_ticks} times:
 		if random number between 1 and 100 <= 35: # sparse/inconsistent rather than every tick
 			draw 1 of dust_color_transition using dustTransition(white, light gray, 1) at (location of {_p}) with offset vector(0.3, 0.05, 0.3) with extra 0 # same particle style as the Tornado ult's trail
 		wait 1 tick
-	delete {tsAirborne::%{_p}'s uuid%}
+	delete {-tsAirborne::%{_p}'s uuid%}
 
 on projectile hit with priority low: # Air Burst impact — handles BOTH the direct hit and the AOE splash in one place. Wind charges deal 0 vanilla damage on contact, so a native "on damage of living entity" event never actually fires for them — that's why the old dedicated direct-hit handler never ran. "victim" here is the entity the projectile directly struck (none if it hit a block/ground instead) — the same native expression zeus.sk and 04-leveling.sk already rely on inside "on projectile hit", so it's the reliable way to detect a direct hit in this environment.
 	if event-projectile is a fireball: # wind charges implement Fireball in the API
@@ -41,7 +41,7 @@ on projectile hit with priority low: # Air Burst impact — handles BOTH the dir
 					if {_direct} is not {_shooter}:
 						updateAttacker({_shooter}, {_direct})
 						directAttack({_direct})
-						set {balance-abilitySource::%{_shooter}'s uuid%} to "TAC" # 19-balance-stats.sk — matches how 08-damage.sk's own generic projectile handler tags TAC/ULT before calling dmgUpdate()
+						set {-balance-abilitySource::%{_shooter}'s uuid%} to "TAC" # 19-balance-stats.sk — matches how 08-damage.sk's own generic projectile handler tags TAC/ULT before calling dmgUpdate()
 						damage {_direct} by 3.5 # Air Burst direct hit: 3.5 (was 2) — raw ability damage only — "damage X by Y" fires its own fresh damage event, which 08-damage.sk's generic handler catches and runs through dmgUpdate() itself (same as the AOE splash's flat "damage loop-entity by 1" below). Calling dmgUpdate() here too double-counted it: showDMG() fired twice, showing the hit number twice for one hit
 						if {_shooter} is a player: # a direct hit also triggers the passive (Airborne) for the shooter
 							tsAirborne({_shooter})
@@ -80,28 +80,28 @@ on drop of iron hoe with priority low: # ULTIMATE (Tornado)
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::TS::ULT-CD}) # 06-perks-general.sk — Spell Caster
 
-		if {godlike-ULT-USE::%player's uuid%::TS} is set:
+		if {-godlike-ULT-USE::%player's uuid%::TS} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::TS} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::TS}
+		else if {-godlike-ULT-CD::%player's uuid%::TS} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::TS}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::TS::ULT-COST}) is true:
 			ultTS(player, {_ultCooldown}, classLevel(player, "TS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultTS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::TS} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::TS} to now
 
 	tornado({_p}, {_lvl})
 
-	set {godlike-ULT-CD::%{_p}'s uuid%::TS} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::TS}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::TS} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::TS}
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::TS}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::TS}
 		stop
 	# ULT CD
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::TS}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::TS}
 	if {class::%{_p}'s uuid%} = "TS":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 

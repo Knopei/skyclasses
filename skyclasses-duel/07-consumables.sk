@@ -208,25 +208,25 @@ on consume:
 		remove 1 water bottle from player
 		recordConsumableUse(player, "MP") # 19-balance-stats.sk
 		enchantedConsumablesCheck(player) # Mana Potion has no healing of its own — this is the "just 0.5" case
-		set {_mana} to {mana::%player's uuid%::curr}
+		set {_mana} to {-mana::%player's uuid%::curr}
 		add 500 to {_mana}
-		if {_mana} > {mana::%player's uuid%::max}:
-			set {mana::%player's uuid%::curr} to {mana::%player's uuid%::max}
+		if {_mana} > {-mana::%player's uuid%::max}:
+			set {-mana::%player's uuid%::curr} to {-mana::%player's uuid%::max}
 		else:
-			add 500 to {mana::%player's uuid%::curr}
+			add 500 to {-mana::%player's uuid%::curr}
 	else if name of event-item is "&eStamina Potion":
 		cancel event
 		remove 1 honey bottle from player
 		recordConsumableUse(player, "SP") # 19-balance-stats.sk
 		enchantedConsumablesCheck(player) # Stamina Potion has no healing of its own — this is the "just 0.5" case
-		set {stamina::%player's uuid%::curr} to {stamina::%player's uuid%::max}
+		set {-stamina::%player's uuid%::curr} to {-stamina::%player's uuid%::max}
 
 on right click with golden carrot: # Golden Pepper
 	if name of player's held item is "&cGolden Pepper":
-		if {consume-cooldown::%player's uuid%} is set:
+		if {-consume-cooldown::%player's uuid%} is set:
 			send "&cYou can't consume another item yet!" to player
 		else:
-			set {consume-cooldown::%player's uuid%} to true
+			set {-consume-cooldown::%player's uuid%} to true
 			remove 1 golden carrot from player
 			recordConsumableUse(player, "GP") # 19-balance-stats.sk
 			enchantedConsumablesCheck(player)
@@ -234,13 +234,13 @@ on right click with golden carrot: # Golden Pepper
 			add potion effect of regeneration 2 for 5 seconds to potion effects of player
 			play sound "ENTITY_GENERIC_EAT" at volume 1 at pitch 1 at player
 			wait 1 second
-			delete {consume-cooldown::%player's uuid%}
+			delete {-consume-cooldown::%player's uuid%}
 
 on rightclick with glistering melon slice: # Golden Melon
-	if {consume-cooldown::%player's uuid%} is set:
+	if {-consume-cooldown::%player's uuid%} is set:
 		send "&cYou can't consume another item yet!" to player
 	else:
-		set {consume-cooldown::%player's uuid%} to true
+		set {-consume-cooldown::%player's uuid%} to true
 		remove 1 glistering melon slice from player
 		recordConsumableUse(player, "GM") # 19-balance-stats.sk
 		enchantedConsumablesCheck(player)
@@ -248,13 +248,13 @@ on rightclick with glistering melon slice: # Golden Melon
 		add potion effect of regeneration 2 for 5 seconds to potion effects of player
 		play sound "ENTITY_GENERIC_EAT" at volume 1 at pitch 1 at player
 		wait 1 second
-		delete {consume-cooldown::%player's uuid%}
+		delete {-consume-cooldown::%player's uuid%}
 
 function cleanseEffect(p: player):
 	loop 20 times:
 		if {_p}.getFireTicks() > 0:
 			set {_cleanse} to true
-		else if {staminaPause::%{_p}'s uuid%} is set: # a stamina lockout (Basher ult, Cyberpunk dart) counts as a bad effect too
+		else if {-staminaPause::%{_p}'s uuid%} is set: # a stamina lockout (Basher ult, Cyberpunk dart) counts as a bad effect too
 			set {_cleanse} to true
 		else:
 			set {_potions::*} to active potion effects of {_p}
@@ -264,12 +264,12 @@ function cleanseEffect(p: player):
 					if {_effect} contains "poison" or "wither" or "weakness" or "mining fatigue" or "slowness": # blindness is intentionally NOT cleansed
 						set {_cleanse} to true
 		if {_cleanse} is true:
-			set {cleanseImmune::%{_p}'s uuid%} to true # for the whole 2.5 seconds, effects that re-apply on a timer (Executioner's Mark slow) are suppressed instead of racing the 0.25s scrub below
+			set {-cleanseImmune::%{_p}'s uuid%} to true # for the whole 2.5 seconds, effects that re-apply on a timer (Executioner's Mark slow) are suppressed instead of racing the 0.25s scrub below
 			loop 10 times:
 				removeBadEffects({_p}, "victim") # poison, wither, slowness, weakness, mining fatigue, fire
-				delete {staminaPause::%{_p}'s uuid%} # also lifts any stamina lockout
+				delete {-staminaPause::%{_p}'s uuid%} # also lifts any stamina lockout
 				wait 5 ticks
-			delete {cleanseImmune::%{_p}'s uuid%}
+			delete {-cleanseImmune::%{_p}'s uuid%}
 			stop loop
 		wait 5 ticks
 

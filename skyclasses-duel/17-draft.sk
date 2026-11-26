@@ -484,7 +484,7 @@ function openDraftClassMenu(p: player):
 	set slot (integers between 9 and 35) of metadata tag "draft class menu" of {_p} to light gray stained glass pane named " " # 3 rows, one per category — same grouping as the class browser (18-class-browser.sk)
 	set slot (integers between 36 and 53) of metadata tag "draft class menu" of {_p} to white stained glass pane named " "
 
-	delete {draftMenuSlotClass::%{_p}'s uuid%::*} # read by this menu's click handler below, rebuilt fresh every open
+	delete {-draftMenuSlotClass::%{_p}'s uuid%::*} # read by this menu's click handler below, rebuilt fresh every open
 	placeDraftCategoryRow({_p}, 9, "STRIKER")
 	placeDraftCategoryRow({_p}, 18, "JUGGERNAUT")
 	placeDraftCategoryRow({_p}, 27, "SKIRMISHER")
@@ -508,7 +508,7 @@ function placeDraftCategoryRow(p: player, rowStart: number, category: text): # f
 			if {draftMenuMode::%{_p}'s uuid%} = "B":
 				add "&c&lCLICK TO BAN" and "" to {_lore::*}
 			set slot {_slot} of metadata tag "draft class menu" of {_p} to ({class::weapon::%{_class}%} named "&eClass: %{class-color::%{_class}%}%&l%{class-name::%{_class}%}%" with lore {_lore::*}) with item flag hide additional tooltip, hide enchants, hide attributes, and hide unbreakable
-		set {draftMenuSlotClass::%{_p}'s uuid%::%{_slot}%} to {_class}
+		set {-draftMenuSlotClass::%{_p}'s uuid%::%{_slot}%} to {_class}
 		add 1 to {_slot}
 
 on inventory click:
@@ -530,7 +530,7 @@ on inventory click:
 			play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to player
 		else:
 			set {_slot} to index of event-slot
-			set {_class} to {draftMenuSlotClass::%player's uuid%::%{_slot}%}
+			set {_class} to {-draftMenuSlotClass::%player's uuid%::%{_slot}%}
 			if {_class} is set:
 				set {draftSelection::%player's uuid%} to {_class}
 				close player's inventory

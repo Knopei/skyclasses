@@ -56,8 +56,8 @@ function combatCheck(a: living entity, v: living entity, dmg: number):
 function markCombat(p: player):
 	if {inMatch::%{_p}'s uuid%} is set:
 		if {respawning::%{_p}'s uuid%} isn't set: # a dead/respawning player can't be in combat (stray fire/wither ticks landing after death shouldn't re-tag them)
-			set {combat::%{_p}'s uuid%} to now
-			if {combatBarShown::%{_p}'s uuid%} isn't set: # first hit of a new combat — show the bar right away instead of waiting for the next ticker pass
+			set {-combat::%{_p}'s uuid%} to now
+			if {-combatBarShown::%{_p}'s uuid%} isn't set: # first hit of a new combat — show the bar right away instead of waiting for the next ticker pass
 				updateCombatBar({_p})
 				updateNameVisibility({_p})
 
@@ -74,7 +74,7 @@ function updateCombatBar(p: player):
 				set {_pct} to 100
 			if {_pct} < 0:
 				set {_pct} to 0
-			if {combatBarShown::%{_p}'s uuid%} isn't set:
+			if {-combatBarShown::%{_p}'s uuid%} isn't set:
 				delete boss bar with id "combat-%{_p}'s uuid%" # a brand-new combat always starts from a fresh bar, so a stale one (old style/viewers from an earlier match or script version) can never carry over
 			set {_title} to "&7[Lvl %{_level}%] &f%{class-name::%{_class}%}%"
 			set {_icons} to "" # 12-major-boss.sk / 21-tablist.sk icons for this player's buffs, in order: high-level boss buff, soul, Seer's Eye
@@ -94,18 +94,18 @@ function updateCombatBar(p: player):
 			set {_protected} to false # shielded or damage-resistant right now -> the bar turns yellow until that wears off
 			if (absorption amount of {_p}) > 0: # Paladin's tactical shield, Frankenstein's ultimate shield
 				set {_protected} to true
-			if {isShielding::%{_p}'s uuid%} is set: # Basher's shield
+			if {-isShielding::%{_p}'s uuid%} is set: # Basher's shield
 				set {_protected} to true
-			if {playerDefense::%{_p}'s uuid%} is set: # Reinforced Dash, Executioner's ult resistance (the shared damage-reduction variable read by 08-damage.sk)
-				if {playerDefense::%{_p}'s uuid%} > 0:
+			if {-playerDefense::%{_p}'s uuid%} is set: # Reinforced Dash, Executioner's ult resistance (the shared damage-reduction variable read by 08-damage.sk)
+				if {-playerDefense::%{_p}'s uuid%} > 0:
 					set {_protected} to true
 			if {class::%{_p}'s uuid%} is "FM": # fisherman.sk — their hook is in the opponent (who then deals them 10%% less damage)
 				if fmHooked({_p}) is {_opp}:
 					set {_protected} to true
-			if {forgeGolem::%{_p}'s uuid%} is set: # scorch.sk — standing within their golem's radius (half of every hit goes to the golem)
-				if {forgeGolem::%{_p}'s uuid%} is alive:
-					if world of {forgeGolem::%{_p}'s uuid%} is world of {_p}:
-						if distance between {_p} and {forgeGolem::%{_p}'s uuid%} <= {forge::golem-radius}:
+			if {-forgeGolem::%{_p}'s uuid%} is set: # scorch.sk — standing within their golem's radius (half of every hit goes to the golem)
+				if {-forgeGolem::%{_p}'s uuid%} is alive:
+					if world of {-forgeGolem::%{_p}'s uuid%} is world of {_p}:
+						if distance between {_p} and {-forgeGolem::%{_p}'s uuid%} <= {forge::golem-radius}:
 							set {_protected} to true
 			if lwWounded({_p}) is true: # Striker's Lingering Wounds (below) — red while wounded
 				{_bar}.setColor(JBarColor.RED)
@@ -119,18 +119,18 @@ function updateCombatBar(p: player):
 				remove {_opp} from {_bar}
 			else:
 				add {_opp} to {_bar}
-			set {combatViewer::%{_p}'s uuid%} to {_opp} # remembered so the bar can still be taken off the right player even after matchOpponent has been deleted (match end)
-			set {combatBarShown::%{_p}'s uuid%} to true
+			set {-combatViewer::%{_p}'s uuid%} to {_opp} # remembered so the bar can still be taken off the right player even after matchOpponent has been deleted (match end)
+			set {-combatBarShown::%{_p}'s uuid%} to true
 
 # Ends a player's combat state and removes their bar from the opponent.
 function clearCombat(p: player):
-	set {_viewer} to {combatViewer::%{_p}'s uuid%}
+	set {_viewer} to {-combatViewer::%{_p}'s uuid%}
 	if {_viewer} is set:
 		remove {_viewer} from boss bar with id "combat-%{_p}'s uuid%"
 	delete boss bar with id "combat-%{_p}'s uuid%"
-	delete {combat::%{_p}'s uuid%}
-	delete {combatViewer::%{_p}'s uuid%}
-	delete {combatBarShown::%{_p}'s uuid%}
+	delete {-combat::%{_p}'s uuid%}
+	delete {-combatViewer::%{_p}'s uuid%}
+	delete {-combatBarShown::%{_p}'s uuid%}
 
 # Shows the vanilla name above a player only while they're in combat, not
 # invisible (Ghost's ultimate / the invisibility consumable), and their
@@ -145,7 +145,7 @@ function updateNameVisibility(p: player):
 	set {_hide} to false
 	if {inMatch::%{_p}'s uuid%} is set:
 		set {_hide} to true
-		if {combat::%{_p}'s uuid%} is set:
+		if {-combat::%{_p}'s uuid%} is set:
 			set {_hide} to false
 			if "%active potion effects of {_p}%" contains "invisibility":
 				set {_hide} to true
@@ -161,13 +161,13 @@ function updateNameVisibility(p: player):
 						if "%active potion effects of {_p}%" doesn't contain "invisibility":
 							set {_hide} to false
 	if {_hide} is true:
-		if {nameHidden::%{_p}'s uuid%} isn't set:
+		if {-nameHidden::%{_p}'s uuid%} isn't set:
 			nameHide({_p})
-			set {nameHidden::%{_p}'s uuid%} to true
+			set {-nameHidden::%{_p}'s uuid%} to true
 	else:
-		if {nameHidden::%{_p}'s uuid%} is set:
+		if {-nameHidden::%{_p}'s uuid%} is set:
 			nameShow({_p})
-			delete {nameHidden::%{_p}'s uuid%}
+			delete {-nameHidden::%{_p}'s uuid%}
 
 function nameHide(p: player): # silent — puts the player in the nametag-hidden team through the API (no chat messages)
 	set {_team} to Bukkit.getScoreboardManager().getMainScoreboard().getTeam("nm_hidden")
@@ -187,21 +187,21 @@ on load: # fresh team every load — also wipes anyone left in it from before a 
 	set {_team} to {_sb}.registerNewTeam("nm_hidden")
 	{_team}.setOption(TeamOption.NAME_TAG_VISIBILITY, TeamOptionStatus.NEVER)
 	{_team}.setCanSeeFriendlyInvisibles(false) # every hidden-name player is on this ONE team, and vanilla draws a teammate's invisibility as a see-through ghost to the rest of the team — so two players in a match saw each other's invisibility as transparent instead of fully gone
-	delete {nameHidden::*}
+	delete {-nameHidden::*}
 
 on join: # nobody should start a session with a hidden name they didn't earn
 	nameShow(player)
-	delete {nameHidden::%player's uuid%}
+	delete {-nameHidden::%player's uuid%}
 
 every 5 ticks: # expires combat timers and keeps every active bar's health/level/class current
 	loop all players:
 		set {_p} to loop-player
-		if {combat::%{_p}'s uuid%} is set:
+		if {-combat::%{_p}'s uuid%} is set:
 			if {inMatch::%{_p}'s uuid%} isn't set: # match ended / force-ended / they quit
 				clearCombat({_p})
 			else if {respawning::%{_p}'s uuid%} is set:
 				clearCombat({_p})
-			else if (difference between now and {combat::%{_p}'s uuid%}) >= {config::combat::duration}:
+			else if (difference between now and {-combat::%{_p}'s uuid%}) >= {config::combat::duration}:
 				clearCombat({_p})
 			else:
 				updateCombatBar({_p})
@@ -210,7 +210,7 @@ every 5 ticks: # expires combat timers and keeps every active bar's health/level
 on quit:
 	clearCombat(player)
 	nameShow(player)
-	delete {nameHidden::%player's uuid%}
+	delete {-nameHidden::%player's uuid%}
 
 # ---- NO NATURAL REGENERATION IN MATCHES ----
 # Vanilla food regeneration (and peaceful-difficulty regen) is cancelled for players in a match. Golden apples, potions and
@@ -232,8 +232,8 @@ on heal:
 
 function lwWounded(p: entity) :: boolean: # wounded right now?
 	if {_p} is a player:
-		if {lwWound::%{_p}'s uuid%} is set:
-			if (unix timestamp of now) < {lwWound::%{_p}'s uuid%}:
+		if {-lwWound::%{_p}'s uuid%} is set:
+			if (unix timestamp of now) < {-lwWound::%{_p}'s uuid%}:
 				return true
 	return false
 
@@ -242,11 +242,11 @@ function lwApply(a: player, v: player): # 08-damage.sk — a level 2+ Striker hi
 	set {_fresh} to true
 	if lwWounded({_v}) is true:
 		set {_fresh} to false
-	set {lwWound::%{_u}%} to (unix timestamp of now) + 3.5
-	set {lwRegenBlock::%{_u}%} to (unix timestamp of now) + 8.5
+	set {-lwWound::%{_u}%} to (unix timestamp of now) + 3.5
+	set {-lwRegenBlock::%{_u}%} to (unix timestamp of now) + 8.5
 	if {_fresh} is true: # a new wound (not just a refresh)
 		draw 6 of dust using dustOption(rgb(120, 0, 0), 1) at ((location of {_v}) offset by vector(0, 1.2, 0)) with offset vector(0.3, 0.4, 0.3)
-		if {combatBarShown::%{_u}%} is set:
+		if {-combatBarShown::%{_u}%} is set:
 			updateCombatBar({_v}) # the bar turns red right away
 
 function healHP(e: living entity, amt: number): # every scripted heal of a player goes through here, so Lingering Wounds can shrink it (amt in hearts)
@@ -254,14 +254,14 @@ function healHP(e: living entity, amt: number): # every scripted heal of a playe
 	if lwWounded({_e}) is true:
 		set {_h} to {_h} * 0.6
 	if {_e} is a player:
-		set {lwSkip::%{_e}'s uuid%} to true # in case Skript's heal fires the heal event too — this one's already been cut
+		set {-lwSkip::%{_e}'s uuid%} to true # in case Skript's heal fires the heal event too — this one's already been cut
 	heal {_e} by {_h}
 	if {_e} is a player:
-		delete {lwSkip::%{_e}'s uuid%}
+		delete {-lwSkip::%{_e}'s uuid%}
 
 on heal: # vanilla heals (potion regeneration, instant health...) while wounded
 	if event-entity is a player:
-		if {lwSkip::%event-entity's uuid%} isn't set:
+		if {-lwSkip::%event-entity's uuid%} isn't set:
 			if lwWounded(event-entity) is true:
 				set heal amount to (heal amount) * 0.6
 
@@ -272,11 +272,11 @@ every 5 ticks: # the wound's particles
 				draw 2 of dust using dustOption(rgb(120, 0, 0), 0.9) at ((location of loop-player) offset by vector(0, 1, 0)) with offset vector(0.3, 0.5, 0.3)
 
 on quit:
-	delete {lwWound::%player's uuid%}
-	delete {lwRegenBlock::%player's uuid%}
+	delete {-lwWound::%player's uuid%}
+	delete {-lwRegenBlock::%player's uuid%}
 
 # ---- JUGGERNAUT LEVEL 2 CATEGORY BUFF: REGENERATION OUT OF COMBAT ----
-# A Juggernaut at level 2+ on its current class regenerates while out of combat (no {combat::<uuid>} timer, see above): scripted
+# A Juggernaut at level 2+ on its current class regenerates while out of combat (no {-combat::<uuid>} timer, see above): scripted
 # healing at the Regeneration I rate (half a heart every 2.5 s), with the Seerhopper's heal particles (12-major-boss.sk) — a heart
 # above the head on each heal and a green sparkle while it's healing. The first heal comes the moment they drop out of combat —
 # unless a Striker's Lingering Wounds is still holding it back (8.5 s after that Striker's last hit, see above).
@@ -287,23 +287,23 @@ every 5 ticks:
 		set {_ok} to false
 		if {inMatch::%{_u}%} is set:
 			if {respawning::%{_u}%} isn't set:
-				if {combat::%{_u}%} isn't set:
+				if {-combat::%{_u}%} isn't set:
 					set {_c} to {class::%{_u}%}
 					if {_c} is set:
 						if classCategory({_c}) is "JUGGERNAUT": # 02-class-data.sk
 							if classLevel({_p}, {_c}) >= 2: # 04-leveling.sk
 								if health of {_p} < max health of {_p}:
 									set {_ok} to true
-									if {lwRegenBlock::%{_u}%} is set: # Lingering Wounds (above)
-										if (unix timestamp of now) < {lwRegenBlock::%{_u}%}:
+									if {-lwRegenBlock::%{_u}%} is set: # Lingering Wounds (above)
+										if (unix timestamp of now) < {-lwRegenBlock::%{_u}%}:
 											set {_ok} to false
 		if {_ok} is true:
-			if {jgRegenNext::%{_u}%} isn't set: # first heal straight away
-				set {jgRegenNext::%{_u}%} to 0
-			if (unix timestamp of now) >= {jgRegenNext::%{_u}%}:
-				set {jgRegenNext::%{_u}%} to (unix timestamp of now) + 2.5
+			if {-jgRegenNext::%{_u}%} isn't set: # first heal straight away
+				set {-jgRegenNext::%{_u}%} to 0
+			if (unix timestamp of now) >= {-jgRegenNext::%{_u}%}:
+				set {-jgRegenNext::%{_u}%} to (unix timestamp of now) + 2.5
 				healHP({_p}, 0.5)
 				draw 1 of heart at ((location of {_p}) offset by vector(0, 2.2, 0)) with offset vector(0.2, 0.1, 0.2)
 			draw 2 of happy_villager at ((location of {_p}) offset by vector(0, 1, 0)) with offset vector(0.35, 0.5, 0.35) # healing sparkle
-		else if {jgRegenNext::%{_u}%} is set:
-			delete {jgRegenNext::%{_u}%}
+		else if {-jgRegenNext::%{_u}%} is set:
+			delete {-jgRegenNext::%{_u}%}

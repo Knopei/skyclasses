@@ -61,8 +61,8 @@ function sbResetMatch(p: player): # 04-leveling.sk's resetPlayerLeveling() — n
 	delete {sbTacNext::%{_u}%}
 
 on load:
-	delete {sbChain::*}
-	delete {sbTargetResult::*}
+	delete {-sbChain::*}
+	delete {-sbTargetResult::*}
 
 # ---- particles ----
 
@@ -115,14 +115,14 @@ function sbSiphon(p: player, v: living entity, amt: number): # amt in mana point
 	if ((health of {_p}) / (max health of {_p})) > {_limit}:
 		stop
 	set {_m} to {_amt} * 10
-	if {mana::%{_v}'s uuid%::curr} < {_m}: # only what they actually have
-		set {_m} to {mana::%{_v}'s uuid%::curr}
+	if {-mana::%{_v}'s uuid%::curr} < {_m}: # only what they actually have
+		set {_m} to {-mana::%{_v}'s uuid%::curr}
 	if {_m} <= 0:
 		stop
-	remove {_m} from {mana::%{_v}'s uuid%::curr}
-	add {_m} to {mana::%{_p}'s uuid%::curr}
-	if {mana::%{_p}'s uuid%::curr} > {mana::%{_p}'s uuid%::max}:
-		set {mana::%{_p}'s uuid%::curr} to {mana::%{_p}'s uuid%::max}
+	remove {_m} from {-mana::%{_v}'s uuid%::curr}
+	add {_m} to {-mana::%{_p}'s uuid%::curr}
+	if {-mana::%{_p}'s uuid%::curr} > {-mana::%{_p}'s uuid%::max}:
+		set {-mana::%{_p}'s uuid%::curr} to {-mana::%{_p}'s uuid%::max}
 	set {_from} to (location of {_v}) offset by vector(0, 1.2, 0)
 	set {_to} to (location of {_p}) offset by vector(0, 1.2, 0)
 	sbLine({_from}, {_to}, 0.5)
@@ -168,11 +168,11 @@ function sbPhaseStep(p: player):
 	set {_l} to (location of {_p}) offset by vector(0, 1, 0)
 	draw 6 of dust using dustOption(rgb(80, 0, 125), 1) at {_l} with offset vector(0.3, 0.5, 0.3)
 
-function sbChainScan(p: player): # the chains' path (14 steps of 0.5 = 7 blocks, 1.5 above, like Reaper's grapple) and what it hits first — results in {sbChain::<uuid>::*}
+function sbChainScan(p: player): # the chains' path (14 steps of 0.5 = 7 blocks, 1.5 above, like Reaper's grapple) and what it hits first — results in {-sbChain::<uuid>::*}
 	set {_u} to {_p}'s uuid
-	delete {sbChain::%{_u}%::*}
+	delete {-sbChain::%{_u}%::*}
 	delete metadata value "sbChainEnt" of {_p}
-	set {sbChain::%{_u}%::n} to 14
+	set {-sbChain::%{_u}%::n} to 14
 	set {_x} to 0
 	set {_l} to 0
 	loop 14 times:
@@ -180,7 +180,7 @@ function sbChainScan(p: player): # the chains' path (14 steps of 0.5 = 7 blocks,
 		add 0.5 to {_l}
 		set {_pt} to location {_l} blocks infront of {_p}
 		set {_pt} to location 1.5 blocks above {_pt}
-		set {sbChain::%{_u}%::pt::%{_x}%} to {_pt}
+		set {-sbChain::%{_u}%::pt::%{_x}%} to {_pt}
 	sbChainScanWorker({_p})
 
 function sbChainScanWorker(p: player): # same hit rules as reaper.sk's reaperGrappleCHECKWorker(); "stop" ends the scan at the first hit
@@ -188,7 +188,7 @@ function sbChainScanWorker(p: player): # same hit rules as reaper.sk's reaperGra
 	set {_x} to 0
 	loop 14 times:
 		add 1 to {_x}
-		set {_loc} to {sbChain::%{_u}%::pt::%{_x}%}
+		set {_loc} to {-sbChain::%{_u}%::pt::%{_x}%}
 		set {_height} to 0
 		loop 3 times:
 			loop all living entities in radius 0.5 around {_loc}:
@@ -207,27 +207,27 @@ function sbChainScanWorker(p: player): # same hit rules as reaper.sk's reaperGra
 								if loop-entity is a cave spider:
 									set {_hit} to true
 							if {_hit} is set:
-								set {sbChain::%{_u}%::n} to {_x}
+								set {-sbChain::%{_u}%::n} to {_x}
 								set metadata value "sbChainEnt" of {_p} to loop-entity # (metadata, not a variable — an entity can't be saved in one)
 								stop
 			add 1 to {_height}
 			set {_loc} to location 1 blocks below {_loc}
-		loop blocks in radius 0.5 around {sbChain::%{_u}%::pt::%{_x}%}:
+		loop blocks in radius 0.5 around {-sbChain::%{_u}%::pt::%{_x}%}:
 			if loop-block is not fern, short grass, air or water:
-				set {sbChain::%{_u}%::n} to {_x}
-				set {sbChain::%{_u}%::wall} to {sbChain::%{_u}%::pt::%{_x}%}
+				set {-sbChain::%{_u}%::n} to {_x}
+				set {-sbChain::%{_u}%::wall} to {-sbChain::%{_u}%::pt::%{_x}%}
 				stop
 
 function sbChains(p: player):
 	set {_u} to {_p}'s uuid
 	sbChainScan({_p})
-	set {_n} to {sbChain::%{_u}%::n}
+	set {_n} to {-sbChain::%{_u}%::n}
 	set {_ent} to metadata value "sbChainEnt" of {_p}
 	delete metadata value "sbChainEnt" of {_p}
-	set {_wall} to {sbChain::%{_u}%::wall}
+	set {_wall} to {-sbChain::%{_u}%::wall}
 	loop 14 times: # keep the path the scan used, so the drawn chains follow exactly where the hit was checked
-		set {_path::%loop-number%} to {sbChain::%{_u}%::pt::%loop-number%}
-	delete {sbChain::%{_u}%::*}
+		set {_path::%loop-number%} to {-sbChain::%{_u}%::pt::%loop-number%}
+	delete {-sbChain::%{_u}%::*}
 	play sound "block.chain.place" with volume 3 and pitch 0.6 at {_p}
 	play sound "entity.evoker.cast_spell" with volume 0.6 and pitch 1.6 at {_p}
 	set {_shown} to 0
@@ -262,11 +262,11 @@ function sbChains(p: player):
 function sbChainHit(p: player, v: living entity): # an enemy hit by Breaker Chains: 3.5 damage, Arcane Siphon, pulled toward it
 	updateAttacker({_p}, {_v}) # 01-utils.sk
 	directAttack({_v})
-	set {balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk
+	set {-balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk
 	set velocity of {_v} to vector(0, 0, 0) # the chains stop the target dead (the same velocity reset Ghost's lunge does)
 	damage {_v} by 3.5
 	set velocity of {_v} to vector(0, 0, 0) # ...including the hit's own knockback
-	delete {balance-abilitySource::%{_p}'s uuid%}
+	delete {-balance-abilitySource::%{_p}'s uuid%}
 	sbSiphon({_p}, {_v}, 10)
 	play sound "block_chain_break" with volume 5 and pitch 0.75 at {_v}
 	set {_burst} to (location of {_v}) offset by vector(0, 1, 0)
@@ -309,11 +309,11 @@ on drop of netherite shovel with priority low:
 
 function sbUltimate(p: player):
 	set {_u} to {_p}'s uuid
-	if {mighty-DASH::%{_u}%} is set: # a stolen Mighty Leap: [DROP] mid-air dashes, same as mighty.sk
+	if {-mighty-DASH::%{_u}%} is set: # a stolen Mighty Leap: [DROP] mid-air dashes, same as mighty.sk
 		push {_p} forward at speed 3
 		perkDashReduction({_p}) # 06-perks-general.sk — Reinforced Dash
 		play sound "entity_bat_takeoff" with volume 1 and pitch 1 at {_p}
-		delete {mighty-DASH::%{_u}%}
+		delete {-mighty-DASH::%{_u}%}
 		stop
 	if classLevel({_p}, "SB") < 1:
 		send "&cUltimate locked! Reach class level 1 to unlock." to {_p}
@@ -322,15 +322,15 @@ function sbUltimate(p: player):
 	if {_held} is not "": # holding a stolen ultimate — cast it, free
 		sbCastStolen({_p}, {_held})
 		stop
-	if {godlike-ULT-CD::%{_u}%::SB} is set:
-		set {_time} to difference between now and {godlike-ULT-CD::%{_u}%::SB}
+	if {-godlike-ULT-CD::%{_u}%::SB} is set:
+		set {_time} to difference between now and {-godlike-ULT-CD::%{_u}%::SB}
 		if {_time} < ultCooldownFor({_p}, {weapons::SB::ULT-CD}): # 06-perks-general.sk — Spell Caster
 			send "&cULT NOT READY!" to {_p}
 			stop
-	delete {sbTargetResult::%{_u}%}
+	delete {-sbTargetResult::%{_u}%}
 	sbFindTarget({_p})
-	set {_t} to {sbTargetResult::%{_u}%}
-	delete {sbTargetResult::%{_u}%}
+	set {_t} to {-sbTargetResult::%{_u}%}
+	delete {-sbTargetResult::%{_u}%}
 	if {_t} isn't set:
 		send "&cNo opponent within 6 blocks!" to {_p}
 		play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
@@ -357,12 +357,12 @@ function sbUltimate(p: player):
 		sbStoreTimer({_p}, {_id})
 		sbStealFx({_p}, {_t})
 
-function sbFindTarget(p: player): # result in {sbTargetResult::<uuid>}: the match opponent if alive and within 6 blocks (outside a match: the nearest player with a class)
+function sbFindTarget(p: player): # result in {-sbTargetResult::<uuid>}: the match opponent if alive and within 6 blocks (outside a match: the nearest player with a class)
 	set {_u} to {_p}'s uuid
 	set {_opp} to {matchOpponent::%{_u}%}
 	if {_opp} is set:
 		if sbStealable({_p}, {_opp}) is true:
-			set {sbTargetResult::%{_u}%} to {_opp}
+			set {-sbTargetResult::%{_u}%} to {_opp}
 		stop
 	set {_best} to 7
 	loop all players in radius 6 around {_p}:
@@ -370,7 +370,7 @@ function sbFindTarget(p: player): # result in {sbTargetResult::<uuid>}: the matc
 			if sbStealable({_p}, loop-player) is true:
 				if distance between {_p} and loop-player < {_best}:
 					set {_best} to distance between {_p} and loop-player
-					set {sbTargetResult::%{_u}%} to loop-player
+					set {-sbTargetResult::%{_u}%} to loop-player
 
 function sbStealable(p: player, t: player) :: boolean:
 	if {_t} isn't online:
@@ -412,11 +412,11 @@ function sbCastStolen(p: player, code: text):
 	if classLevel({_p}, "SB") >= 3: # Perk 2 (Mastered Theft) — the level 3 version
 		set {_lvl} to 3
 	if {_code} is "CB": # one free phase — if there's nowhere to phase to ("Target too far!"), keep the stolen ultimate
-		delete {cbPhaseOK::%{_u}%}
+		delete {-cbPhaseOK::%{_u}%}
 		cbPhase({_p}, "sb") # cyberpunk.sk
-		if {cbPhaseOK::%{_u}%} isn't set:
+		if {-cbPhaseOK::%{_u}%} isn't set:
 			stop
-		delete {cbPhaseOK::%{_u}%}
+		delete {-cbPhaseOK::%{_u}%}
 	delete {sbStore::%{_u}%}
 	delete {sbStoreAt::%{_u}%}
 	delete {sbStoreId::%{_u}%} # stops the 30 s timer
@@ -461,7 +461,7 @@ function sbCastStolen(p: player, code: text):
 function sbStartCooldown(p: player): # Spell Theft's 80 s (Spell Caster shortens it, like every ultimate)
 	set {_id} to "%unix timestamp of now%-%random integer between 1 and 999999999%"
 	set {sbCdId::%{_p}'s uuid%} to {_id}
-	set {godlike-ULT-CD::%{_p}'s uuid%::SB} to now
+	set {-godlike-ULT-CD::%{_p}'s uuid%::SB} to now
 	sbCooldownWait({_p}, {_id})
 
 function sbCooldownWait(p: player, id: text):
@@ -469,7 +469,7 @@ function sbCooldownWait(p: player, id: text):
 	wait {_cd}
 	if {sbCdId::%{_p}'s uuid%} = {_id}: # (a new match wipes it — 04-leveling.sk)
 		delete {sbCdId::%{_p}'s uuid%}
-		delete {godlike-ULT-CD::%{_p}'s uuid%::SB}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::SB}
 		if {_p} is online:
 			if {class::%{_p}'s uuid%} = "SB":
 				play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}

@@ -111,7 +111,7 @@ function resetPlayerLeveling(p: player): # called by 09-death-match.sk / match-m
 	delete {classDeathCD::%{_p}'s uuid%::*}
 	delete {classDeathCDLength::%{_p}'s uuid%::*}
 	delete {classPvpKills::%{_p}'s uuid%::*}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::*} # ultimate charge now persists across mid-match class switches (see clearCurrClass()) — this is the one place left that needs to wipe it clean, so a cooldown from a previous match can't carry into a new one
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::*} # ultimate charge now persists across mid-match class switches (see clearCurrClass()) — this is the one place left that needs to wipe it clean, so a cooldown from a previous match can't carry into a new one
 	delete {match-override-generalperk::%{_p}'s uuid%::*} # in-match perk/consumable overrides (18-class-browser.sk default selectors are the persistent ones) never survive past the match they were set in — this function runs both at the start of every match and whenever one is force-ended, so it's the single place that guarantees a clean slate
 	delete {match-override-consumable::%{_p}'s uuid%::*}
 	delete {pendingPerkChoice::%{_p}'s uuid%} # an in-progress in-match pick that never got applied to a class
@@ -241,15 +241,15 @@ function killLevelTag(p: player): # shared cleanup — kills the current riding 
 	loop passengers of {_p}:
 		if metadata value "levelTag" of loop-value is set:
 			kill loop-value
-	if {levelTag::%{_p}'s uuid%} is set:
-		if {levelTag::%{_p}'s uuid%} is alive:
-			kill {levelTag::%{_p}'s uuid%}
-		delete {levelTag::%{_p}'s uuid%}
+	if {-levelTag::%{_p}'s uuid%} is set:
+		if {-levelTag::%{_p}'s uuid%} is alive:
+			kill {-levelTag::%{_p}'s uuid%}
+		delete {-levelTag::%{_p}'s uuid%}
 
 function setLevelTagNameVisible(p: player, visible: boolean): # used by ghost.sk — the stand's body is already permanently NBT-flagged invisible, but the floating name text is a separate toggle (Entity#setCustomNameVisible), which is what actually needs hiding while the player themselves is invisible
-	if {levelTag::%{_p}'s uuid%} is set:
-		if {levelTag::%{_p}'s uuid%} is alive:
-			{levelTag::%{_p}'s uuid%}.setCustomNameVisible({_visible})
+	if {-levelTag::%{_p}'s uuid%} is set:
+		if {-levelTag::%{_p}'s uuid%} is alive:
+			{-levelTag::%{_p}'s uuid%}.setCustomNameVisible({_visible})
 
 # ---- SNEAK-TO-HIDE NAMETAG ----
 # Sneaking in a match for more than a second hides the floating level/class
@@ -260,14 +260,14 @@ on sneak toggle:
 	if {top::%player's uuid%} is set: # only while actually in a match
 		if player is sneaking:
 			set {_sneakStart} to now
-			set {levelTagSneakStart::%player's uuid%} to {_sneakStart}
+			set {-levelTagSneakStart::%player's uuid%} to {_sneakStart}
 			wait 20 ticks # 1 second
-			if {levelTagSneakStart::%player's uuid%} = {_sneakStart}: # nothing newer (an unsneak+resneak) has overwritten it — still the same, uninterrupted sneak
+			if {-levelTagSneakStart::%player's uuid%} = {_sneakStart}: # nothing newer (an unsneak+resneak) has overwritten it — still the same, uninterrupted sneak
 				if player is sneaking: # they could have unsneaked exactly during this wait without a fresh toggle event re-running this check
 					setLevelTagNameVisible(player, false)
 		else:
-			delete {levelTagSneakStart::%player's uuid%}
-			if {godlike-ULT-USE::%player's uuid%::GD} isn't set: # don't fight Ghost's own invisibility-based nametag hide (ghost.sk) — unsneaking mid-ult shouldn't force the tag visible while still invisible; ghost.sk's own ult-end code restores it
+			delete {-levelTagSneakStart::%player's uuid%}
+			if {-godlike-ULT-USE::%player's uuid%::GD} isn't set: # don't fight Ghost's own invisibility-based nametag hide (ghost.sk) — unsneaking mid-ult shouldn't force the tag visible while still invisible; ghost.sk's own ult-end code restores it
 				setLevelTagNameVisible(player, true)
 
 function updateNametag(p: player):
@@ -282,7 +282,7 @@ function updateNametag(p: player):
 		add nbt compound of "{CustomNameVisible:1,NoGravity:1b,Small:1,Invisible:1,Invulnerable:1,Marker:1b}" to nbt compound of {_tag}
 		set name of {_tag} to "&7[Lvl %{_level}%] &f%{class-name::%{_class}%}%"
 		set metadata value "levelTag" of {_tag} to true
-		set {levelTag::%{_p}'s uuid%} to {_tag} # direct reference, so killLevelTag() can find it even if it's already been dismounted
+		set {-levelTag::%{_p}'s uuid%} to {_tag} # direct reference, so killLevelTag() can find it even if it's already been dismounted
 		make {_tag} ride {_p}
 
 on damage of an armor stand: # extra safety net beyond the Marker NBT flag (which should already make it non-hittable/non-colliding) — guarantees it can never be damaged or knocked around

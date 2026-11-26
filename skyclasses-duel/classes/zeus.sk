@@ -18,12 +18,12 @@ function extinguishMobsFor(loc: location, radius: number, ticks: number):
 
 on shoot: # TACTICAL — thrown trident, strikes lightning on impact
 	if name of shooter's held item is "%{wc}%Zeus's Trident":
-		if difference between now and {projectileChangeFix::%shooter's uuid%} > 10 ticks:
+		if difference between now and {-projectileChangeFix::%shooter's uuid%} > 10 ticks:
 			if tacCHECK(shooter, {weapons::ZT::TAC-COST}) is true:
 				cancel event
 				set shooter's held item to {class::weapon::ZT}
 
-				set {projectileChangeFix::%shooter's uuid%} to now
+				set {-projectileChangeFix::%shooter's uuid%} to now
 				shoot a trident from shooter at speed 2
 				set {_proj} to last shot projectile
 
@@ -72,17 +72,17 @@ on drop of trident with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::ZT::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::ZT} is set:
+		if {-godlike-ULT-USE::%player's uuid%::ZT} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::ZT} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::ZT}
+		else if {-godlike-ULT-CD::%player's uuid%::ZT} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::ZT}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::ZT::ULT-COST}) is true:
 			ultZT(player, {_ultCooldown}, classLevel(player, "ZT"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultZT(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::ZT} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::ZT} to now
 
 	set {_shapes::outer-circle} to a circle of radius 6
 	set {_shapes::inner-circle} to a circle of radius 4
@@ -115,7 +115,7 @@ function ultZT(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	draw shapes {_shapes::outer-circle} at {_loc}
 
 	loop 60 times:
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::ZT} is set:
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::ZT} is set:
 			stop loop
 		set {_r} to random integer between 1 and {_s} # index 0 doesn't exist, so a 0 roll used to skip the strike entirely
 		loop all entities in radius 5 around {_strike::%{_r}%}: # vanilla lightning damages everything within ~3 blocks horizontally of the bolt (6 vertically), so the attacker has to be recorded for ALL of them — it used to only cover radius 2, and anything hit outside that fell through to the "no Zeus attacker" damage path (flat vanilla-based number instead of the 1.5-3 Zeus formula, wrong credit)
@@ -131,21 +131,21 @@ function ultZT(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 		draw shapes {_shapes::outer-circle} at {_loc}
 		wait 2 tick
 	wait 1 second
-	set {godlike-ULT-CD::%{_p}'s uuid%::ZT} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::ZT}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::ZT}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::ZT} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::ZT}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::ZT}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::ZT}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::ZT}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::ZT}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::ZT}
 	if {class::%{_p}'s uuid%} = "ZT":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on damage of player: # ultimate's lightning shouldn't hurt Zeus themself
 	if "%damage cause%" is "lightning":
-		if {godlike-ULT-USE::%victim's uuid%::ZT} is set:
+		if {-godlike-ULT-USE::%victim's uuid%::ZT} is set:
 			cancel event
 
 on pickup of trident: # prevents picking the thrown trident back up as a normal item
@@ -154,20 +154,20 @@ on pickup of trident: # prevents picking the thrown trident back up as a normal 
 on left click with priority high: # PASSIVE — every 3rd hit is empowered
 	if name of player's held item is "%{wc}%Zeus's Trident":
 		if attack cooldown of player >= 0.75:
-			if {zeus-attack::%player's uuid%} = 3:
-				delete {zeus-attack::%player's uuid%}
+			if {-zeus-attack::%player's uuid%} = 3:
+				delete {-zeus-attack::%player's uuid%}
 				set level progress of player to 0
 				zeusPSS(player, 13)
 
 function ztCHECK(a: player) :: number:
 	if name of {_a}'s held item is "%{wc}%Zeus's Trident":
-		if {zeus-attack::%{_a}'s uuid%} = 3:
-			delete {zeus-attack::%{_a}'s uuid%}
+		if {-zeus-attack::%{_a}'s uuid%} = 3:
+			delete {-zeus-attack::%{_a}'s uuid%}
 			set level of {_a} to 0
 			set level progress of {_a} to 0
 			zeusPSS({_a}, 13)
 		else:
-			add 1 to {zeus-attack::%{_a}'s uuid%}
+			add 1 to {-zeus-attack::%{_a}'s uuid%}
 			set level of {_a} to 0
 			add 0.33 to level progress of {_a}
 

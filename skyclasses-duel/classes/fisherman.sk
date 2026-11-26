@@ -119,9 +119,9 @@ on ProjectileHitEvent: # the cast landing on a living target: 1 damage, a small 
 	set metadata value "fmHit" of {_hook} to true
 	updateAttacker({_p}, {_v}) # 01-utils.sk
 	directAttack({_v})
-	set {balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk
+	set {-balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk
 	damage {_v} by 1
-	delete {balance-abilitySource::%{_p}'s uuid%}
+	delete {-balance-abilitySource::%{_p}'s uuid%}
 	play sound "entity.fishing_bobber.splash" with volume 0.75 and pitch 1.4 at {_v}
 	if fmBoss({_v}) is false:
 		set {_dx} to (x-coord of {_v}) - (x-coord of {_p})
@@ -154,10 +154,10 @@ every 5 ticks: # the line snaps past 20 blocks
 on right click:
 	if name of player's held item is name of {fish-item}: # 07-consumables.sk — the raw fish
 		cancel event # eaten instantly, not over the vanilla eating time
-		if {consume-cooldown::%player's uuid%} is set:
+		if {-consume-cooldown::%player's uuid%} is set:
 			send "&cYou can't consume another item yet!" to player
 			stop
-		set {consume-cooldown::%player's uuid%} to true
+		set {-consume-cooldown::%player's uuid%} to true
 		remove 1 of {fish-item} from player
 		recordConsumableUse(player, "GA") # 19-balance-stats.sk — counts as a golden apple
 		enchantedConsumablesCheck(player) # 07-consumables.sk
@@ -165,7 +165,7 @@ on right click:
 		play sound "entity.generic.eat" with volume 1 and pitch 1.2 at player
 		play sound "entity.fish.swim" with volume 0.6 and pitch 1.4 at player
 		wait 1 second
-		delete {consume-cooldown::%player's uuid%}
+		delete {-consume-cooldown::%player's uuid%}
 
 # ---- ULTIMATE: Whirlpool ----
 
@@ -176,10 +176,10 @@ on drop of fishing rod with priority low:
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::FM::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::FM} is set:
+		if {-godlike-ULT-USE::%player's uuid%::FM} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::FM} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::FM}
+		else if {-godlike-ULT-CD::%player's uuid%::FM} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::FM}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 			else if ultCHECK(player, {weapons::FM::ULT-COST}) is true:
@@ -189,7 +189,7 @@ on drop of fishing rod with priority low:
 
 function ultFM(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
 	set {_u} to {_p}'s uuid
-	set {godlike-ULT-USE::%{_u}%::FM} to now
+	set {-godlike-ULT-USE::%{_u}%::FM} to now
 	shoot a trident from {_p} at speed 2
 	set {_proj} to last shot projectile
 	set metadata value "attacker" of {_proj} to {_p}
@@ -202,7 +202,7 @@ function ultFM(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	while metadata value "fmLanded" of {_proj} isn't set:
 		if {_proj} is not valid:
 			stop loop
-		if {godlike-ULT-CANCEL::%{_u}%::FM} is set:
+		if {-godlike-ULT-CANCEL::%{_u}%::FM} is set:
 			stop loop
 		if {_t} >= 100: # 5 s in the air — gone, no whirlpool
 			stop loop
@@ -210,22 +210,22 @@ function ultFM(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 		add 1 to {_t}
 		wait 1 tick
 	if metadata value "fmLanded" of {_proj} is set:
-		if {godlike-ULT-CANCEL::%{_u}%::FM} isn't set:
+		if {-godlike-ULT-CANCEL::%{_u}%::FM} isn't set:
 			set {_loc} to metadata value "fmLanded" of {_proj}
 			if {_proj} is valid:
 				kill {_proj}
 			fmWhirlpool({_p}, {_loc}, {_lvl})
 	else if {_proj} is valid:
 		kill {_proj}
-	set {godlike-ULT-CD::%{_u}%::FM} to now
-	delete {godlike-ULT-USE::%{_u}%::FM}
-	delete {godlike-ULT-CANCEL::%{_u}%::FM}
+	set {-godlike-ULT-CD::%{_u}%::FM} to now
+	delete {-godlike-ULT-USE::%{_u}%::FM}
+	delete {-godlike-ULT-CANCEL::%{_u}%::FM}
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_u}%::FM}
+		delete {-godlike-ULT-CD::%{_u}%::FM}
 		stop
 	# ULT CD
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_u}%::FM}
+	delete {-godlike-ULT-CD::%{_u}%::FM}
 	if {class::%{_u}%} = "FM":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
@@ -247,7 +247,7 @@ function fmWhirlpool(p: player, loc: location, lvl: number): # 5 s: spiral pull 
 	set {_tick} to 0
 	set {_spin} to 0
 	while {_tick} < 100: # 5 seconds
-		if {godlike-ULT-CANCEL::%{_u}%::FM} is set:
+		if {-godlike-ULT-CANCEL::%{_u}%::FM} is set:
 			stop loop
 		if {_p} isn't online:
 			stop loop
@@ -305,9 +305,9 @@ function fmWhirlpool(p: player, loc: location, lvl: number): # 5 s: spiral pull 
 							if sqrt(({_dx} * {_dx}) + ({_dz} * {_dz})) <= 2:
 								updateAttacker({_p}, loop-entity) # 01-utils.sk
 								directAttack(loop-entity)
-								set {balance-abilitySource::%{_u}%} to "ULT" # 19-balance-stats.sk
+								set {-balance-abilitySource::%{_u}%} to "ULT" # 19-balance-stats.sk
 								damage loop-entity by 0.5
-								delete {balance-abilitySource::%{_u}%}
+								delete {-balance-abilitySource::%{_u}%}
 								if loop-entity is a player: # caught in the center: stamina disabled for 3 seconds
 									staminaPause(loop-entity, 3) # 01-utils.sk
 			if {_lvl} >= 3: # Perk 2 (Riptide Renewal)

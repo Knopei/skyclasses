@@ -139,14 +139,14 @@ on inventory close: # while respawning, closing this menu (for any reason) retur
 # Cyberpunk's phase is instant, so it uses perkPhaseReduction() below instead (a flat half second, no airborne check).
 # It can trigger at most once every 2.5 seconds, and it never stacks or extends: a movement while it's already running (or within 2.5 s of
 # the last trigger) does nothing — the running reduction still ends on landing as usual.
-# These two functions also stamp {lastMoveAbility::uuid} for Magmaroth's Fury (12-major-boss.sk / 08-damage.sk): its +0.5 damage window
+# These two functions also stamp {-lastMoveAbility::uuid} for Magmaroth's Fury (12-major-boss.sk / 08-damage.sk): its +0.5 damage window
 # lasts 2 seconds from the movement and can only start once every 2 seconds — a movement inside a running window doesn't restart it.
 function markMoveAbility(p: player): # Magmaroth's Fury window: starts only if the last one started 2+ seconds ago
-	set {_last} to {lastMoveAbility::%{_p}'s uuid%}
+	set {_last} to {-lastMoveAbility::%{_p}'s uuid%}
 	if {_last} is set:
 		if ((unix timestamp of now) - {_last}) < 2:
 			stop
-	set {lastMoveAbility::%{_p}'s uuid%} to unix timestamp of now
+	set {-lastMoveAbility::%{_p}'s uuid%} to unix timestamp of now
 
 function rdCanTrigger(p: player) :: boolean: # Reinforced Movement: not already running, and 2.5 s since the last trigger
 	set {_uuid} to {_p}'s uuid
@@ -168,7 +168,7 @@ function perkDashReduction(p: player):
 		set {rd-last::%{_uuid}%} to unix timestamp of now
 		set {rd-hold::%{_uuid}%} to now # the grace window in which being on the ground doesn't end the reduction yet
 		set {rd-active::%{_uuid}%} to true
-		set {playerDefense::%{_uuid}%} to {gp-dmgReduction}
+		set {-playerDefense::%{_uuid}%} to {gp-dmgReduction}
 		loop 150 times: # hard cap of 15 seconds, in case a landing is somehow never detected
 			wait 2 ticks
 			if {_p} isn't online:
@@ -180,8 +180,8 @@ function perkDashReduction(p: player):
 			if {_p} is on ground:
 				if difference between now and {rd-hold::%{_uuid}%} >= 8 ticks:
 					stop loop
-		if {playerDefense::%{_uuid}%} = {gp-dmgReduction}: # only clear our own value — Executioner's ult (20) manages its own and restores itself on its next tick
-			delete {playerDefense::%{_uuid}%}
+		if {-playerDefense::%{_uuid}%} = {gp-dmgReduction}: # only clear our own value — Executioner's ult (20) manages its own and restores itself on its next tick
+			delete {-playerDefense::%{_uuid}%}
 		delete {rd-active::%{_uuid}%}
 		delete {rd-hold::%{_uuid}%}
 
@@ -197,10 +197,10 @@ function perkPhaseReduction(p: player):
 		rdActivated({_p}) # 25-balance-stats-advanced.sk
 		set {rd-last::%{_uuid}%} to unix timestamp of now
 		set {rd-active::%{_uuid}%} to true
-		set {playerDefense::%{_uuid}%} to {gp-dmgReduction}
+		set {-playerDefense::%{_uuid}%} to {gp-dmgReduction}
 		wait 10 ticks
-		if {playerDefense::%{_uuid}%} = {gp-dmgReduction}:
-			delete {playerDefense::%{_uuid}%}
+		if {-playerDefense::%{_uuid}%} = {gp-dmgReduction}:
+			delete {-playerDefense::%{_uuid}%}
 		delete {rd-active::%{_uuid}%}
 
 on load:

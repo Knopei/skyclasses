@@ -18,7 +18,7 @@
 #
 # DAMAGE-BY-SOURCE / HIT-RATE ATTRIBUTION: each class file tags its own
 # tactical/ultimate/passive damage at the exact line that deals it —
-# {balance-abilitySource::%uuid%} is set to "TAC"/"ULT"/"PASSIVE" immediately
+# {-balance-abilitySource::%uuid%} is set to "TAC"/"ULT"/"PASSIVE" immediately
 # before the class's `damage <target> by <amount>` effect (or, for a shot
 # projectile, as metadata on the projectile itself, read in 08-damage.sk's
 # projectile branch) and deleted immediately after. Because Skript effects
@@ -256,36 +256,36 @@ function recordAbilityCast(p: player, source: text, manaSpent: number): # "TAC" 
 # ---- FIRE-TICK SOURCE TAGGING (Mighty's Fire Pit, Ninja's ignites, Rapid's Overheat) ----
 
 function setFireSource(v: player, source: text, duration: number): # called at the moment a class ignites a player as part of a TAC/ULT effect
-	set {balance-fireSource::%{_v}'s uuid%} to {_source}
+	set {-balance-fireSource::%{_v}'s uuid%} to {_source}
 	set {_setTime} to now
-	set {balance-fireSourceSet::%{_v}'s uuid%} to {_setTime}
+	set {-balance-fireSourceSet::%{_v}'s uuid%} to {_setTime}
 	clearFireSourceLater({_v}, {_setTime}, {_duration})
 
 function clearFireSourceLater(v: player, setTime: date, duration: number): # runs as its own background execution — doesn't block the caller (same pattern as 11-mini-bosses.sk's respawn hologram)
 	wait ("%{_duration}% seconds" parsed as a timespan)
-	if {balance-fireSourceSet::%{_v}'s uuid%} = {_setTime}: # nothing newer (a fresh ignite) has overwritten it — safe to clear
-		delete {balance-fireSource::%{_v}'s uuid%}
-		delete {balance-fireSourceSet::%{_v}'s uuid%}
+	if {-balance-fireSourceSet::%{_v}'s uuid%} = {_setTime}: # nothing newer (a fresh ignite) has overwritten it — safe to clear
+		delete {-balance-fireSource::%{_v}'s uuid%}
+		delete {-balance-fireSourceSet::%{_v}'s uuid%}
 
 # ---- TIMED ABILITY-SOURCE TAGGING (Zeus's lightning — see the header note above) ----
 
 function setAbilitySourceTimed(p: player, source: text, ticks: number):
-	set {balance-abilitySource::%{_p}'s uuid%} to {_source}
+	set {-balance-abilitySource::%{_p}'s uuid%} to {_source}
 	set {_setTime} to now
-	set {balance-abilitySourceSet::%{_p}'s uuid%} to {_setTime}
+	set {-balance-abilitySourceSet::%{_p}'s uuid%} to {_setTime}
 	clearAbilitySourceLaterTicks({_p}, {_setTime}, {_ticks})
 
 function clearAbilitySourceLaterTicks(p: player, setTime: date, ticks: number):
 	wait ("%{_ticks}% ticks" parsed as a timespan)
-	if {balance-abilitySourceSet::%{_p}'s uuid%} = {_setTime}:
-		delete {balance-abilitySource::%{_p}'s uuid%}
-		delete {balance-abilitySourceSet::%{_p}'s uuid%}
+	if {-balance-abilitySourceSet::%{_p}'s uuid%} = {_setTime}:
+		delete {-balance-abilitySource::%{_p}'s uuid%}
+		delete {-balance-abilitySourceSet::%{_p}'s uuid%}
 
 function recordDamageBySource(a: player, class: text, dmg: number): # called from 08-damage.sk's dmgStats(), only for confirmed player-vs-player hits — "only damage of players" per the original spec, so this stays player-victim-only
 	if {testMatch} is set: # 10-match-manager.sk / 17-draft.sk — a test duel (/testduel) records no balance-dashboard stats at all
 		stop
-	if {balance-abilitySource::%{_a}'s uuid%} is set:
-		set {_source} to {balance-abilitySource::%{_a}'s uuid%}
+	if {-balance-abilitySource::%{_a}'s uuid%} is set:
+		set {_source} to {-balance-abilitySource::%{_a}'s uuid%}
 	else:
 		set {_source} to "MELEE"
 	balAdd("dmg-by-source", "%{_class}%::%{_source}%", {_dmg})
@@ -1191,10 +1191,10 @@ command /resetbalancestats:
 		# delete {balance-recent-valid::*}
 		# delete {balance-recent-slot}
 		# # transient in-flight tagging state — shouldn't normally be set outside the instant of a single damage call, cleared here for good measure
-		# delete {balance-abilitySource::*}
-		# delete {balance-abilitySourceSet::*}
-		# delete {balance-fireSource::*}
-		# delete {balance-fireSourceSet::*}
+		# delete {-balance-abilitySource::*}
+		# delete {-balance-abilitySourceSet::*}
+		# delete {-balance-fireSource::*}
+		# delete {-balance-fireSourceSet::*}
 		# send "&a&lBalance dashboard stats reset." to player
 		# send "&7All /balancestats trackers are back to empty. Player-specific stats (kills, deaths, class games played, mastery, etc.) were not affected." to player
 

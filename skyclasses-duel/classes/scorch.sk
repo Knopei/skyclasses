@@ -36,7 +36,7 @@ on load:
 		set {_x} to loop-entity
 		if {_x}.getScoreboardTags().contains("forge_golem"):
 			{_x}.remove()
-	delete {forgeGolem::*}
+	delete {-forgeGolem::*}
 
 # ---- PASSIVE: MOLOTOV (07-consumables.sk calls this instead of the explosion for a Scorch's grenade) ----
 
@@ -186,10 +186,10 @@ on drop of copper sword with priority low:
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::FG::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::FG} is set:
+		if {-godlike-ULT-USE::%player's uuid%::FG} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::FG} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::FG}
+		else if {-godlike-ULT-CD::%player's uuid%::FG} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::FG}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::FG::ULT-COST}) is true:
@@ -197,7 +197,7 @@ on drop of copper sword with priority low:
 
 function forgeGolemRun(p: player, cd: timespan, lvl: number, sb: boolean): # {_lvl} = the level the ultimate runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
 	set {_u} to {_p}'s uuid
-	set {godlike-ULT-USE::%{_u}%::FG} to now
+	set {-godlike-ULT-USE::%{_u}%::FG} to now
 	set {_hp} to {forge::golem-health}
 	set {_inMatch} to false
 	if {inMatch::%{_u}%} is set:
@@ -216,7 +216,7 @@ function forgeGolemRun(p: player, cd: timespan, lvl: number, sb: boolean): # {_l
 		add potion effect of slowness 1 without particles for 16 seconds to potion effects of {_g}
 	else:
 		add potion effect of slowness 2 without particles for 16 seconds to potion effects of {_g} # Slowness II (removed when enhanced)
-	set {forgeGolem::%{_u}%} to {_g}
+	set {-forgeGolem::%{_u}%} to {_g}
 	forgeGolemName({_g})
 	# spawn: knock every enemy within the radius up
 	play sound "entity.iron_golem.repair" with volume 2 and pitch 0.6 at {_g}
@@ -245,9 +245,9 @@ function forgeGolemRun(p: player, cd: timespan, lvl: number, sb: boolean): # {_l
 			stop loop
 		if health of {_p} <= 0:
 			stop loop
-		if {godlike-ULT-CANCEL::%{_u}%::FG} is set: # set by 09-death-match.sk when Scorch dies
+		if {-godlike-ULT-CANCEL::%{_u}%::FG} is set: # set by 09-death-match.sk when Scorch dies
 			stop loop
-		if {godlike-ULT-USE::%{_u}%::FG} isn't set: # class swap (01-utils.sk's clearCurrClass)
+		if {-godlike-ULT-USE::%{_u}%::FG} isn't set: # class swap (01-utils.sk's clearCurrClass)
 			stop loop
 		if {_inMatch} is true:
 			if {inMatch::%{_u}%} isn't set:
@@ -284,16 +284,16 @@ function forgeGolemRun(p: player, cd: timespan, lvl: number, sb: boolean): # {_l
 		draw 20 of large_smoke at {_g} with offset vector(0.6, 1, 0.6) with extra 0.02
 		play sound "entity.iron_golem.death" with volume 1 and pitch 1 at {_g}
 		{_g}.remove()
-	delete {forgeGolem::%{_u}%}
+	delete {-forgeGolem::%{_u}%}
 	# the ultimate's cooldown starts once the golem is gone
-	set {godlike-ULT-CD::%{_u}%::FG} to now
-	delete {godlike-ULT-USE::%{_u}%::FG}
-	delete {godlike-ULT-CANCEL::%{_u}%::FG}
+	set {-godlike-ULT-CD::%{_u}%::FG} to now
+	delete {-godlike-ULT-USE::%{_u}%::FG}
+	delete {-godlike-ULT-CANCEL::%{_u}%::FG}
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_u}%::FG}
+		delete {-godlike-ULT-CD::%{_u}%::FG}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_u}%::FG}
+	delete {-godlike-ULT-CD::%{_u}%::FG}
 	if {_p} is online:
 		if {class::%{_u}%} = "FG":
 			play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
@@ -396,7 +396,7 @@ on damage of player with priority highest: # the redirect: half of what Scorch t
 	if event is cancelled:
 		stop
 	set {_u} to victim's uuid
-	set {_g} to {forgeGolem::%{_u}%}
+	set {_g} to {-forgeGolem::%{_u}%}
 	if {_g} isn't set:
 		stop
 	if {_g} is dead:

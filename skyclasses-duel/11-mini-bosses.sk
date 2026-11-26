@@ -54,10 +54,10 @@ function stopMiniBossTimers():
 		miniBossChunks(loop-value, false)
 		delete {minibossActive::%loop-value%}
 		delete {minibossRespawnAt::%loop-value%}
-		loop {minibossmobs::%loop-value%::*}:
+		loop {-minibossmobs::%loop-value%::*}:
 			if loop-value-2 is alive:
 				kill loop-value-2
-		delete {minibossmobs::%loop-value%::*}
+		delete {-minibossmobs::%loop-value%::*}
 		clearMiniBossRespawnHolo(loop-value)
 
 # ---- DISPLAY NAME (shows live health, refreshed on every hit) ----
@@ -78,7 +78,7 @@ function spawnMiniBoss(loc: number):
 		if loop-entity is a zombie, zombie villager or cave spider:
 			if metadata value "minibossLoc" of loop-entity is {_loc}:
 				delete loop-entity
-	delete {minibossmobs::%{_loc}%::*}
+	delete {-minibossmobs::%{_loc}%::*}
 
 	if {_type} is "individual":
 		spawn 1 zombie villager at {_spawnloc}
@@ -104,7 +104,7 @@ function spawnMiniBoss(loc: number):
 		set metadata value "minibossLoc" of {_mob} to {_loc}
 		{_mob}.setRemoveWhenFarAway(false) # never naturally despawns when no player is near
 		mobDeactivate({_mob}) # 01-utils.sk — passive until a player hits it
-		add {_mob} to {minibossmobs::%{_loc}%::*}
+		add {_mob} to {-minibossmobs::%{_loc}%::*}
 		miniBossAttackLoop({_mob})
 	else if {_type} is "pack":
 		# Equilateral triangle centered on the spawn point, each vertex 1 block
@@ -124,13 +124,13 @@ function spawnMiniBoss(loc: number):
 			set metadata value "minibossLoc" of {_mob} to {_loc}
 			{_mob}.setRemoveWhenFarAway(false) # never naturally despawns when no player is near
 			mobDeactivate({_mob}) # 01-utils.sk
-			add {_mob} to {minibossmobs::%{_loc}%::*}
+			add {_mob} to {-minibossmobs::%{_loc}%::*}
 
 	miniBossLeashLoop({_loc}, {_spawnloc})
 
 function miniBossLeashLoop(loc: number, spawnloc: location):
-	while {minibossmobs::%{_loc}%::*} is set:
-		loop {minibossmobs::%{_loc}%::*}:
+	while {-minibossmobs::%{_loc}%::*} is set:
+		loop {-minibossmobs::%{_loc}%::*}:
 			if loop-value is alive:
 				bossLeashCheck(loop-value, {_spawnloc}, {config::miniboss::leash-radius}, {config::miniboss::leash-heal-percent}) # 01-utils.sk
 		wait 2 seconds
@@ -218,7 +218,7 @@ on death of a zombie villager or cave spider:
 	if metadata value "minibossLoc" of victim is set:
 		set {_loc} to metadata value "minibossLoc" of victim
 		set {_type} to {minibosstype::%{_loc}%}
-		remove victim from {minibossmobs::%{_loc}%::*}
+		remove victim from {-minibossmobs::%{_loc}%::*}
 
 		set {_killer} to metadata value "attacker" of victim # set by updateAttacker() — works for melee, abilities, and grenades alike, unlike the native "attacker" value which only populates for direct melee hits
 		if {_killer} is a player:
@@ -237,7 +237,7 @@ on death of a zombie villager or cave spider:
 						set {_healPct} to 25
 					else:
 						set {_left} to 0
-						loop {minibossmobs::%{_loc}%::*}:
+						loop {-minibossmobs::%{_loc}%::*}:
 							if loop-value is alive:
 								add 1 to {_left}
 						if {_left} = 0:
@@ -265,11 +265,11 @@ every 2 seconds:
 			miniBossWatch(loop-value)
 
 function miniBossWatch(loc: number):
-	set {_mobs::*} to {minibossmobs::%{_loc}%::*}
+	set {_mobs::*} to {-minibossmobs::%{_loc}%::*}
 	loop {_mobs::*}:
 		if loop-value is not alive:
-			remove loop-value from {minibossmobs::%{_loc}%::*}
-	if {minibossmobs::%{_loc}%::*} is set: # still has a live mob
+			remove loop-value from {-minibossmobs::%{_loc}%::*}
+	if {-minibossmobs::%{_loc}%::*} is set: # still has a live mob
 		stop
 	if {minibossRespawnAt::%{_loc}%} is not set: # camp just cleared — schedule the respawn
 		set {_waitSeconds} to a random integer between {config::miniboss::respawn-min} and {config::miniboss::respawn-max}

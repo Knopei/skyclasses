@@ -10,12 +10,12 @@
 function bsPSS(p: player, stamina: integer): # refunds stamina (1 point = 300 internal units)
 	set {_uuid} to {_p}'s uuid
 	set {_stamina} to {_stamina} * 10
-	set {_check} to {stamina::%{_uuid}%::curr} + {_stamina}
+	set {_check} to {-stamina::%{_uuid}%::curr} + {_stamina}
 
-	if {_check} > {stamina::%{_uuid}%::max}:
-		set {stamina::%{_uuid}%::curr} to {stamina::%{_uuid}%::max}
+	if {_check} > {-stamina::%{_uuid}%::max}:
+		set {-stamina::%{_uuid}%::curr} to {-stamina::%{_uuid}%::max}
 	else:
-		add {_stamina} to {stamina::%{_uuid}%::curr}
+		add {_stamina} to {-stamina::%{_uuid}%::curr}
 
 import:
 	io.papermc.paper.event.player.PlayerShieldDisableEvent
@@ -25,7 +25,7 @@ on PlayerShieldDisableEvent: # prevents vanilla shield-disable (axe parry) from 
 
 function disableShield(p: player, type: text):
 	play sound "item.shield.break" with volume 1 and pitch 1 at {_p}
-	delete {isShielding::%{_p}'s uuid%}
+	delete {-isShielding::%{_p}'s uuid%}
 	set {_slot} to index of {_p}'s held item
 	set {_p}'s held item to air
 	wait 3 tick
@@ -36,8 +36,8 @@ function disableShield(p: player, type: text):
 
 	set slot {_slot} of {_p}'s inventory to {class::weapon::BS}
 	set item cooldown of slot {_slot} of {_p}'s inventory for {_p} to {_cd}
-	set {shieldCooldownTracker::%{_p}'s uuid%} to now
-	set {shieldCooldown::%{_p}'s uuid%} to {_cd}
+	set {-shieldCooldownTracker::%{_p}'s uuid%} to now
+	set {-shieldCooldown::%{_p}'s uuid%} to {_cd}
 
 	if {_type} = "disable":
 		wait {_cd}
@@ -46,24 +46,24 @@ function disableShield(p: player, type: text):
 		set level progress of {_p} to 0.99
 
 on held item change:
-	delete {isShielding::%player's uuid%}
+	delete {-isShielding::%player's uuid%}
 
 on right click with shield: # TACTICAL — channeled block, drains mana per tick while held
 	if name of event-item contains "%{wc}%Basher Shield":
-		if {shieldCooldownTracker::%player's uuid%} is set:
-			set {_time} to difference between now and {shieldCooldownTracker::%player's uuid%}
-			if {_time} < {shieldCooldown::%player's uuid%}:
+		if {-shieldCooldownTracker::%player's uuid%} is set:
+			set {_time} to difference between now and {-shieldCooldownTracker::%player's uuid%}
+			if {_time} < {-shieldCooldown::%player's uuid%}:
 				send "&cSHIELD ON COOLDOWN!" to player
 				cancel event
 				stop
 			else:
-				delete {shieldCooldownTracker::%player's uuid%}
-				delete {shieldCooldown::%player's uuid%}
+				delete {-shieldCooldownTracker::%player's uuid%}
+				delete {-shieldCooldown::%player's uuid%}
 		set {_shapes::circle} to a circle with radius 1.25
 		set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 0.75)
-		set {isShielding::%player's uuid%} to now
+		set {-isShielding::%player's uuid%} to now
 		wait 6 ticks
-		while {isShielding::%player's uuid%} is set:
+		while {-isShielding::%player's uuid%} is set:
 			if player.isBlocking():
 				set {_mana} to {weapons::BS::TAC-COST} / 10
 				if atkCHECK(player, {_mana}) is true:
@@ -74,11 +74,11 @@ on right click with shield: # TACTICAL — channeled block, drains mana per tick
 				else:
 					disableShield(player, "temp")
 			else:
-				delete {isShielding::%player's uuid%}
+				delete {-isShielding::%player's uuid%}
 
 on stop using item:
 	if name of event-item contains "%{wc}%Basher Shield":
-		delete {isShielding::%player's uuid%}
+		delete {-isShielding::%player's uuid%}
 
 function bsCHECK(p: player, dmg: number, cause: text, a: object = "none"): # called from the damage pipeline while blocking ({_a} = the attacker; the default keeps the call running when there is none — Skript skips a call with an empty argument)
 	if {_cause} = "fall":
@@ -105,7 +105,7 @@ function bsCHECK(p: player, dmg: number, cause: text, a: object = "none"): # cal
 # Shield reflect: half of the damage a MELEE hit does to the shield goes back to whoever dealt it (projectiles, abilities and damage over
 # time are still blocked, just not reflected). A reflected hit can't be reflected again, so two Bashers can't bounce damage back and forth.
 function bsReflect(p: player, dmg: number, cause: text, a: object):
-	if {bsReflecting} is set:
+	if {-bsReflecting} is set:
 		stop
 	if {_a} is not a living entity:
 		stop
@@ -118,12 +118,12 @@ function bsReflect(p: player, dmg: number, cause: text, a: object):
 	set {_back} to {_dmg} / 2
 	if {_back} <= 0:
 		stop
-	set {bsReflecting} to true
+	set {-bsReflecting} to true
 	updateAttacker({_p}, {_a}) # 01-utils.sk — the reflected damage counts as the Basher's (damage numbers, kill credit)
-	set {balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk — part of the Shield tactical
+	set {-balance-abilitySource::%{_p}'s uuid%} to "TAC" # 19-balance-stats.sk — part of the Shield tactical
 	damage {_a} by {_back}
-	delete {balance-abilitySource::%{_p}'s uuid%}
-	delete {bsReflecting}
+	delete {-balance-abilitySource::%{_p}'s uuid%}
+	delete {-bsReflecting}
 	play sound "item.shield.block" with volume 1 and pitch 1.6 at {_a}
 
 function bsBashSlowFollowup(victim: living entity): # runs on its own after the slowness 2 above has worn off — kept separate so bsBashHit()'s own waits aren't delayed by it
@@ -135,11 +135,11 @@ function bsBashHit(victim: living entity, attacker: player, prevLoc: location):
 	play sound "item.shield.block" with volume 1 and pitch 0.5 at {_victim}
 	updateAttacker({_attacker}, {_victim})
 	directAttack({_victim})
-	set {balance-abilitySource::%{_attacker}'s uuid%} to "TAC" # 19-balance-stats.sk — dash-bash is Basher's tactical
+	set {-balance-abilitySource::%{_attacker}'s uuid%} to "TAC" # 19-balance-stats.sk — dash-bash is Basher's tactical
 	damage {_victim} by 2 # (was 3)
 	add potion effect of slowness 2 without particles for 2 seconds to potion effects of {_victim}
 	bsBashSlowFollowup({_victim}) # slowness 2 for 2 seconds, THEN slowness 1 for 2 more (the ult's own slow below is unchanged)
-	delete {balance-abilitySource::%{_attacker}'s uuid%}
+	delete {-balance-abilitySource::%{_attacker}'s uuid%}
 	set {_v} to vector between {_prevLoc} and location of {_victim}
 	wait 1 tick
 	set velocity of {_attacker} to vector(0, 0, 0) # was "teleport X to X" — that resets momentum too, but also dismounts a riding passenger (the level-tag armor stand, 04-leveling.sk), which self-teleporting the attacker or victim would knock off just like Mighty's ultimate did
@@ -184,17 +184,17 @@ on drop of shield with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::BS::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::BS} is set:
+		if {-godlike-ULT-USE::%player's uuid%::BS} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::BS} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::BS}
+		else if {-godlike-ULT-CD::%player's uuid%::BS} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::BS}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::BS::ULT-COST}) is true:
 			ultBS(player, {_ultCooldown}, classLevel(player, "BS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultBS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::BS} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::BS} to now
 	set {_pauseDuration} to 1.25
 	set {_tickDamage} to 1.5
 	if {_lvl} >= 3: # Perk 2 (Unsteady Grounds)
@@ -205,7 +205,7 @@ function ultBS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	set {_shapes::tiny-circle} to a circle of radius 1.5
 	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(light gray, brown, 1)
 	loop 3 times:
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::BS} is set:
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::BS} is set:
 			stop loop
 		play sound "ITEM_MACE_SMASH_GROUND_HEAVY" with volume 3 and pitch 0.5 at {_p}
 		set {_loc} to location of {_p}
@@ -222,7 +222,7 @@ function ultBS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 					if loop-block is not air:
 						set {_block} to type of loop-block
 						draw 1 of block particle using {_block} at block 0.5 above loop-block with extra 0.5
-		set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
+		set {-balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
 		loop all living entities in radius 4.5 around {_p}:
 			if loop-entity is not {_p}:
 				updateAttacker({_p}, loop-entity)
@@ -232,22 +232,22 @@ function ultBS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 				push loop-entity upward at speed 0.85
 				staminaPause(loop-entity, {_pauseDuration})
 				set {_hit} to true
-		delete {balance-abilitySource::%{_p}'s uuid%}
+		delete {-balance-abilitySource::%{_p}'s uuid%}
 		if {_hit} is set:
 			delete {_hit}
 		wait 2 seconds
 
-	set {godlike-ULT-CD::%{_p}'s uuid%::BS} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::BS}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::BS}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::BS} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::BS}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::BS}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::BS}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::BS}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::BS}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::BS}
 	if {class::%{_p}'s uuid%} = "BS":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
 on load:
-	delete {bsReflecting} # the shield reflect's re-entry guard (bsReflect) — never left set across a reload
+	delete {-bsReflecting} # the shield reflect's re-entry guard (bsReflect) — never left set across a reload

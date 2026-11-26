@@ -14,7 +14,7 @@ on sprint toggle: # smoke trail while sprinting
 		if player isn't sprinting:
 			wait 1 tick
 			while player is sprinting:
-				if {godlike-ULT-USE::%player's uuid%::GD} is set:
+				if {-godlike-ULT-USE::%player's uuid%::GD} is set:
 					stop
 				if player.isOnGround() is true:
 					draw 1 of smoke at player with extra 0
@@ -28,7 +28,7 @@ on right click with golden sword: # TACTICAL
 			if classLevel(player, "GD") >= 2: # Perk 1 (Deeper Shadows) — below 5 hearts instead
 				set {_below} to 5
 			if health of player < {_below}:
-				if {godlike-ULT-USE::%player's uuid%::GD} isn't set:
+				if {-godlike-ULT-USE::%player's uuid%::GD} isn't set:
 					gdTacInvisOn(player)
 			set velocity of player to vector(0, 0, 0)
 			push player forward at speed 1.1
@@ -38,7 +38,7 @@ on right click with golden sword: # TACTICAL
 			set {_gd} to 3 # Lunge damage (was 1.75)
 			loop 10 times:
 				add 1 to {_n}
-				set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
+				set {-balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
 				if player isn't on ground:
 					loop all living entities in radius 2 around player:
 						if loop-entity is not player:
@@ -56,9 +56,9 @@ on right click with golden sword: # TACTICAL
 								damage loop-entity by {_gd}
 								add loop-entity to {_tacHit::*}
 				else:
-					delete {balance-abilitySource::%player's uuid%}
+					delete {-balance-abilitySource::%player's uuid%}
 					stop loop
-				delete {balance-abilitySource::%player's uuid%}
+				delete {-balance-abilitySource::%player's uuid%}
 				wait 5 ticks
 			gdTacInvisOff(player) # no-op unless the passive turned the Ghost invisible for this lunge
 
@@ -69,17 +69,17 @@ on drop of golden sword with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::GD::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::GD} is set:
+		if {-godlike-ULT-USE::%player's uuid%::GD} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::GD} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::GD}
+		else if {-godlike-ULT-CD::%player's uuid%::GD} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::GD}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::GD::ULT-COST}) is true:
 			ultGD(player, {_ultCooldown}, classLevel(player, "GD"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultGD(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::GD} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::GD} to now
 	if {_lvl} >= 3: # Perk 2 (Supportive Ghost)
 		removeBadEffects({_p}, "victim")
 		add potion effect of regeneration 3 without particles for 5 seconds to potion effects of {_p}
@@ -105,13 +105,13 @@ function ultGD(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	set {total-armor::%{_p}'s uuid%} to {_ta}
 	set {projectile-armor::%{_p}'s uuid%} to {_pa}
 
-	while {godlike-ULT-USE::%{_p}'s uuid%::GD} is set:
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::GD} is set:
+	while {-godlike-ULT-USE::%{_p}'s uuid%::GD} is set:
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::GD} is set:
 			stop loop
 		add 1 to {_n}
 		if {_n} = 100:
 			stop loop
-		if {godlike-ULT-USE::%{_p}'s uuid%::GD} is false:
+		if {-godlike-ULT-USE::%{_p}'s uuid%::GD} is false:
 			if {_n} > 20:
 				stop loop
 			else: # allows a guaranteed 1 second of ult
@@ -119,8 +119,8 @@ function ultGD(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 				stop loop
 		else:
 			wait 1 tick
-	delete {godlike-ULT-USE::%{_p}'s uuid%::GD}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::GD}
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::GD}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::GD}
 	remove speed from active potion effects of {_p}
 	remove invisibility from active potion effects of {_p}
 	setLevelTagNameVisible({_p}, true) # 04-leveling.sk
@@ -133,13 +133,13 @@ function ultGD(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	set {_p}'s boots to {_armor::4}
 	play sound "block_fire_extinguish" with volume 5 and pitch 1 at {_p}
 	draw 25 of large_smoke at {_p} with offset vector(0.5, 0.5, 0.5) with extra 0.1
-	set {godlike-ULT-CD::%{_p}'s uuid%::GD} to now
+	set {-godlike-ULT-CD::%{_p}'s uuid%::GD} to now
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::GD}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::GD}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::GD}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::GD}
 	if {class::%{_p}'s uuid%} = "GD":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
@@ -169,7 +169,7 @@ function gdTacInvisOff(p: player): # ends the passive's invisibility — safe to
 	if {gd-tacInvis::%{_p}'s uuid%} isn't set:
 		stop
 	set {_uuid} to {_p}'s uuid
-	if {godlike-ULT-USE::%{_uuid}%::GD} isn't set: # if the ultimate somehow took over, leave its invisibility alone
+	if {-godlike-ULT-USE::%{_uuid}%::GD} isn't set: # if the ultimate somehow took over, leave its invisibility alone
 		remove invisibility from active potion effects of {_p}
 	if {_p} is online:
 		if health of {_p} > 0:
@@ -179,7 +179,7 @@ function gdTacInvisOff(p: player): # ends the passive's invisibility — safe to
 					set {_p}'s chestplate to {gd-tacInvisArmor::%{_uuid}%::2}
 					set {_p}'s leggings to {gd-tacInvisArmor::%{_uuid}%::3}
 					set {_p}'s boots to {gd-tacInvisArmor::%{_uuid}%::4}
-				if {godlike-ULT-USE::%{_uuid}%::GD} isn't set:
+				if {-godlike-ULT-USE::%{_uuid}%::GD} isn't set:
 					setLevelTagNameVisible({_p}, true) # 04-leveling.sk
 				play sound "block_fire_extinguish" with volume 2 and pitch 1 at {_p}
 	delete {gd-tacInvisArmor::%{_uuid}%::*}
@@ -190,35 +190,35 @@ on load:
 	delete {gd-tacInvisArmor::*}
 
 function gdCHECK(a: living entity, v: living entity) :: number: # wrapper - see the Skript bug note in 10-match-manager.sk's forceEndMatch()
-	delete {gdCHECKResult}
+	delete {-gdCHECKResult}
 	gdCHECKWorker({_a}, {_v})
-	if {gdCHECKResult} is set:
-		return {gdCHECKResult}
+	if {-gdCHECKResult} is set:
+		return {-gdCHECKResult}
 	# else falls through, returning nothing — matches the original, which only
 	# returns when its conditions are met, leaving the caller's {_temp} unset otherwise
 
 function gdCHECKWorker(a: living entity, v: living entity): # empowered next-hit after the tactical dash, or a weaker version if the ultimate has already ended
 	if name of {_a}'s held item is "%{wc}%Ghost Dagger" or "%{wc}%Spell Breaker": # Spell Breaker: a stolen Ghost (spellbreaker.sk / 08-damage.sk)
-		if {godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
+		if {-godlike-ULT-USE::%{_a}'s uuid%::GD} is set:
 			set {_h} to 2.5 # flat damage: 2.5, +0.5 for every full second spent in the ultimate (max 4.5 at 4+ s); crits add nothing (this is its own hit)
-			if {godlike-ULT-USE::%{_a}'s uuid%::GD} isn't false: # hit during the ultimate -> stays at the 2.5 base
-				set {_time} to difference between now and {godlike-ULT-USE::%{_a}'s uuid%::GD}
+			if {-godlike-ULT-USE::%{_a}'s uuid%::GD} isn't false: # hit during the ultimate -> stays at the 2.5 base
+				set {_time} to difference between now and {-godlike-ULT-USE::%{_a}'s uuid%::GD}
 				set {_check} to 80 ticks
 				loop 4 times:
 					if {_time} > {_check}:
 						add 0.5 to {_h}
 					remove 20 ticks from {_check}
 
-			delete {godlike-ULT-USE::%{_a}'s uuid%::GD}
+			delete {-godlike-ULT-USE::%{_a}'s uuid%::GD}
 			updateAttacker({_a}, {_v})
-			set {balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk — the execute is Ghost's ultimate finishing off whatever hit triggered it
+			set {-balance-abilitySource::%{_a}'s uuid%} to "ULT" # 19-balance-stats.sk — the execute is Ghost's ultimate finishing off whatever hit triggered it
 			damage {_v} by {_h} # this re-enters the normal damage pipeline (on damage of living entity with priority high -> dmgUpdate -> dmgStats) on its own, so no separate dmgStats() call is needed here — the removed manual call was double-counting this hit
-			delete {balance-abilitySource::%{_a}'s uuid%}
+			delete {-balance-abilitySource::%{_a}'s uuid%}
 			make 25 of block particle using redstone block at block 1.5 above location of {_v}
 			play sound "BLOCK_STONE_BREAK" at volume 5 at location of {_v}
-			set {gdCHECKResult} to 0
+			set {-gdCHECKResult} to 0
 
 on damage of player: # marks the empowered hit as "consumed" once landed
 	if "%event-damagecause%" is "attack" or "projectile":
-		if {godlike-ULT-USE::%victim's uuid%::GD} is set:
-			set {godlike-ULT-USE::%victim's uuid%::GD} to false
+		if {-godlike-ULT-USE::%victim's uuid%::GD} is set:
+			set {-godlike-ULT-USE::%victim's uuid%::GD} to false

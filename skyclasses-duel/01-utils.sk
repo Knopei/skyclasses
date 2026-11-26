@@ -29,8 +29,8 @@ function directAttack(v: living entity):
 	# Cancels Ghost's (GD) mid-ultimate empowered-next-hit flag if the ultimate
 	# fires from something other than the empowered attack itself (e.g. a tactical
 	# or an unrelated hit landing while the ultimate is active).
-	if {godlike-ULT-USE::%{_v}'s uuid%::GD} is set:
-		set {godlike-ULT-USE::%{_v}'s uuid%::GD} to false
+	if {-godlike-ULT-USE::%{_v}'s uuid%::GD} is set:
+		set {-godlike-ULT-USE::%{_v}'s uuid%::GD} to false
 
 function itemEnchant(p: player, name: string):
 	loop {_p}'s inventory:
@@ -47,21 +47,21 @@ function itemDisenchant(p: player, name: string):
 			stop loop
 
 function staminaPause(p: player, time: number):
-	set {staminaPause::%{_p}'s uuid%} to true
+	set {-staminaPause::%{_p}'s uuid%} to true
 	set {_time} to "%{_time}% seconds" parsed as a timespan
 	wait {_time}
-	delete {staminaPause::%{_p}'s uuid%}
+	delete {-staminaPause::%{_p}'s uuid%}
 
 function invulnerabilityFix(e: living entity): # tracks a living entity's invulnerability time so it can be checked without waiting on it
-	set {invulnerabilityFix::%{_e}'s uuid%} to ({_e}'s invulnerability time) - 1 ticks
-	while {invulnerabilityFix::%{_e}'s uuid%} > 0 ticks:
+	set {-invulnerabilityFix::%{_e}'s uuid%} to ({_e}'s invulnerability time) - 1 ticks
+	while {-invulnerabilityFix::%{_e}'s uuid%} > 0 ticks:
 		wait 1 tick
-		remove 1 tick from {invulnerabilityFix::%{_e}'s uuid%}
-	delete {invulnerabilityFix::%{_e}'s uuid%}
+		remove 1 tick from {-invulnerabilityFix::%{_e}'s uuid%}
+	delete {-invulnerabilityFix::%{_e}'s uuid%}
 
 function invulnerabilityCheck(e: living entity) :: timespan:
-	if {invulnerabilityFix::%{_e}'s uuid%} is set:
-		return {invulnerabilityFix::%{_e}'s uuid%}
+	if {-invulnerabilityFix::%{_e}'s uuid%} is set:
+		return {-invulnerabilityFix::%{_e}'s uuid%}
 	else:
 		return 0 ticks
 
@@ -165,18 +165,18 @@ on shoot:
 # and a single shared "every 1 tick" trigger below handles drawing/cleanup for
 # every registered projectile independently.
 function trackProjectileTrail(p: entity):
-	add {_p} to {trailTrack::*}
+	add {_p} to {-trailTrack::*}
 
 every 1 tick:
-	loop {trailTrack::*}:
+	loop {-trailTrack::*}:
 		if loop-value is not valid: # removed without ever landing (e.g. a boss's arrows cleared when it dies or despawns) — without this it stayed in the list and kept drawing sparks where it vanished
-			remove loop-value from {trailTrack::*}
+			remove loop-value from {-trailTrack::*}
 		else if metadata value "hit" of loop-value is set:
-			remove loop-value from {trailTrack::*}
+			remove loop-value from {-trailTrack::*}
 		else if (y-coord of loop-value) < -75:
 			set metadata value "hit" of loop-value to true
 			kill loop-value
-			remove loop-value from {trailTrack::*}
+			remove loop-value from {-trailTrack::*}
 		else:
 			draw 1 of electric spark particle at loop-value with offset vector(0, 0, 0) with extra 0
 
@@ -186,7 +186,7 @@ every 1 tick:
 # that first-ever trident throw doesn't skip the cancel/restore and let the
 # vanilla throw consume the real weapon.
 on join:
-	set {projectileChangeFix::%player's uuid%} to now
+	set {-projectileChangeFix::%player's uuid%} to now
 
 # ---- BASIC ADMIN COMMANDS (kept per design decision; all other debug tools dropped) ----
 command /gmsp [<offline player>]:
@@ -288,7 +288,7 @@ command /mana <text> [<integer>] [<player>]:
 		if arg-1 is "set":
 			if arg-2 is set:
 				set {_m} to arg-2
-				set {mana::%{_player}'s uuid%::curr} to {_m}
+				set {-mana::%{_player}'s uuid%::curr} to {_m}
 				send "&aYou set your mana to %{_m}%!"
 		else if arg-1 is "pace":
 			if arg-2 is set:
@@ -296,12 +296,12 @@ command /mana <text> [<integer>] [<player>]:
 				if {_m} > 10:
 					set {_m} to 10
 				send "&eYou now gain x%{_m}% times the mana!"
-				set {mana::%{_player}'s uuid%::pace} to {_m}
+				set {-mana::%{_player}'s uuid%::pace} to {_m}
 		else if arg-1 is "max":
 			if arg-2 is set:
 				set {_m} to arg-2
 				send "&eYou set you max mana to %{_m}%"
-				set {mana::%{_player}'s uuid%::max} to arg-2
+				set {-mana::%{_player}'s uuid%::max} to arg-2
 
 command /stamina <text> [<integer>] [<player>]:
 	permission: op
@@ -313,7 +313,7 @@ command /stamina <text> [<integer>] [<player>]:
 		if arg-1 is "set":
 			if arg-2 is set:
 				set {_m} to arg-2
-				set {stamina::%{_player}'s uuid%::curr} to {_m}
+				set {-stamina::%{_player}'s uuid%::curr} to {_m}
 				send "&aYou set your stamina to %{_m}%!"
 		else if arg-1 is "pace":
 			if arg-2 is set:
@@ -321,22 +321,22 @@ command /stamina <text> [<integer>] [<player>]:
 				if {_m} > 10:
 					set {_m} to 10
 				send "&eYou now gain x%{_m}% times the stamina!"
-				set {stamina::%{_player}'s uuid%::pace} to {_m}
+				set {-stamina::%{_player}'s uuid%::pace} to {_m}
 		else if arg-1 is "max":
 			if arg-2 is set:
 				set {_m} to arg-2
 				send "&eYou set you max stamina to %{_m}%"
-				set {stamina::%{_player}'s uuid%::max} to arg-2
+				set {-stamina::%{_player}'s uuid%::max} to arg-2
 
 function clearCurrClass(p: player): # called by 05-class-menu.sk's classSelect() when swapping away from a class — resets per-class visual/state flags
 	set {_uuid} to {_p}'s uuid
-	delete {godlike-ULT-USE::%{_uuid}%::*}
-	delete {godlike-ULT-CANCEL::%{_uuid}%::*}
-	delete {isShielding::%{_uuid}%}
-	delete {mighty-DASH::%{_uuid}%}
-	delete {reaper-attack::%{_uuid}%}
-	delete {zeus-attack::%{_uuid}%}
-	delete {playerDefense::%{_uuid}%}
+	delete {-godlike-ULT-USE::%{_uuid}%::*}
+	delete {-godlike-ULT-CANCEL::%{_uuid}%::*}
+	delete {-isShielding::%{_uuid}%}
+	delete {-mighty-DASH::%{_uuid}%}
+	delete {-reaper-attack::%{_uuid}%}
+	delete {-zeus-attack::%{_uuid}%}
+	delete {-playerDefense::%{_uuid}%}
 	delete {sbTacNext::%{_uuid}%} # spellbreaker.sk — the tactical starts over on Phase Step
 	set level of {_p} to 0
 	set level progress of {_p} to 0
@@ -420,3 +420,230 @@ function clearPlayerBossBars(p: player):
 	while {_it}.hasNext() is true:
 		set {_bar} to {_it}.next()
 		{_bar}.removePlayer({_p})
+
+# ---- PERFORMANCE: memory-only variables ----
+# Variables whose name starts with "-" (e.g. {-mana::...}) live only in memory and are never written to variables.csv. Everything
+# that changes many times a second or only matters during a match (mana, stamina, combat timers, cooldown / ultimate flags, fight
+# trackers, entity references) uses that form, so the server isn't constantly queueing disk writes and doesn't freeze when Skript
+# rewrites a big variables file. This one-time cleanup deletes the old saved copies of those variables (from before the rename),
+# shrinking the file. It runs once per server (the {perfCleanupV1} flag).
+on load:
+	if {perfCleanupV1} isn't set:
+		set {perfCleanupV1} to true
+		delete {ability-cooldown::*}
+		delete {ability-cooldown}
+		delete {arenaFrogMob::*}
+		delete {arenaFrogMob}
+		delete {balance-abilitySource::*}
+		delete {balance-abilitySource}
+		delete {balance-abilitySourceSet::*}
+		delete {balance-abilitySourceSet}
+		delete {balance-fireSource::*}
+		delete {balance-fireSource}
+		delete {balance-fireSourceSet::*}
+		delete {balance-fireSourceSet}
+		delete {bsReflecting::*}
+		delete {bsReflecting}
+		delete {cbPhaseBoost::*}
+		delete {cbPhaseBoost}
+		delete {cbPhaseOK::*}
+		delete {cbPhaseOK}
+		delete {cleanseImmune::*}
+		delete {cleanseImmune}
+		delete {combat::*}
+		delete {combat}
+		delete {combatBarShown::*}
+		delete {combatBarShown}
+		delete {combatViewer::*}
+		delete {combatViewer}
+		delete {consume-cooldown::*}
+		delete {consume-cooldown}
+		delete {ea-chargeLevel::*}
+		delete {ea-chargeLevel}
+		delete {ea-tacBuff::*}
+		delete {ea-tacBuff}
+		delete {ea-ultLvl::*}
+		delete {ea-ultLvl}
+		delete {eaWatch::*}
+		delete {eaWatch}
+		delete {ecDelta::*}
+		delete {ecDelta}
+		delete {ecExec::*}
+		delete {ecExec}
+		delete {ecF::*}
+		delete {ecF}
+		delete {ecFightEC::*}
+		delete {ecFightEC}
+		delete {fhULTResult::*}
+		delete {fhULTResult}
+		delete {forgeGolem::*}
+		delete {forgeGolem}
+		delete {gdCHECKResult::*}
+		delete {gdCHECKResult}
+		delete {godlike-ULT-CANCEL::*}
+		delete {godlike-ULT-CANCEL}
+		delete {godlike-ULT-CD::*}
+		delete {godlike-ULT-CD}
+		delete {godlike-ULT-USE::*}
+		delete {godlike-ULT-USE}
+		delete {hbAdj::*}
+		delete {hbAdj}
+		delete {hbDelta::*}
+		delete {hbDelta}
+		delete {hbExec::*}
+		delete {hbExec}
+		delete {hbFight::*}
+		delete {hbFight}
+		delete {hbFightClass::*}
+		delete {hbFightClass}
+		delete {hbFightHB::*}
+		delete {hbFightHB}
+		delete {hbFightLast::*}
+		delete {hbFightLast}
+		delete {hbFightPlayers::*}
+		delete {hbFightPlayers}
+		delete {hbFightSave::*}
+		delete {hbFightSave}
+		delete {hbFightWinner::*}
+		delete {hbFightWinner}
+		delete {hbPending::*}
+		delete {hbPending}
+		delete {invulnerabilityFix::*}
+		delete {invulnerabilityFix}
+		delete {isShielding::*}
+		delete {isShielding}
+		delete {jgRegenNext::*}
+		delete {jgRegenNext}
+		delete {lastMoveAbility::*}
+		delete {lastMoveAbility}
+		delete {levelTag::*}
+		delete {levelTag}
+		delete {levelTagSneakStart::*}
+		delete {levelTagSneakStart}
+		delete {lwRegenBlock::*}
+		delete {lwRegenBlock}
+		delete {lwSkip::*}
+		delete {lwSkip}
+		delete {lwWound::*}
+		delete {lwWound}
+		delete {mana::*}
+		delete {mana}
+		delete {manaLock::*}
+		delete {manaLock}
+		delete {mbMagmaTouch::*}
+		delete {mbMagmaTouch}
+		delete {mighty-DASH::*}
+		delete {mighty-DASH}
+		delete {minibossmobs::*}
+		delete {minibossmobs}
+		delete {nameHidden::*}
+		delete {nameHidden}
+		delete {nsHit::*}
+		delete {nsHit}
+		delete {pfCons::*}
+		delete {pfCons}
+		delete {pfPerk::*}
+		delete {pfPerk}
+		delete {pgBelieverNext::*}
+		delete {pgBelieverNext}
+		delete {playerDefense::*}
+		delete {playerDefense}
+		delete {projectileChangeFix::*}
+		delete {projectileChangeFix}
+		delete {rapid-attack::*}
+		delete {rapid-attack}
+		delete {rdActUseful::*}
+		delete {rdActUseful}
+		delete {rdBlockNote::*}
+		delete {rdBlockNote}
+		delete {rdF::*}
+		delete {rdF}
+		delete {rdFightRD::*}
+		delete {rdFightRD}
+		delete {rdL::*}
+		delete {rdL}
+		delete {rdPrevNote::*}
+		delete {rdPrevNote}
+		delete {rdShadow::*}
+		delete {rdShadow}
+		delete {rdShadowHold::*}
+		delete {rdShadowHold}
+		delete {reaper-attack::*}
+		delete {reaper-attack}
+		delete {rg::*}
+		delete {rg}
+		delete {rg-hitEntity::*}
+		delete {rg-hitEntity}
+		delete {rg-hitLoc::*}
+		delete {rg-hitLoc}
+		delete {rg-movement::*}
+		delete {rg-movement}
+		delete {rgCheckResult::*}
+		delete {rgCheckResult}
+		delete {sbChain::*}
+		delete {sbChain}
+		delete {sbTargetResult::*}
+		delete {sbTargetResult}
+		delete {shieldCooldown::*}
+		delete {shieldCooldown}
+		delete {shieldCooldownTracker::*}
+		delete {shieldCooldownTracker}
+		delete {spawn-protection::*}
+		delete {spawn-protection}
+		delete {stamina::*}
+		delete {stamina}
+		delete {stamina-cooldown::*}
+		delete {stamina-cooldown}
+		delete {staminaPause::*}
+		delete {staminaPause}
+		delete {stopPhysics::*}
+		delete {stopPhysics}
+		delete {tabCustom::*}
+		delete {tabCustom}
+		delete {trailTrack::*}
+		delete {trailTrack}
+		delete {tsAirborne::*}
+		delete {tsAirborne}
+		delete {zeus-attack::*}
+		delete {zeus-attack}
+
+# One-time cleanup #2 (found in variables.csv, Nov 2026):
+#   - damage stats saved under ~2,400 mob UUIDs (jungle mobs / bosses that hit players, from before dmgStats() only counted players):
+#     {damage::<mob>}, {class-damage::<mob>::*} and {matchdamage::<mob>} — about 10,800 variables, 0.8 MB. Kept only for real players
+#     (anyone with a {kill::<uuid>} stat, which every player gets on first join).
+#   - variables no script uses any more (old prototype / menu / draft-deck leftovers).
+on load:
+	if {perfCleanupV2} isn't set:
+		set {perfCleanupV2} to true
+		loop {damage::*}:
+			if {kill::%loop-index%} isn't set:
+				set {_junk::%loop-index%} to true
+		loop {matchdamage::*}:
+			if {kill::%loop-index%} isn't set:
+				set {_junk::%loop-index%} to true
+		loop {_junk::*}:
+			delete {damage::%loop-index%}
+			delete {class-damage::%loop-index%::*}
+			delete {matchdamage::%loop-index%}
+			delete {matchdamage::%loop-index%::*}
+		delete {mbMagma::*}
+		delete {sv-r::*}
+		delete {sv-l::*}
+		delete {classBrowserSlotClass::*}
+		delete {draftMenuSlotClass::*}
+		delete {class-menu::*}
+		delete {protocfg::*}
+		delete {classlevel-lore::*}
+		delete {class-blurb::*}
+		delete {perk-display-name::*}
+		delete {category-buff::*}
+		delete {minibossbuffs::*}
+		delete {gd-speeduntil::*}
+		delete {tbMagmaTouch::*}
+		delete {grantPerkResult}
+		delete {arrow-slot::*}
+		delete {protoClock}
+		delete {draftDeckV2}
+		delete {draftDeckV3}
+		delete {draftDeckV4}
+		delete {draftResult}

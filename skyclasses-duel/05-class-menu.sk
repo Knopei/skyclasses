@@ -155,12 +155,12 @@ function classSelect(p: player, class: text):
 	nadeCount({_p}, {_id}) # 07-consumables.sk
 	maxHealth({_p}) # 04-leveling.sk
 
-	set {mana::%{_uuid}%::max} to 1000
-	set {stamina::%{_uuid}%::max} to 900
+	set {-mana::%{_uuid}%::max} to 1000
+	set {-stamina::%{_uuid}%::max} to 900
 	set {currWeapon::%{_uuid}%} to {_class}
 
 	if {_class} = "NS": # baseline passive "Improved Stamina" — increased max stamina, no longer level-gated
-		set {stamina::%{_uuid}%::max} to 1200
+		set {-stamina::%{_uuid}%::max} to 1200
 	else if {_class} = "BS":
 		set {shieldStrength::%{_uuid}%} to {weapons::BS::SS}
 		set level progress of {_p} to 0.99
@@ -173,7 +173,7 @@ function classSelect(p: player, class: text):
 	else if {_class} = "TS": # tempest.sk — clears the one-time self-push flag Tornado uses, so a leftover flag from a previous life doesn't suppress the self-push the next time this player casts Tornado
 		delete {tornadoMovement::%{_uuid}%}
 
-	set {stamina::%{_uuid}%::curr} to {stamina::%{_uuid}%::max} # always full on respawn — also clears any stale overflow if the previous life's class had a different max (e.g. swapping away from NS's Perk 1 bonus)
+	set {-stamina::%{_uuid}%::curr} to {-stamina::%{_uuid}%::max} # always full on respawn — also clears any stale overflow if the previous life's class had a different max (e.g. swapping away from NS's Perk 1 bonus)
 
 	send "&eYou selected the &6%{class-name::%{_class}%}% &eclass!" to {_p}
 	updateNametag({_p}) # 04-leveling.sk
@@ -187,20 +187,20 @@ function classSelect(p: player, class: text):
 	# and nothing here should impose an artificial fresh wait on top of that.
 	# EXCLUDES "CB" — Cyberpunk's 2-charge ultimate is entirely managed by its
 	# own cbULT() background loop (started above), which reads/writes this same
-	# {godlike-ULT-CD::*::CB} variable on its own schedule. Letting this generic
+	# {-godlike-ULT-CD::*::CB} variable on its own schedule. Letting this generic
 	# block ALSO wait on and delete that variable races with cbULT() and was
 	# corrupting CB's charge timing/display — this is the actual fix for
 	# "Cyberpunk ult cooldowns and timer" being wrong.
 	if {_class} isn't "CB":
 		if classLevel({_p}, {_class}) >= 1:
-			if {godlike-ULT-CD::%{_uuid}%::%{_class}%} is set:
+			if {-godlike-ULT-CD::%{_uuid}%::%{_class}%} is set:
 				set {_wait} to {weapons::%{_class}%::ULT-CD}
-				set {_elapsed} to difference between now and {godlike-ULT-CD::%{_uuid}%::%{_class}%}
+				set {_elapsed} to difference between now and {-godlike-ULT-CD::%{_uuid}%::%{_class}%}
 				set {_remaining} to {_wait} - {_elapsed}
 				if {_remaining} > 0 seconds:
 					wait {_remaining}
-					delete {godlike-ULT-CD::%{_uuid}%::%{_class}%} # always clear it once truly expired, regardless of what class is currently active — this is what lets charge finish "in the background" even while playing a different class
+					delete {-godlike-ULT-CD::%{_uuid}%::%{_class}%} # always clear it once truly expired, regardless of what class is currently active — this is what lets charge finish "in the background" even while playing a different class
 					if {class::%{_uuid}%} = {_class}: # only play the ready sound if they're still actually on this class when it happens, to avoid a confusing out-of-context cue
 						play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 				else:
-					delete {godlike-ULT-CD::%{_uuid}%::%{_class}%} # already recharged by wall-clock time while they were dead/choosing
+					delete {-godlike-ULT-CD::%{_uuid}%::%{_class}%} # already recharged by wall-clock time while they were dead/choosing

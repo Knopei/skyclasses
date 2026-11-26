@@ -128,7 +128,7 @@ function forceEndMatchWorker(reason: text):
 			{_p}.setAllowFlight(false)
 		delete {hadLead::%{_p}'s uuid%}
 		delete {wasBehind::%{_p}'s uuid%}
-		delete {spawn-protection::%{_p}'s uuid%}
+		delete {-spawn-protection::%{_p}'s uuid%}
 		resetPlayerLeveling({_p}) # 04-leveling.sk
 		resetMatchStats({_p})
 		if {_p} is online:
@@ -290,8 +290,8 @@ function enterArena(p1: player, p2: player): # called by 17-draft.sk once the dr
 	set {matchStartTime} to unix timestamp of now # 04-leveling.sk reads this for Early/Mid/Late-Game XP; also used for match duration
 	delete {firstBloodClaimed} # 09-death-match.sk checks this
 
-	set {projectileChangeFix::%{_p1}'s uuid%} to now # zeus.sk's TAC breaks if this is ever unset (see 01-utils.sk's on-join initializer) — set again here as a guarantee at the start of every match, regardless of what happened before
-	set {projectileChangeFix::%{_p2}'s uuid%} to now
+	set {-projectileChangeFix::%{_p1}'s uuid%} to now # zeus.sk's TAC breaks if this is ever unset (see 01-utils.sk's on-join initializer) — set again here as a guarantee at the start of every match, regardless of what happened before
+	set {-projectileChangeFix::%{_p2}'s uuid%} to now
 
 	teleport {_p1} to {playerSpawn::%{_p1}'s uuid%}
 	teleport {_p2} to {playerSpawn::%{_p2}'s uuid%}

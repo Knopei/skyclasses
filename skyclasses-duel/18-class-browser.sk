@@ -234,7 +234,7 @@ function openClassBrowser(p: player):
 
 	set slot 4 of metadata tag "class browser" of {_p} to {browser::caption}
 
-	delete {classBrowserSlotClass::%{_p}'s uuid%::*} # read by this menu's click handler below, rebuilt fresh every open
+	delete {-classBrowserSlotClass::%{_p}'s uuid%::*} # read by this menu's click handler below, rebuilt fresh every open
 	placeClassBrowserCategoryRow({_p}, 9, "STRIKER")
 	placeClassBrowserCategoryRow({_p}, 18, "JUGGERNAUT")
 	placeClassBrowserCategoryRow({_p}, 27, "SKIRMISHER")
@@ -250,7 +250,7 @@ function placeClassBrowserCategoryRow(p: player, rowStart: number, category: tex
 	set {_slot} to {_rowStart} + 2 # leaves a gray gap right after the category icon
 	loop {category-classes::%{_category}%::*}: # 02-class-data.sk
 		placeClassBrowserIcon({_p}, {_slot}, loop-value)
-		set {classBrowserSlotClass::%{_p}'s uuid%::%{_slot}%} to loop-value
+		set {-classBrowserSlotClass::%{_p}'s uuid%::%{_slot}%} to loop-value
 		add 1 to {_slot}
 
 function classRatingLore(p: player, class: text) :: strings: # shared by this file's browser icons and 17-draft.sk's draft-pick icons — stat rating rows (Close Damage/Range Damage/Toughness/Crowd Control/Mobility; Difficulty removed) + mastery line, with no trailing content of its own (callers add whatever comes after)
@@ -274,7 +274,7 @@ on inventory click:
 	if event-inventory = (metadata tag "class browser" of player):
 		cancel event
 		set {_slot} to index of event-slot
-		set {_class} to {classBrowserSlotClass::%player's uuid%::%{_slot}%}
+		set {_class} to {-classBrowserSlotClass::%player's uuid%::%{_slot}%}
 		if {_class} is set:
 			openClassInfoPage(player, {_class})
 			play sound "BLOCK_STONE_BUTTON_CLICK_ON" at volume 3 at pitch 1 to player
@@ -459,20 +459,20 @@ function classStatisticsIcon(p: player, class: text, recent: boolean) :: item: #
 	set {_uuid} to {_p}'s uuid
 	if {_recent} is true:
 		recentStatsAgg({_p}) # 14-stats.sk
-		set {_g} to bd({sv-r::%{_uuid}%::c::%{_class}%::g})
-		set {_w} to bd({sv-r::%{_uuid}%::c::%{_class}%::w})
-		set {_l} to bd({sv-r::%{_uuid}%::c::%{_class}%::l})
-		set {_k} to bd({sv-r::%{_uuid}%::c::%{_class}%::k})
-		set {_d} to bd({sv-r::%{_uuid}%::c::%{_class}%::d})
-		set {_dmg} to bd({sv-r::%{_uuid}%::c::%{_class}%::dmg})
-		set {_pd} to bd({sv-r::%{_uuid}%::c::%{_class}%::pd})
-		set {_dt} to bd({sv-r::%{_uuid}%::c::%{_class}%::dt})
-		set {_jg} to bd({sv-r::%{_uuid}%::c::%{_class}%::jg})
-		set {_bs} to bd({sv-r::%{_uuid}%::c::%{_class}%::bs})
-		set {_bl} to bd({sv-r::%{_uuid}%::c::%{_class}%::bl})
-		set {_bh} to bd({sv-r::%{_uuid}%::c::%{_class}%::bh})
-		set {_ks} to bd({sv-r::%{_uuid}%::c::%{_class}%::mxks})
-		set {_foot::*} to "" and "&e> Last 30 Games &7(%bd({sv-r::%{_uuid}%::n})% played)" and "&7[CLICK] Show lifetime" and ""
+		set {_g} to bd({-sv-r::%{_uuid}%::c::%{_class}%::g})
+		set {_w} to bd({-sv-r::%{_uuid}%::c::%{_class}%::w})
+		set {_l} to bd({-sv-r::%{_uuid}%::c::%{_class}%::l})
+		set {_k} to bd({-sv-r::%{_uuid}%::c::%{_class}%::k})
+		set {_d} to bd({-sv-r::%{_uuid}%::c::%{_class}%::d})
+		set {_dmg} to bd({-sv-r::%{_uuid}%::c::%{_class}%::dmg})
+		set {_pd} to bd({-sv-r::%{_uuid}%::c::%{_class}%::pd})
+		set {_dt} to bd({-sv-r::%{_uuid}%::c::%{_class}%::dt})
+		set {_jg} to bd({-sv-r::%{_uuid}%::c::%{_class}%::jg})
+		set {_bs} to bd({-sv-r::%{_uuid}%::c::%{_class}%::bs})
+		set {_bl} to bd({-sv-r::%{_uuid}%::c::%{_class}%::bl})
+		set {_bh} to bd({-sv-r::%{_uuid}%::c::%{_class}%::bh})
+		set {_ks} to bd({-sv-r::%{_uuid}%::c::%{_class}%::mxks})
+		set {_foot::*} to "" and "&e> Last 30 Games &7(%bd({-sv-r::%{_uuid}%::n})% played)" and "&7[CLICK] Show lifetime" and ""
 	else:
 		set {_g} to bd({class-games::%{_uuid}%::%{_class}%})
 		set {_w} to bd({class-wins::%{_uuid}%::%{_class}%})

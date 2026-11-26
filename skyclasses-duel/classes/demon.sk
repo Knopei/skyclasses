@@ -26,7 +26,7 @@ on right click with netherite sword: # TACTICAL
 			if classLevel(player, "DS") >= 2: # Perk 1 (Extended Siphon) — 7.5 blocks
 				set {_beamRange} to 7.5
 
-			set {balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
+			set {-balance-abilitySource::%player's uuid%} to "TAC" # 19-balance-stats.sk
 			set {_dis} to 0
 			while {_dis} < {_beamRange}: # steps of 1 block out to the range (the last step lands exactly on 7.5 with Extended Siphon)
 				add 1 to {_dis}
@@ -45,7 +45,7 @@ on right click with netherite sword: # TACTICAL
 								directAttack({_target})
 								damage {_target} by 0.5
 								healHP(player, 0.5) # 20-combat.sk — Lingering Wounds can shrink it
-			delete {balance-abilitySource::%player's uuid%}
+			delete {-balance-abilitySource::%player's uuid%}
 			if {_target} isn't set:
 				play sound "entity.blaze.hurt" at volume 3 and pitch 0.5 to player
 
@@ -56,30 +56,30 @@ on drop of netherite sword with priority low: # ULTIMATE
 			send "&cUltimate locked! Reach class level 1 to unlock." to player
 			stop
 		set {_ultCooldown} to ultCooldownFor(player, {weapons::DS::ULT-CD}) # 06-perks-general.sk — Spell Caster
-		if {godlike-ULT-USE::%player's uuid%::DS} is set:
+		if {-godlike-ULT-USE::%player's uuid%::DS} is set:
 			send "&cULT ALREADY ACTIVATED!" to player
-		else if {godlike-ULT-CD::%player's uuid%::DS} is set:
-			set {_time} to difference between now and {godlike-ULT-CD::%player's uuid%::DS}
+		else if {-godlike-ULT-CD::%player's uuid%::DS} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::DS}
 			if {_time} < {_ultCooldown}:
 				send "&cULT NOT READY!" to player
 		else if ultCHECK(player, {weapons::DS::ULT-COST}) is true:
 			ultDS(player, {_ultCooldown}, classLevel(player, "DS"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
 
 function ultDS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
-	set {godlike-ULT-USE::%{_p}'s uuid%::DS} to now
+	set {-godlike-ULT-USE::%{_p}'s uuid%::DS} to now
 	play sound "entity_blaze_death" with volume 5 and pitch 0.5 at {_p}
 	set {_shapes::circle} to a circle with radius 1.25
 	set particle of {_shapes::*} to 1 of dust_color_transition particle using dustTransition(red, black, 0.5)
 	set {_rotation} to rotation around vector(1, 1, 1) by 9 degrees
 	set {_n} to 39
 	loop 161 times:
-		if {godlike-ULT-CANCEL::%{_p}'s uuid%::DS} is set:
+		if {-godlike-ULT-CANCEL::%{_p}'s uuid%::DS} is set:
 			stop loop
 		add 1 to {_n}
 		if {_n} = 40:
 			set {_n} to 0
 			set {_max} to 0
-			set {balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
+			set {-balance-abilitySource::%{_p}'s uuid%} to "ULT" # 19-balance-stats.sk
 			loop all living entities in radius 6 around {_p}:
 				if loop-entity is not an armor stand: # excludes armor stands (including the per-player level-tag stands from 04-leveling.sk) from being targeted, damaged, or healed off of
 					if loop-entity is not {_p}:
@@ -101,22 +101,22 @@ function ultDS(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 			delete {_hits}
 			delete {_v}
 			delete {_max}
-			delete {balance-abilitySource::%{_p}'s uuid%}
+			delete {-balance-abilitySource::%{_p}'s uuid%}
 
 		set {_loc} to {_p}'s location
 		add 1 to y-coord of {_loc}
 		rotate shapes {_shapes::*} by {_rotation}
 		draw shapes {_shapes::*} at {_loc}
 		wait 1 tick
-	set {godlike-ULT-CD::%{_p}'s uuid%::DS} to now
-	delete {godlike-ULT-USE::%{_p}'s uuid%::DS}
-	delete {godlike-ULT-CANCEL::%{_p}'s uuid%::DS}
+	set {-godlike-ULT-CD::%{_p}'s uuid%::DS} to now
+	delete {-godlike-ULT-USE::%{_p}'s uuid%::DS}
+	delete {-godlike-ULT-CANCEL::%{_p}'s uuid%::DS}
 	# ULT CD
 	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
-		delete {godlike-ULT-CD::%{_p}'s uuid%::DS}
+		delete {-godlike-ULT-CD::%{_p}'s uuid%::DS}
 		stop
 	wait {_cd}
-	delete {godlike-ULT-CD::%{_p}'s uuid%::DS}
+	delete {-godlike-ULT-CD::%{_p}'s uuid%::DS}
 	if {class::%{_p}'s uuid%} = "DS":
 		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}
 
@@ -124,7 +124,7 @@ on damage of living entity: # PASSIVE — lifesteal on melee hit, boosted during
 	if attacker is a player:
 		if name of attacker's held item is "%{wc}%Demonic Saber":
 			if attack cooldown of attacker >= 0.75:
-				if {godlike-ULT-USE::%attacker's uuid%::DS} is set:
+				if {-godlike-ULT-USE::%attacker's uuid%::DS} is set:
 					if classLevel(attacker, "DS") >= 3: # Perk 2 (Vampire)
 						healHP(attacker, 0.75)
 					else:
@@ -132,7 +132,7 @@ on damage of living entity: # PASSIVE — lifesteal on melee hit, boosted during
 				else:
 					healHP(attacker, 0.25)
 		else if name of attacker's held item is "%{wc}%Spell Breaker": # spellbreaker.sk — a stolen Blood Harvest gives the shovel the ultimate's lifesteal (not the passive's)
-			if {godlike-ULT-USE::%attacker's uuid%::DS} is set:
+			if {-godlike-ULT-USE::%attacker's uuid%::DS} is set:
 				if attack cooldown of attacker >= 0.75:
 					if sbStolenLevel(attacker) >= 3: # Mastered Theft — the Vampire version
 						healHP(attacker, 0.75)

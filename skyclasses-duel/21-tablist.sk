@@ -138,14 +138,14 @@ every 1 seconds:
 					set {_footer} to "%nl%&8%{_opp}% is disconnected%nl%"
 			set player list header of {_p} to {_header}
 			set player list footer of {_p} to {_footer}
-			set {tabCustom::%{_u}%} to true
-		else if {tabCustom::%{_u}%} is set: # match over — back to the normal name, no table
+			set {-tabCustom::%{_u}%} to true
+		else if {-tabCustom::%{_u}%} is set: # match over — back to the normal name, no table
 			set player list name of {_p} to name of {_p}
 			set player list header of {_p} to ""
 			set player list footer of {_p} to ""
-			delete {tabCustom::%{_u}%}
+			delete {-tabCustom::%{_u}%}
 
 on join:
-	delete {tabCustom::%player's uuid%}
+	delete {-tabCustom::%player's uuid%}
 	set player list header of player to ""
 	set player list footer of player to ""
