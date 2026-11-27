@@ -453,6 +453,8 @@ function sbCastStolen(p: player, code: text):
 		ultTS({_p}, {_noCd}, {_lvl}, true) # tempest.sk
 	else if {_code} is "EA":
 		ultEA({_p}, {_noCd}, {_lvl}, true) # executioner.sk
+	else if {_code} is "HT":
+		ultHT({_p}, {_noCd}, {_lvl}, true) # hunter.sk
 	else if {_code} is "FM":
 		ultFM({_p}, {_noCd}, {_lvl}, true) # fisherman.sk
 	else if {_code} is "FG":

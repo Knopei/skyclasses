@@ -149,6 +149,8 @@ function actionBar(p: player):
 				if {_time} < {_cooldown}:
 					set {_pct} to floor(({_time} / {_cooldown}) * 100)
 			set {_ultText} to "&b%{_charges}%/2 ULT &7(%{_pct}%%%)"
+	else if htUltText({_p}) is not "": # hunter.sk — the crossbow ultimate: "8s ULT (4/4)" (time left, shots left)
+		set {_ultText} to htUltText({_p})
 	else if sbHeldText({_p}) is not "": # spellbreaker.sk — a Spell Breaker holding a stolen ultimate: "22s ULT: Viking" in purple
 		set {_ultText} to sbHeldText({_p})
 	else:

@@ -388,4 +388,6 @@ on right click:
 			push loop-entity upward at speed 0.5
 			push loop-entity {_v} at speed 1
 			dmgStats(player, loop-entity, {_d}, "nade")
+			if {class::%player's uuid%} is "HT": # hunter.sk — Hunter's passive (Crippling Traps): Slowness II + stamina lockout for 3 s
+				htNadeHit(player, loop-entity)
 		kill {_e}

@@ -75,6 +75,15 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 				delete {-ea-tacBuff::%{_a}'s uuid%}
 				eaRedstoneEffect({_v}) # executioner.sk
 			eaMarkCheck({_a}, {_v}) # executioner.sk — Executioner's Mark; just registers the victim for the real-health check on the global 1-second ticker, no health math happens here
+	else if {class::%{_a}'s uuid%} is "FM": # Fisherman — fisherman.sk
+		if {_cause} = "projectile":
+			if {_other} = "FMW": # the Whirlpool trident's direct hit: stamina disabled for 3 seconds
+				if {_v} is a player:
+					staminaPause({_v}, 3) # 01-utils.sk
+	else if {class::%{_a}'s uuid%} is "HT": # Hunter — hunter.sk
+		if {_cause} = "projectile":
+			if {_other} = "HT": # Bow Shot: 1 (+0.5 from 7.5+ blocks, +0.25 per heart over, max 4), Poison I, Perk 1's slow
+				set {_dmg} to htArrowHit({_a}, {_v})
 	else if {class::%{_a}'s uuid%} is "SB": # Spell Breaker — spellbreaker.sk: a stolen ultimate runs on the shovel as if it were that class's weapon
 		if {_cause} = "attack":
 			if {-godlike-ULT-USE::%{_a}'s uuid%::VBA} is set: # Big Rage — the x8 hit itself is in the base-damage handler below
@@ -87,6 +96,11 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 			if {_other} = "RB": # Rapid Bow's arrows — the same 7.5-block scaling as Rapid's
 				if (distance between {_a} and {_v}) >= 7.5:
 					set {_dmg} to {_dmg}*1.5
+			else if {_other} = "FMW": # a stolen Whirlpool's trident (fisherman.sk): stamina disabled for 3 seconds
+				if {_v} is a player:
+					staminaPause({_v}, 3) # 01-utils.sk
+			else if {_other} = "HT": # a stolen Poison-Tipped Crossbow's arrows (hunter.sk)
+				set {_dmg} to htArrowHit({_a}, {_v})
 	if {_temp} is set: # checks if any addon changed the damage
 		if {_temp} > 0:
 			set {_dmg} to {_dmg}+{_temp}
@@ -104,7 +118,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 							set {_dmg} to {_temp}
 
 	# 19-balance-stats.sk — DoT damage (fire-tick from Mighty's Fire Pit/Ninja's ignites/Rapid's Overheat, and wither from Reaper's passive) doesn't happen synchronously with the ability effect that started it, so the class file tags the VICTIM (setFireSource(), despite the name, is reused for any timed DoT) instead of the attacker; bridge that over to the attacker-keyed tag dmgStats()/recordDamageBySource() actually reads, for exactly this one hit
-	if {_cause} is "fire" or "fire_tick" or "fire tick" or "wither" or "poison":
+	if {_cause} is "fire" or "fire_tick" or "fire tick" or "burning" or "wither" or "poison":
 		if {-balance-fireSource::%{_v}'s uuid%} is set:
 			set {-balance-abilitySource::%{_a}'s uuid%} to {-balance-fireSource::%{_v}'s uuid%}
 
@@ -112,7 +126,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 	set {_mfIgnite} to false
 	if {_a} is a player:
 		if {_a} is not {_v}:
-			if {_cause} is not "fire" or "fire_tick" or "fire tick" or "wither" or "poison" or "fall" or "void":
+			if {_cause} is not "fire" or "fire_tick" or "fire tick" or "burning" or "wither" or "poison" or "fall" or "void":
 				if {_cause} is "attack":
 					if hlBuffOf({_a}) is "harbinger": # Harbinger's Might: +0.5 damage on every melee hit (after the class caps above, so Mighty / Frankenstein keep it too)
 						add 0.5 to {_dmg}
@@ -176,7 +190,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 	if {_v} is a player:
 		if {_a} is not {_v}:
 			if {_dmg} > 0:
-				if {_cause} is not "fire" or "fire_tick" or "fire tick" or "wither" or "poison" or "fall" or "void" or "lava" or "hot_floor" or "hot floor" or "freeze" or "suffocation" or "drowning" or "starvation" or "contact":
+				if {_cause} is not "fire" or "fire_tick" or "fire tick" or "burning" or "wither" or "poison" or "fall" or "void" or "lava" or "hot_floor" or "hot floor" or "freeze" or "suffocation" or "drowning" or "starvation" or "contact":
 					if categoryLevel2({_a}, "SKIRMISHER") is true: # 04-leveling.sk
 						if {_cause} is not "attack" or "projectile": # ability damage ("damage X by Y") names its attacker through updateAttacker() right before the hit — an older attacker (a boss or jungle hit landing on someone the Skirmisher hit earlier) doesn't count
 							set {_at} to metadata value "attackerAt" of {_v}
@@ -213,7 +227,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 		if {_a} is a player:
 			if {_a} is not {_v}:
 				if {_dmg} > 0:
-					if {_cause} is not "fire" or "fire_tick" or "fire tick" or "wither" or "poison" or "fall" or "void" or "lava" or "hot_floor" or "hot floor" or "freeze" or "suffocation" or "drowning" or "starvation" or "contact":
+					if {_cause} is not "fire" or "fire_tick" or "fire tick" or "burning" or "wither" or "poison" or "fall" or "void" or "lava" or "hot_floor" or "hot floor" or "freeze" or "suffocation" or "drowning" or "starvation" or "contact":
 						if categoryLevel2({_a}, "STRIKER") is true: # 04-leveling.sk
 							set {_lwOk} to true
 							if {_cause} is not "attack" or "projectile":
@@ -226,7 +240,7 @@ function dmgUpdate(a: living entity, v: living entity, dmg: number, cause: text,
 							if {_lwOk} is true:
 								lwApply({_a}, {_v}) # 20-combat.sk
 
-	if {_mfIgnite} is true: # Magmaroth's Fury: a hit that leaves the enemy at 1.5 hearts or less sets them on fire for 3 seconds
+	if {_mfIgnite} is true: # Magmaroth's Fury: a hit that leaves the enemy at 1.5 hearts or less sets them on fire for 3 seconds — 3 fire ticks. Only direct hits do this: the burn's own ticks ("burning") are excluded above, so it no longer keeps re-igniting itself while they stay low. No cooldown — every new hit at 1.5 hearts or less lights it again
 		if {_v} is alive:
 			if ((health of {_v}) - {_dmg}) <= 1.5:
 				set fire to {_v} for 3 seconds
@@ -335,8 +349,8 @@ on damage of living entity with priority high: # BASE DAMAGE — converts raw va
 				set {_w} to metadata value "type" of event-projectile
 				if event-projectile is a arrow or trident:
 					set {_new} to {_dmg} # default: raw damage passes through unscaled (e.g. Zeus's ZT trident, which has no R-AD multiplier) — without this, {_new} stayed unset for it and the whole block below (including showDMG) never ran, so a direct trident hit sometimes never showed its damage number
-					if {_w} is "FMW": # Fisherman's Whirlpool trident (fisherman.sk): a flat 2 on a direct hit
-						set {_new} to 2
+					if {_w} is "FMW": # Fisherman's Whirlpool trident (fisherman.sk): a flat 1 on a direct hit (+ a 3 s stamina lockout, dmgUpdate())
+						set {_new} to 1
 					if {weapons::%{_w}%::R-AD} is set:
 						set {_new} to {_dmg}*{weapons::%{_w}%::R-AD}
 						if {_new} < 0.5:

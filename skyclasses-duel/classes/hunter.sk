@@ -1,0 +1,242 @@
+# ============================================
+# HUNTER (HT) — Hunter's Bow (a bow used as a melee weapon; it never draws)
+# Striker (x5 melee, level 2 Lingering Wounds). Tactical: always available. Ultimate: unlocks at class level 1.
+#
+# Passive "Crippling Traps": your grenades give the enemies they hit Slowness II and (players) a stamina lockout for 3 seconds.
+#   Bosses keep their own slows and aren't affected. Hooked into 07-consumables.sk's grenade explosion.
+# Tactical "Bow Shot" (40 mana, paid on the press): a 0.5 s draw (sound + green particles, you can still move), then one fast arrow
+#   in the direction you face at release. 1 damage, +0.5 if it lands from 7.5+ blocks, +0.25 per heart of max health the target has
+#   over yours (counting at most 4 hearts) — 2.5 max — and Poison I for 3 seconds (08-damage.sk's dmgUpdate() HT branch).
+#   Arrows leave a faint green trail.
+# Ultimate "Poison-Tipped Crossbow" (60 mana, 80 s): a wolf howl, then after 1 s the bow becomes a crossbow (also a melee weapon)
+#   for 8 s. Bow Shot then costs no mana and fires 2 arrows in Ninja's tight spread, 4 times in all; once they're used up the
+#   tactical is locked until the ultimate ends. The action bar shows "8s ULT (4/4)", and a green trail follows you.
+#   Crossbow shots have their own draw / release sounds.
+# Perk 1 (level 2) "Hamstring": your arrows also give Slowness I for 3 seconds.
+# Perk 2 (level 3) "Volley": during the ultimate, each Bow Shot fires 3 arrows, but you get 3 shots instead of 4.
+# ============================================
+
+# ---- shared helpers ----
+
+function htUltLive(p: player) :: boolean: # the crossbow phase of the ultimate (after the 1 s howl)
+	if {-godlike-ULT-USE::%{_p}'s uuid%::HT} is set:
+		if {-htShotsMax::%{_p}'s uuid%} is set:
+			return true
+	return false
+
+function htUltText(p: player) :: text: # 03-resources.sk's action bar: "8s ULT (4/4)" — time left, shots left / shots
+	if htUltLive({_p}) is false:
+		return ""
+	set {_u} to {_p}'s uuid
+	set {_left} to ceil({-htUltEnd::%{_u}%} - (unix timestamp of now))
+	if {_left} < 0:
+		set {_left} to 0
+	return "&2%{_left}%s ULT (%{-htShots::%{_u}%}%/%{-htShotsMax::%{_u}%}%)"
+
+function htBoss(e: entity) :: boolean:
+	if metadata value "isMajorBoss" of {_e} is set:
+		return true
+	if metadata value "mbClone" of {_e} is set:
+		return true
+	return false
+
+# ---- PASSIVE: Crippling Traps ----
+
+function htNadeHit(p: player, v: living entity): # 07-consumables.sk — an enemy caught in this Hunter's grenade
+	if {_v} is {_p}:
+		stop
+	if htBoss({_v}) is true:
+		stop
+	add potion effect of slowness 2 for 3 seconds to potion effects of {_v}
+	if {_v} is a player:
+		staminaPause({_v}, 3) # 01-utils.sk
+
+# ---- TACTICAL: Bow Shot ----
+
+on right click with bow or crossbow:
+	if name of player's held item is "%{wc}%Hunter's Bow" or "%{wc}%Hunter's Crossbow":
+		cancel event # never draws / loads — the bow is a melee weapon
+		if {class::%player's uuid%} is "HT":
+			htTactical(player)
+		else if {class::%player's uuid%} is "SB": # a Spell Breaker's stolen crossbow (spellbreaker.sk)
+			if htUltLive(player) is true:
+				htTactical(player)
+
+function htTactical(p: player):
+	set {_u} to {_p}'s uuid
+	if {-htDrawing::%{_u}%} is set: # already drawing
+		stop
+	if htUltLive({_p}) is true: # the ultimate: free, a limited number of volleys
+		if {-htShots::%{_u}%} <= 0:
+			send "&cNo shots left!" to {_p}
+			play sound "BLOCK_NOTE_BLOCK_BASS" at volume 1 at pitch 0.5 to {_p}
+			stop
+		if tacCHECK({_p}, 0) is true: # 03-resources.sk — no mana, still the usual short ability cooldown
+			remove 1 from {-htShots::%{_u}%}
+			htDraw({_p}, {-htVolley::%{_u}%}, true)
+	else if tacCHECK({_p}, {weapons::HT::TAC-COST}) is true:
+		htDraw({_p}, 1, false)
+
+function htDraw(p: player, n: number, cross: boolean): # the 0.5 s draw, then the shot
+	set {_u} to {_p}'s uuid
+	set {-htDrawing::%{_u}%} to true
+	if {_cross} is true:
+		play sound "item.crossbow.loading_start" with volume 1.5 and pitch 0.9 at {_p}
+	else:
+		play sound "item.crossbow.loading_middle" with volume 1.2 and pitch 1.7 at {_p} # a light string-tension creak
+	loop 10 times:
+		if {_p} is online:
+			draw 1 of dust using dustOption(rgb(80, 190, 80), 0.7) at ((location of {_p}) offset by vector(0, 1.3, 0)) with offset vector(0.3, 0.2, 0.3)
+		wait 1 tick
+	delete {-htDrawing::%{_u}%}
+	if {_p} isn't online:
+		stop
+	if health of {_p} <= 0:
+		stop
+	if {respawning::%{_u}%} is set:
+		stop
+	if {_cross} is true:
+		play sound "item.crossbow.shoot" with volume 2.5 and pitch 0.8 at {_p}
+		play sound "entity.arrow.shoot" with volume 1 and pitch 0.6 at {_p}
+	else:
+		play sound "entity.arrow.shoot" with volume 2.5 and pitch 1.3 at {_p}
+	htFire({_p}, {_n})
+
+function htFire(p: player, n: number): # {_n} arrows, 3 ticks apart; more than one = Ninja's tight random spread
+	loop {_n} times:
+		if {_p} isn't online:
+			stop
+		if {_n} > 1:
+			set {_l} to location 0.5 in front of {_p}
+			add 1.5 to y-coord of {_l}
+			set {_jy} to a random number between -0.5 and 0.5
+			set {_jp} to a random number between -0.5 and 0.5
+			add {_jy} to yaw of {_l}
+			add {_jp} to pitch of {_l}
+			shoot a arrow from {_p} with speed 2.5
+			set {_xz} to cos(pitch of {_l})
+			set {_dx} to 0 - ({_xz} * sin(yaw of {_l}) * 2.5)
+			set {_dy} to 0 - (sin(pitch of {_l}) * 2.5)
+			set {_dz} to {_xz} * cos(yaw of {_l}) * 2.5
+			set velocity of shot projectile to vector({_dx}, {_dy}, {_dz})
+		else:
+			shoot a arrow from {_p} with speed 2.5
+		set metadata value "type" of shot projectile to "HT" # 08-damage.sk — the arrow's damage, poison and slow
+		set metadata value "attacker" of shot projectile to {_p}
+		set metadata value "balanceSource" of shot projectile to "TAC" # 19-balance-stats.sk
+		add shot projectile to {-htTrail::*} # the green trail (ticker below)
+		if loop-number < {_n}:
+			wait 3 ticks
+
+function htArrowHit(a: player, v: living entity) :: number: # 08-damage.sk — a Bow Shot arrow landed: returns its damage, applies its effects
+	set {_d} to 1
+	if (distance between {_a} and {_v}) >= 7.5:
+		add 0.5 to {_d}
+	hbScaleNote({_a}, {_v}, 0.25) # 25-balance-stats-advanced.sk — Healthy Boy Value
+	set {_over} to effMaxHealth({_v}) - effMaxHealth({_a}) # 01-utils.sk — absorption counts as max health
+	if {_over} > 4: # counts at most 4 hearts over
+		set {_over} to 4
+	if {_over} > 0:
+		add (0.25 * {_over}) to {_d}
+	updateAttacker({_a}, {_v}) # 01-utils.sk — so the poison ticks are credited to the Hunter
+	add potion effect of poison 1 for 3 seconds to potion effects of {_v}
+	if {class::%{_a}'s uuid%} is "HT":
+		if classLevel({_a}, "HT") >= 2: # Perk 1 (Hamstring)
+			if htBoss({_v}) is false:
+				add potion effect of slowness 1 for 3 seconds to potion effects of {_v}
+	return {_d}
+
+every 1 tick: # Bow Shot arrows' faint green trail
+	loop {-htTrail::*}:
+		if loop-value is not valid:
+			remove loop-value from {-htTrail::*}
+		else if metadata value "hit" of loop-value is set:
+			remove loop-value from {-htTrail::*}
+		else:
+			draw 1 of dust using dustOption(rgb(90, 200, 90), 0.6) at loop-value
+
+# ---- ULTIMATE: Poison-Tipped Crossbow ----
+
+on drop of bow with priority low:
+	if name of event-item is "%{wc}%Hunter's Bow":
+		cancel event
+		if classLevel(player, "HT") < 1:
+			send "&cUltimate locked! Reach class level 1 to unlock." to player
+			stop
+		set {_ultCooldown} to ultCooldownFor(player, {weapons::HT::ULT-CD}) # 06-perks-general.sk — Spell Caster
+		if {-godlike-ULT-USE::%player's uuid%::HT} is set:
+			send "&cULT ALREADY ACTIVATED!" to player
+		else if {-godlike-ULT-CD::%player's uuid%::HT} is set:
+			set {_time} to difference between now and {-godlike-ULT-CD::%player's uuid%::HT}
+			if {_time} < {_ultCooldown}:
+				send "&cULT NOT READY!" to player
+			else if ultCHECK(player, {weapons::HT::ULT-COST}) is true:
+				ultHT(player, {_ultCooldown}, classLevel(player, "HT"), false)
+		else if ultCHECK(player, {weapons::HT::ULT-COST}) is true:
+			ultHT(player, {_ultCooldown}, classLevel(player, "HT"), false) # the body is a function so Spell Breaker can cast it too (spellbreaker.sk)
+
+on drop of crossbow with priority low: # the crossbow can't be dropped either
+	if name of event-item is "%{wc}%Hunter's Crossbow":
+		cancel event
+
+function ultHT(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE body — {_lvl} = the level it runs at, {_sb} = cast by Spell Breaker (spellbreaker.sk: no cooldown of its own)
+	set {_u} to {_p}'s uuid
+	set {-godlike-ULT-USE::%{_u}%::HT} to now
+	play sound "entity.wolf.howl" with volume 5 and pitch 0.9 at {_p}
+	wait 20 ticks # 1 s telegraph after the howl, like Ninja's
+	set {_wn} to "%{wc}%Hunter's Bow"
+	set {_back} to {class::weapon::HT}
+	if {_sb} is true: # Spell Breaker's shovel becomes the crossbow, then comes back
+		set {_wn} to "%{wc}%Spell Breaker"
+		set {_back} to {class::weapon::SB}
+	if {-godlike-ULT-CANCEL::%{_u}%::HT} isn't set: # died during the telegraph (09-death-match.sk)
+		if name of {_p}'s held item is {_wn}:
+			set {_p}'s held item to {class::weapon::HC}
+		else:
+			loop {_p}'s inventory:
+				if name of loop-value is {_wn}:
+					set {_i} to index of loop-value
+					set slot {_i} of {_p}'s inventory to {class::weapon::HC}
+					stop loop
+		set {-htShotsMax::%{_u}%} to 4
+		set {-htVolley::%{_u}%} to 2
+		if {_lvl} >= 3: # Perk 2 (Volley)
+			set {-htShotsMax::%{_u}%} to 3
+			set {-htVolley::%{_u}%} to 3
+		set {-htShots::%{_u}%} to {-htShotsMax::%{_u}%}
+		set {-htUltEnd::%{_u}%} to (unix timestamp of now) + 8
+		play sound "item.crossbow.loading_end" with volume 2 and pitch 0.8 at {_p}
+		actionBar({_p}) # 03-resources.sk
+		loop 80 times: # 80 x 2 ticks = 8 seconds
+			if {-godlike-ULT-CANCEL::%{_u}%::HT} is set:
+				stop loop
+			if {_p} isn't online:
+				stop loop
+			if "%active potion effects of {_p}%" doesn't contain "invisibility":
+				draw 2 of dust using dustOption(rgb(70, 170, 70), 0.8) at ((location of {_p}) offset by vector(0, 0.2, 0)) with offset vector(0.2, 0.1, 0.2) # the green trail that follows you
+			wait 2 ticks
+	# back to the bow (or the shovel)
+	if {_p} is online:
+		if name of {_p}'s held item is "%{wc}%Hunter's Crossbow":
+			set {_p}'s held item to {_back}
+		else:
+			loop {_p}'s inventory:
+				if name of loop-value is "%{wc}%Hunter's Crossbow":
+					set {_i} to index of loop-value
+					set slot {_i} of {_p}'s inventory to {_back}
+					stop loop
+	delete {-htShots::%{_u}%}
+	delete {-htShotsMax::%{_u}%}
+	delete {-htVolley::%{_u}%}
+	delete {-htUltEnd::%{_u}%}
+	set {-godlike-ULT-CD::%{_u}%::HT} to now
+	delete {-godlike-ULT-USE::%{_u}%::HT}
+	delete {-godlike-ULT-CANCEL::%{_u}%::HT}
+	if {_sb} is true: # Spell Breaker's stolen cast has no cooldown of its own (spellbreaker.sk runs Spell Breaker's)
+		delete {-godlike-ULT-CD::%{_u}%::HT}
+		stop
+	# ULT CD
+	wait {_cd}
+	delete {-godlike-ULT-CD::%{_u}%::HT}
+	if {class::%{_u}%} = "HT":
+		play sound "BLOCK_BEACON_ACTIVATE" at volume 3 at pitch 1 to {_p}

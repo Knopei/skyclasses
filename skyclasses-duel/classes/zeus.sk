@@ -34,7 +34,7 @@ on shoot: # TACTICAL — thrown trident, strikes lightning on impact
 				play sound "item_trident_throw" at volume 3 at pitch 1 at shooter
 
 				if classLevel(shooter, "ZT") >= 2: # Perk 1 (Weight Reduction)
-					add potion effect of speed 2 without particles for 4 seconds to potion effects of shooter
+					add potion effect of speed 2 without particles for 3 seconds to potion effects of shooter
 
 				while metadata value "hit" of {_proj} isn't set:
 					if metadata value "type" of {_proj} is "ZT":

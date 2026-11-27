@@ -15,7 +15,7 @@
 #     hook stays in. Reeling in an empty line (nothing hooked) is free.
 #   - While your hook is in a living target, that target deals you 10% less damage (08-damage.sk).
 #   - The line snaps if the hooked target gets more than 20 blocks away.
-# Ultimate "Whirlpool" (60 mana, 90 s): throw a trident. It deals 2 damage to whatever it hits (08-damage.sk) and opens a whirlpool
+# Ultimate "Whirlpool" (60 mana, 90 s): throw a trident. It deals 1 damage to whatever it hits and disables a hit player's stamina for 3 s (08-damage.sk) and opens a whirlpool
 #   where it lands for 5 s: enemies within 6 blocks are dragged in a spiral toward the center (bosses aren't moved), and enemies within
 #   2 blocks of the center take 0.5 damage every second and have their stamina disabled for 3 seconds. A trident still in the air after 5 s disappears with no whirlpool.
 # Perk 1 (level 2) "Bountiful Catch": reeling in a hooked living target gives you +1 raw fish.
@@ -193,7 +193,7 @@ function ultFM(p: player, cd: timespan, lvl: number, sb: boolean): # ULTIMATE bo
 	shoot a trident from {_p} at speed 2
 	set {_proj} to last shot projectile
 	set metadata value "attacker" of {_proj} to {_p}
-	set metadata value "type" of {_proj} to "FMW" # 08-damage.sk — a flat 2 damage on a direct hit
+	set metadata value "type" of {_proj} to "FMW" # 08-damage.sk — a flat 1 damage + a 3 s stamina lockout on a direct hit
 	set metadata value "balanceSource" of {_proj} to "ULT" # 19-balance-stats.sk
 	set metadata value "fmLvl" of {_proj} to {_lvl}
 	play sound "item.trident.throw" with volume 3 and pitch 0.8 at {_p}

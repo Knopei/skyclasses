@@ -39,7 +39,8 @@ on load:
 	set {class-rating::EA::*} to "&a●●●● &cClose Damage" and "&7●●●● &eRange Damage" and "&a●&7●●● &6Toughness" and "&a●&2●&7●● &5Crowd Control" and "&a●●&7●● &bMobility"
 	set {class-rating::SB::*} to "&a●●&7●● &cClose Damage" and "&a●&2●&7●● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&a●●●&7● &bMobility" # 2 + 1.5 + 0 + 2 + 3 = 8.5
 	set {class-rating::FM::*} to "&a●&2●&7●● &cClose Damage" and "&a●●&7●● &eRange Damage" and "&a●●&2●&7● &6Toughness" and "&a●●&2●&7● &5Crowd Control" and "&7●●●● &bMobility" # 1.5 + 2 + 2.5 + 2.5 + 0 = 8.5
-	set {class-rating::FG::*} to "&a●●&7●● &cClose Damage" and "&a●&7●●● &eRange Damage" and "&a●●●&7● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&2●&7●●● &bMobility" # 2 + 1 + 3 + 2 + 0.5 = 8.5
+	set {class-rating::HT::*} to "&a●●●&7● &cClose Damage" and "&a●●●&2● &eRange Damage" and "&7●●●● &6Toughness" and "&a●●&7●● &5Crowd Control" and "&7●●●● &bMobility" # 3 + 3.5 + 0 + 2 + 0 = 8.5
+	set {class-rating::FG::*} to "&a●●&7●● &cClose Damage" and "&2●&7●●● &eRange Damage" and "&a●●●&2● &6Toughness" and "&a●●&2●&7● &5Crowd Control" and "&7●●●● &bMobility" # 2 + 0.5 + 3.5 + 2.5 + 0 = 8.5
 
 	# ---- LEVEL UNLOCK INFO (Level 1 = ultimate, Level 2 = Perk 1, Level 3 = Perk 2) ----
 	# category feeds the item's display name ("Level N: <category>"); name is the
@@ -153,6 +154,16 @@ on load:
 	set {classlevel-category::FM::3} to "Ultimate Upgrade"
 	set {classlevel-name::FM::3} to "&6Riptide Renewal"
 	set {classlevel-desc::FM::3::*} to "&8&oStanding at your whirlpool's center" and "&8&oheals you 0.5 hearts every second."
+
+	set {classlevel-category::HT::1} to "Unlocks Ultimate"
+	set {classlevel-name::HT::1} to "&2Poison-Tipped Crossbow"
+	set {classlevel-desc::HT::1::*} to "&8&oSwap to a crossbow for 8 seconds:" and "&8&oBow Shot fires 2 arrows and costs no" and "&8&omana, 4 times."
+	set {classlevel-category::HT::2} to "Tactical Upgrade"
+	set {classlevel-name::HT::2} to "&6Hamstring"
+	set {classlevel-desc::HT::2::*} to "&8&oYour arrows also give Slowness I for" and "&8&o3 seconds."
+	set {classlevel-category::HT::3} to "Ultimate Upgrade"
+	set {classlevel-name::HT::3} to "&6Volley"
+	set {classlevel-desc::HT::3::*} to "&8&oDuring the ultimate, each shot fires" and "&8&o3 arrows, but you get 3 shots instead of 4."
 
 	set {classlevel-category::RB::1} to "Unlocks Ultimate"
 	set {classlevel-name::RB::1} to "&6Rapid Bow"

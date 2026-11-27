@@ -50,7 +50,7 @@ on load:
 
 	# ---- MAJOR BOSSES (1 fixed location, one at a time — 12-major-boss.sk) ----
 	# Boss health, abilities and buff sizes are set in 12-major-boss.sk itself.
-	set {config::majorboss::interval-seconds} to 180 # time between spawns, starting from match start (the next one never comes sooner than 60 s after the last one died/despawned)
+	set {config::majorboss::interval-seconds} to 150 # time between spawns, starting from match start (the next one never comes sooner than 60 s after the last one died/despawned)
 	set {config::majorboss::low-xp-reward} to 10 # Evoker / Vindicator / Pillager — plus 1 extra life
 	set {config::majorboss::high-xp-reward} to 20 # Harbinger / Magmaroth / Doomhoof — plus a buff on all 3 of the killer's classes
 
